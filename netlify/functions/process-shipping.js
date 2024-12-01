@@ -17,31 +17,37 @@ exports.handler = async function(event, context) {
 
         console.log('Processing shipping for order:', orderId);
 
-        // Create a new payment intent for shipping
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: Math.round(shippingCost * 100), // Convert to cents
-            currency: 'eur',
-            customer: customerId,
+        // First, retrieve the original payment intent
+        const originalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        // Update the original payment intent with shipping
+        const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+            amount: Math.round(totalAmount * 100), // Convert to cents
+            shipping: {
+                address: {
+                    country: country
+                },
+                name: originalPaymentIntent.shipping?.name || 'Customer',
+                carrier: 'Standard Shipping',
+                tracking_number: orderId
+            },
             metadata: {
                 order_id: orderId,
+                shipping_cost: shippingCost,
                 shipping_country: country,
-                original_payment_intent: paymentIntentId,
-                type: 'shipping_charge'
-            },
-            description: `Shipping charge for order ${orderId} to ${country}`,
-            automatic_payment_methods: {
-                enabled: true,
-            },
+                total_amount: totalAmount
+            }
         });
 
-        console.log('Created shipping payment intent:', paymentIntent.id);
+        console.log('Updated payment intent with shipping:', updatedPaymentIntent.id);
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
-                paymentIntentId: paymentIntent.id,
-                clientSecret: paymentIntent.client_secret
+                paymentIntentId: updatedPaymentIntent.id,
+                shippingCost: shippingCost,
+                totalAmount: totalAmount
             })
         };
     } catch (error) {

@@ -24,120 +24,64 @@ document.addEventListener('DOMContentLoaded', async () => {
         shippingCost: 0
     };
 
-    // Wait for Memberstack to be ready
-    await waitForMemberstack();
-    console.log('Memberstack ready');
+    // Wait for Memberstack 2.0
+    function waitForMemberstack() {
+        return new Promise((resolve) => {
+            if (window.$memberstackDom) {
+                resolve(window.$memberstackDom);
+                return;
+            }
 
-    // Initialize UI elements
-    function initializeUI() {
-        console.log('initializeUI called');
-        
-        // Get product type and base price
-        const productElement = document.querySelector('[data-product-type]');
-        console.log('Product element:', productElement);
-        
-        if (productElement) {
-            state.productType = productElement.dataset.productType;
-            state.basePrice = parseFloat(productElement.dataset.basePrice || '0');
-            console.log('Product type:', state.productType);
-            console.log('Base price:', state.basePrice);
-        }
-
-        // Set up country selector
-        const countrySelect = document.getElementById('shipping-country');
-        console.log('Setting up country selector:', countrySelect);
-        
-        if (countrySelect) {
-            console.log('Found country select element');
-            populateCountryDropdown(countrySelect);
-            countrySelect.addEventListener('change', (e) => {
-                state.country = e.target.value;
-                updatePricing();
+            const observer = new MutationObserver((mutations, obs) => {
+                if (window.$memberstackDom) {
+                    obs.disconnect();
+                    resolve(window.$memberstackDom);
+                }
             });
-        } else {
-            console.error('Country select element not found');
-        }
 
-        // Set up quantity selector for standalone book
-        const quantitySelect = document.getElementById('book-quantity');
-        console.log('Setting up quantity selector:', quantitySelect);
-        
-        if (quantitySelect && state.productType === 'book') {
-            quantitySelect.addEventListener('change', (e) => {
-                state.quantity = parseInt(e.target.value);
-                updatePricing();
+            observer.observe(document, {
+                childList: true,
+                subtree: true
             });
-        }
-
-        // Hide quantity selector for bundle
-        if (state.productType === 'bundle' && quantitySelect) {
-            quantitySelect.style.display = 'none';
-        }
-
-        // Show/hide shipping section based on product type
-        const shippingSection = document.querySelector('.shipping-section');
-        console.log('Setting up shipping section:', shippingSection);
-        
-        if (shippingSection) {
-            shippingSection.style.display = state.productType === 'course' ? 'none' : 'block';
-        }
+        });
     }
 
     // Populate country dropdown
-    function populateCountryDropdown(countrySelect) {
+    function populateCountryDropdown() {
         console.log('Populating country dropdown');
+        const countrySelect = document.getElementById('shipping-country');
         
-        // Clear existing options
-        countrySelect.innerHTML = '<option value="">Select Country</option>';
-
-        try {
-            // Add Austria first
-            const atOption = document.createElement('option');
-            atOption.value = 'AT';
-            atOption.textContent = SHIPPING_RATES.AT.label;
-            countrySelect.appendChild(atOption);
-            console.log('Added AT option');
-
-            // Add Germany second
-            const deOption = document.createElement('option');
-            deOption.value = 'DE';
-            deOption.textContent = SHIPPING_RATES.DE.label;
-            countrySelect.appendChild(deOption);
-            console.log('Added DE option');
-
-            // Add other EU countries
-            const euOptgroup = document.createElement('optgroup');
-            euOptgroup.label = 'Other EU Countries';
-            EU_COUNTRIES.forEach(country => {
-                if (country !== 'AT' && country !== 'DE') {
-                    const option = document.createElement('option');
-                    option.value = country;
-                    option.textContent = `${country} (€${SHIPPING_RATES.EU.price})`;
-                    euOptgroup.appendChild(option);
-                }
-            });
-            countrySelect.appendChild(euOptgroup);
-            console.log('Added EU countries');
-
-            // Add International option
-            const intOption = document.createElement('option');
-            intOption.value = 'INT';
-            intOption.textContent = SHIPPING_RATES.INT.label;
-            countrySelect.appendChild(intOption);
-            console.log('Added INT option');
-
-        } catch (error) {
-            console.error('Error populating dropdown:', error);
+        if (!countrySelect) {
+            console.error('Country select element not found!');
+            return;
         }
+
+        // Clear existing options
+        countrySelect.innerHTML = '';
+
+        // Add default option
+        countrySelect.appendChild(new Option('Select Country', ''));
+
+        // Add Austria and Germany first
+        countrySelect.appendChild(new Option(SHIPPING_RATES.AT.label, 'AT'));
+        countrySelect.appendChild(new Option(SHIPPING_RATES.DE.label, 'DE'));
+
+        // Add other EU countries
+        EU_COUNTRIES.forEach(country => {
+            if (country !== 'AT' && country !== 'DE') {
+                countrySelect.appendChild(new Option(`${country} (€${SHIPPING_RATES.EU.price})`, country));
+            }
+        });
+
+        // Add International option
+        countrySelect.appendChild(new Option(SHIPPING_RATES.INT.label, 'INT'));
     }
 
     // Calculate shipping cost
     function calculateShipping(country, quantity) {
-        console.log('Calculating shipping cost');
-        
         if (!country || state.productType === 'course') return 0;
         
-        let rate = SHIPPING_RATES.INT.price; // Default to international
+        let rate = SHIPPING_RATES.INT.price;
         
         if (country === 'AT') {
             rate = SHIPPING_RATES.AT.price;
@@ -147,18 +91,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             rate = SHIPPING_RATES.EU.price;
         }
 
-        // Bundle always has quantity of 1
-        if (state.productType === 'bundle') {
-            return rate;
-        }
-
         return rate * quantity;
     }
 
     // Update pricing displays
-    async function updatePricing() {
-        console.log('Updating pricing');
-        
+    function updatePricing() {
         const shippingCost = calculateShipping(state.country, state.quantity);
         state.shippingCost = shippingCost;
         const subtotal = state.basePrice * state.quantity;
@@ -169,17 +106,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const shippingDisplay = document.getElementById('shipping-cost');
         const totalDisplay = document.getElementById('total-price');
         
-        if (subtotalDisplay) {
-            subtotalDisplay.textContent = `€${subtotal.toFixed(2)}`;
-        }
-        if (shippingDisplay) {
-            shippingDisplay.textContent = `€${shippingCost.toFixed(2)}`;
-        }
-        if (totalDisplay) {
-            totalDisplay.textContent = `€${totalPrice.toFixed(2)}`;
-        }
+        if (subtotalDisplay) subtotalDisplay.textContent = subtotal.toFixed(2);
+        if (shippingDisplay) shippingDisplay.textContent = shippingCost.toFixed(2);
+        if (totalDisplay) totalDisplay.textContent = totalPrice.toFixed(2);
 
-        // Update Memberstack checkout button metadata
+        // Update checkout button metadata
         const checkoutButton = document.querySelector('[data-ms-price\\:add]');
         if (checkoutButton) {
             const metadata = {
@@ -190,14 +121,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 requires_shipping: state.productType !== 'course',
                 order_id: `order_${Date.now()}`
             };
-            
             checkoutButton.dataset.msMetadata = JSON.stringify(metadata);
         }
     }
 
-    // Handle checkout button click
+    // Handle checkout
     async function handleCheckout(e) {
-        console.log('Handling checkout');
         const button = e.currentTarget;
         
         if (!state.country && state.productType !== 'course') {
@@ -212,6 +141,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const priceId = button.dataset.msPriceAdd;
                 const orderId = `order_${Date.now()}`;
+
+                // Create metadata with all necessary information
                 const metadata = {
                     shipping_country: state.country,
                     shipping_cost: state.shippingCost,
@@ -222,96 +153,119 @@ document.addEventListener('DOMContentLoaded', async () => {
                     total_amount: (state.basePrice * state.quantity) + state.shippingCost
                 };
 
-                console.log('Checkout metadata:', metadata);
+                console.log('Opening checkout with metadata:', metadata);
 
-                try {
-                    // Open Memberstack checkout
-                    const result = await window.memberstackDom.openModal({
-                        type: "CHECKOUT",
-                        priceId: priceId,
-                        metadata: metadata,
-                        quantity: state.quantity,
-                        successUrl: window.location.origin + "/order-confirmation?order_id=" + orderId,
-                        cancelUrl: window.location.href
-                    });
-                    
-                    console.log('Checkout result:', result);
-
-                    if (result.success && metadata.requires_shipping) {
-                        try {
-                            // Process shipping charge
-                            const response = await fetch('/.netlify/functions/process-shipping', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    orderId: metadata.order_id,
-                                    shippingCost: metadata.shipping_cost,
-                                    country: metadata.shipping_country,
-                                    customerId: result.data.customerId,
-                                    paymentIntentId: result.data.paymentIntentId,
-                                    totalAmount: metadata.total_amount
-                                })
-                            });
-
-                            if (!response.ok) {
-                                throw new Error('Shipping processing failed');
-                            }
-
-                            const shippingResult = await response.json();
-                            console.log('Shipping processed:', shippingResult);
-
-                        } catch (error) {
-                            console.error('Error processing shipping:', error);
-                            alert('Your order was successful, but there was an issue processing shipping. Our team will contact you.');
-                        }
+                const memberstack = await waitForMemberstack();
+                const result = await memberstack.openModal({
+                    type: "CHECKOUT",
+                    priceId: priceId,
+                    metadata: metadata,
+                    quantity: state.quantity,
+                    successUrl: window.location.origin + "/order-confirmation?order_id=" + orderId,
+                    cancelUrl: window.location.href,
+                    shipping: {
+                        amount: Math.round(state.shippingCost * 100), // Convert to cents
+                        description: `Shipping to ${state.country}`
                     }
-                } catch (error) {
-                    console.error('Checkout error:', error);
-                    alert('There was an error processing your checkout. Please try again.');
+                });
+
+                console.log('Checkout result:', result);
+
+                if (result.success && metadata.requires_shipping) {
+                    try {
+                        const response = await fetch('/.netlify/functions/process-shipping', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                orderId: metadata.order_id,
+                                shippingCost: metadata.shipping_cost,
+                                country: metadata.shipping_country,
+                                customerId: result.data.customerId,
+                                paymentIntentId: result.data.paymentIntentId,
+                                totalAmount: metadata.total_amount
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Shipping processing failed');
+                        }
+
+                        const shippingResult = await response.json();
+                        console.log('Shipping processed:', shippingResult);
+                    } catch (error) {
+                        console.error('Error processing shipping:', error);
+                        alert('Your order was successful, but there was an issue processing shipping. Our team will contact you.');
+                    }
                 }
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Checkout error:', error);
         }
     }
 
-    // Wait for Memberstack function
-    function waitForMemberstack() {
-        console.log('Waiting for Memberstack');
-        
-        return new Promise((resolve) => {
-            if (window.memberstackDom) {
-                resolve(window.memberstackDom);
-                return;
-            }
+    // Initialize UI
+    function initializeUI() {
+        // Get product information
+        const productElement = document.querySelector('[data-product-type]');
+        if (productElement) {
+            state.productType = productElement.dataset.productType;
+            state.basePrice = parseFloat(productElement.dataset.basePrice || '0');
+        }
 
-            const observer = new MutationObserver((mutations, obs) => {
-                if (window.memberstackDom) {
-                    obs.disconnect();
-                    resolve(window.memberstackDom);
-                }
+        // Set up quantity selector
+        const quantitySelect = document.getElementById('book-quantity');
+        if (quantitySelect) {
+            quantitySelect.addEventListener('change', (e) => {
+                state.quantity = parseInt(e.target.value);
+                updatePricing();
             });
+        }
 
-            observer.observe(document, {
-                childList: true,
-                subtree: true
+        // Set up country selector
+        const countrySelect = document.getElementById('shipping-country');
+        if (countrySelect) {
+            countrySelect.addEventListener('change', (e) => {
+                state.country = e.target.value;
+                updatePricing();
             });
+        }
+
+        // Show/hide shipping section
+        const shippingSection = document.querySelector('.shipping-section');
+        if (shippingSection) {
+            shippingSection.style.display = state.productType === 'course' ? 'none' : 'block';
+        }
+
+        // Populate countries
+        populateCountryDropdown();
+
+        // Add checkout button listeners
+        const checkoutButtons = document.querySelectorAll('[data-ms-price\\:add]');
+        checkoutButtons.forEach(button => {
+            button.addEventListener('click', handleCheckout);
         });
+
+        // Initial pricing update
+        updatePricing();
     }
 
-    // Initialize
-    initializeUI();
+    // Initialize when DOM and Memberstack are ready
+    async function init() {
+        try {
+            await waitForMemberstack();
+            console.log('Memberstack 2.0 loaded');
+            initializeUI();
+        } catch (error) {
+            console.error('Error initializing:', error);
+        }
+    }
 
-    // Add checkout button listener
-    const checkoutButtons = document.querySelectorAll('[data-ms-price\\:add]');
-    console.log('Adding checkout button listeners');
-    
-    checkoutButtons.forEach(button => {
-        button.addEventListener('click', handleCheckout);
-    });
-
-    // Initial pricing update
-    updatePricing();
+    // Start initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 });
