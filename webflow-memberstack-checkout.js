@@ -18,7 +18,7 @@ const CONFIG = {
     // Memberstack 2.0 price ID (starts with prc_)
     priceId: 'prc_buch-tp2106tu',
     // Replace with your actual Stripe price ID (starts with price_)
-    stripeProductId: 'price_1234567890',  // TODO: Replace with your actual Stripe price ID
+    stripeProductId: 'price_1QRIZnJRMXFic4sWptbw8uuA',  // TODO: Replace with your actual Stripe price ID
     successUrl: `${window.location.origin}/success`,
     cancelUrl: `${window.location.origin}/cancel`
 };
@@ -103,6 +103,7 @@ async function handleCheckout(e) {
 
         const member = await memberstack.getCurrentMember();
         console.log('Current member:', member);
+        console.log('Full member object:', JSON.stringify(member, null, 2));
         
         if (!member) {
             console.log('User not authenticated, redirecting to login');
@@ -126,13 +127,13 @@ async function handleCheckout(e) {
                 priceId: CONFIG.stripeProductId,
                 successUrl: CONFIG.successUrl,
                 cancelUrl: CONFIG.cancelUrl,
-                customerEmail: member.data.email,
+                customerEmail: member.data?.email || member.auth?.email,
                 shipping: {
                     allowedCountries: ['AT', 'DE', 'CH'],
                     collectShippingAddress: true
                 },
                 metadata: {
-                    memberstackUserId: member.data.id,
+                    memberstackUserId: member.data?.id,
                     memberstackPlanId: CONFIG.priceId
                 }
             })
