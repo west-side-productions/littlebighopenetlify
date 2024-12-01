@@ -89,7 +89,7 @@
         <button 
             id="checkoutButton"
             class="custom-checkout"
-            data-stripe-price-id="price_1QRJp1JRMXFic4sWz3gLoCy6"
+            data-ms-plan="pln_recipe-course-v1"
             data-memberstack-bypass="true"
             onclick="event.preventDefault();"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;"
@@ -153,8 +153,11 @@
         <!-- Checkout Button -->
         <button 
             class="checkout-button" 
-            data-ms-price-add="price_01HKP1GCHVWQ4WBXN8KQXPVP4T"
-            data-stripe-price-id="price_01HKP1GCHVWQ4WBXN8KQXPVP4T">
+            data-memberstack-content="checkout"
+            data-memberstack-bypass="true"
+            onclick="event.preventDefault();"
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;"
+        >
             Proceed to Checkout
         </button>
     </div>
