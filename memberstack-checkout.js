@@ -1,5 +1,5 @@
 // Memberstack 2.0 Checkout Handler
-document.addEventListener('DOMContentLoaded', async () => {
+function initMemberstack() {
     // Configuration
     const SHIPPING_RATES = {
         AT: { price: 5, label: "Austria (€5)" },
@@ -13,13 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
         'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
     ];
-
-    // Get Memberstack instance
-    const memberstack = window.$memberstackDom;
-    if (!memberstack) {
-        console.error('Memberstack not found');
-        return;
-    }
 
     let state = {
         productType: '',
@@ -192,7 +185,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 // Create the checkout configuration for Memberstack 2.0
                 const checkoutConfig = {
-                    mode: "payment",
                     priceId: priceId,
                     metadata: metadata
                 };
@@ -201,37 +193,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                     checkoutConfig.quantity = state.quantity;
                 }
 
-                try {
-                    const checkout = await memberstack.openCheckout(checkoutConfig);
-                    
-                    // After successful checkout, trigger shipping charge via Netlify function
-                    if (checkout.success && metadata.requires_shipping) {
-                        try {
-                            const response = await fetch('/.netlify/functions/process-shipping', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    orderId: metadata.order_id,
-                                    shippingCost: metadata.shipping_cost,
-                                    country: metadata.shipping_country,
-                                    customerId: checkout.customer.id,
-                                    paymentIntentId: checkout.paymentIntent.id
-                                })
-                            });
+                // Use the correct Memberstack 2.0 checkout method
+                const result = await window.memberstackDom.openModal({
+                    type: "CHECKOUT",
+                    priceId: priceId,
+                    metadata: metadata,
+                    quantity: state.quantity
+                });
+                
+                // After successful checkout, trigger shipping charge via Netlify function
+                if (result.success && metadata.requires_shipping) {
+                    try {
+                        const response = await fetch('/.netlify/functions/process-shipping', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                orderId: metadata.order_id,
+                                shippingCost: metadata.shipping_cost,
+                                country: metadata.shipping_country,
+                                customerId: result.data.customerId,
+                                paymentIntentId: result.data.paymentIntentId
+                            })
+                        });
 
-                            if (!response.ok) {
-                                throw new Error('Shipping processing failed');
-                            }
-                        } catch (error) {
-                            console.error('Error processing shipping:', error);
-                            alert('Your order was successful, but there was an issue processing shipping. Our team will contact you.');
+                        if (!response.ok) {
+                            throw new Error('Shipping processing failed');
                         }
+                    } catch (error) {
+                        console.error('Error processing shipping:', error);
+                        alert('Your order was successful, but there was an issue processing shipping. Our team will contact you.');
                     }
-                } catch (error) {
-                    console.error('Checkout error:', error);
-                    alert('There was an error processing your checkout. Please try again.');
                 }
             }
         } catch (error) {
@@ -250,4 +243,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initial pricing update
     updatePricing();
+}
+
+// Wait for Memberstack to be ready
+function waitForMemberstack() {
+    return new Promise((resolve) => {
+        if (window.memberstackDom) {
+            resolve(window.memberstackDom);
+            return;
+        }
+
+        const observer = new MutationObserver((mutations, obs) => {
+            if (window.memberstackDom) {
+                obs.disconnect();
+                resolve(window.memberstackDom);
+            }
+        });
+
+        observer.observe(document, {
+            childList: true,
+            subtree: true
+        });
+    });
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await waitForMemberstack();
+        initMemberstack();
+    } catch (error) {
+        console.error('Error initializing Memberstack:', error);
+    }
 });

@@ -134,5 +134,15 @@
             // Initialize UI elements
         });
     </script>
+    <script>
+        (function(w,d) {
+            w.memberstack = { site: "ms_a2e8d0" }; // Replace with your Project ID
+            var s = d.createElement("script");
+            s.src = "https://api.memberstack.io/static/memberstack.js?custom";
+            s.async = true;
+            d.body.appendChild(s);
+        })(window, document);
+    </script>
+    <script src="memberstack-checkout.js"></script>
 </body>
 </html>

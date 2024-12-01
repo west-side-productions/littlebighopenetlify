@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Little Big Hope - Checkout</title>
+    
+    <!-- Memberstack 2.0 initialization -->
+    <script data-memberstack-app="app_cm24j3get009s0spw6wz49psh" src="https://static.memberstack.com/scripts/v1/memberstack.js" defer></script>
+    
+    <style>
+        .shipping-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .price-display {
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Product Section -->
+    <div class="product-section">
+        <!-- Example for a Book Product -->
+        <div class="product" data-product-type="book" data-base-price="29.99">
+            <h2>Cookbook</h2>
+            <p>Price: €29.99</p>
+            
+            <!-- Quantity Selector (only for book) -->
+            <div class="quantity-section">
+                <label for="book-quantity">Quantity:</label>
+                <select id="book-quantity">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Shipping Section -->
+        <div class="shipping-section">
+            <h3>Shipping Information</h3>
+            <div class="shipping-country-section">
+                <label for="shipping-country">Select Shipping Country:</label>
+                <select id="shipping-country">
+                    <!-- Will be populated by JavaScript -->
+                </select>
+            </div>
+        </div>
+
+        <!-- Price Summary -->
+        <div class="price-summary">
+            <div class="price-display">
+                <span>Subtotal: €</span>
+                <span id="subtotal-price">29.99</span>
+            </div>
+            <div class="price-display">
+                <span>Shipping: €</span>
+                <span id="shipping-cost">0.00</span>
+            </div>
+            <div class="price-display">
+                <span>Total: €</span>
+                <span id="total-price">29.99</span>
+            </div>
+        </div>
+
+        <!-- Checkout Button -->
+        <button 
+            data-ms-price:add="price_xxxxx" 
+            class="checkout-button">
+            Proceed to Checkout
+        </button>
+    </div>
+
+    <!-- Your checkout script (load last) -->
+    <script src="webflow-memberstack-checkout.js" defer></script>
+</body>
+</html>
