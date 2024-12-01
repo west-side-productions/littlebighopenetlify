@@ -39,12 +39,20 @@ async function initStripe() {
 async function initializeCheckoutButtons() {
     try {
         console.log('Setting up checkout buttons...');
-        const checkoutButtons = document.querySelectorAll('[data-stripe-price-id]');
+        const checkoutButtons = document.querySelectorAll('.custom-checkout[data-stripe-price-id]');
         console.log('Found checkout buttons:', checkoutButtons.length);
         
         checkoutButtons.forEach(button => {
             console.log('Button price ID:', button.dataset.stripePriceId);
-            button.addEventListener('click', handleCheckout);
+            // Remove any existing click handlers
+            button.replaceWith(button.cloneNode(true));
+            const newButton = document.querySelector(`#${button.id}`);
+            newButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCheckout(e);
+                return false;
+            });
         });
         
         console.log('Checkout buttons initialized');
@@ -53,21 +61,33 @@ async function initializeCheckoutButtons() {
     }
 }
 
+// Check Memberstack authentication
+async function checkAuth() {
+    try {
+        // For Memberstack v1
+        if (!window.Memberstack) {
+            console.error('Memberstack not initialized');
+            return null;
+        }
+
+        const member = await window.Memberstack.getMemberCookie();
+        console.log('Memberstack auth check:', member ? 'authenticated' : 'not authenticated');
+        return member;
+    } catch (error) {
+        console.error('Memberstack auth error:', error);
+        return null;
+    }
+}
+
 // Handle checkout button click
 async function handleCheckout(e) {
     e.preventDefault();
+    e.stopPropagation();
     console.log('Handling checkout...');
 
     try {
-        // Check Memberstack authentication
-        const memberstack = window.$memberstackDom;
-        if (!memberstack) {
-            console.error('Memberstack not initialized');
-            window.location.href = '/login';
-            return;
-        }
-
-        const member = await memberstack.getCurrentMember();
+        // Check authentication
+        const member = await checkAuth();
         if (!member) {
             console.log('User not authenticated, redirecting to login');
             window.location.href = '/login';
@@ -75,8 +95,8 @@ async function handleCheckout(e) {
         }
 
         console.log('User authenticated:', member.email);
-
-        const priceId = e.target.dataset.stripePriceId || 'price_1QRJp1JRMXFic4sWz3gLoCy6';
+        const button = e.target;
+        const priceId = button.dataset.stripePriceId || 'price_1QRJp1JRMXFic4sWz3gLoCy6';
         const quantity = state.quantity || 1;
 
         const response = await fetch('/.netlify/functions/create-checkout', {
@@ -94,10 +114,15 @@ async function handleCheckout(e) {
             })
         });
 
-        const { url } = await response.json();
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Checkout session created:', data);
         
-        if (url) {
-            window.location.href = url;
+        if (data.url) {
+            window.location.href = data.url;
         } else {
             console.error('No checkout URL received');
             alert('Sorry, there was a problem creating the checkout session. Please try again.');
@@ -110,6 +135,7 @@ async function handleCheckout(e) {
             alert('Sorry, there was a problem processing your request. Please try again.');
         }
     }
+    return false;
 }
 
 // Initialize the script
@@ -120,7 +146,7 @@ async function init() {
         // Wait for Memberstack to initialize
         await new Promise(resolve => {
             const checkMemberstack = () => {
-                if (window.$memberstackDom) {
+                if (window.Memberstack) {
                     resolve();
                 } else {
                     setTimeout(checkMemberstack, 100);
