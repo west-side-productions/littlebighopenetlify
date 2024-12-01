@@ -8,6 +8,9 @@ exports.handler = async function(event, context) {
         };
     }
 
+    // Get the site URL from Netlify environment variables
+    const siteUrl = process.env.DEPLOY_URL || process.env.URL || 'http://localhost:8888';
+
     try {
         const { priceId, quantity, metadata } = JSON.parse(event.body);
 
@@ -97,8 +100,8 @@ exports.handler = async function(event, context) {
                 }
             ],
             metadata: metadata,
-            success_url: `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.SITE_URL}/cancel`,
+            success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${siteUrl}/cancel`,
         });
 
         return {
