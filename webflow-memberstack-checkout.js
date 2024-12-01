@@ -17,7 +17,8 @@ const EU_COUNTRIES = [
 const CONFIG = {
     // Memberstack 2.0 price ID (starts with prc_)
     priceId: 'prc_buch-tp2106tu',
-    stripeProductId: 'your_stripe_product_id', // Add Stripe product ID
+    // Replace with your actual Stripe price ID (starts with price_)
+    stripeProductId: 'price_1234567890',  // TODO: Replace with your actual Stripe price ID
     successUrl: `${window.location.origin}/success`,
     cancelUrl: `${window.location.origin}/cancel`
 };
@@ -120,22 +121,19 @@ async function handleCheckout(e) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
             },
-            credentials: 'include',
-            mode: 'cors',
             body: JSON.stringify({
-                priceId: CONFIG.stripeProductId, // Use Stripe product ID instead of Memberstack
+                priceId: CONFIG.stripeProductId,
                 successUrl: CONFIG.successUrl,
                 cancelUrl: CONFIG.cancelUrl,
-                customerEmail: member.email,
+                customerEmail: member.data.email,
                 shipping: {
                     allowedCountries: ['AT', 'DE', 'CH'],
                     collectShippingAddress: true
                 },
                 metadata: {
-                    memberstackUserId: member.id,
-                    memberstackPlanId: CONFIG.priceId // Store original Memberstack plan ID
+                    memberstackUserId: member.data.id,
+                    memberstackPlanId: CONFIG.priceId
                 }
             })
         });
