@@ -4,7 +4,8 @@
   "description": "A Webflow-based shopping system with Memberstack 2.0 integration and custom shipping handling.",
   "main": "memberstack-checkout.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "cross-env STRIPE_SECRET_KEY=sk_test_51OQvSBFrPAUGZiHgwDHSIJRQEpnTLWTkVZDaKiMvLXJGOlPAUwdDxTDTCWdnO7vKHLQBNgLYKtQTnLQhVVbVtFKe00zLQjPaXS netlify dev"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +15,9 @@
     "dotenv": "^16.4.5",
     "node-fetch": "^3.3.2",
     "stripe": "^17.4.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   },
   "repository": {
     "type": "git",

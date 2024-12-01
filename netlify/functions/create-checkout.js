@@ -1,6 +1,12 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+require('dotenv').config();
+
+// Temporarily use test key for development
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_51OQvSBFrPAUGZiHgwDHSIJRQEpnTLWTkVZDaKiMvLXJGOlPAUwdDxTDTCWdnO7vKHLQBNgLYKtQTnLQhVVbVtFKe00zLQjPaXS';
+const stripe = require('stripe')(STRIPE_KEY);
 
 exports.handler = async function(event, context) {
+    console.log('Received checkout request');
+
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
@@ -8,21 +14,25 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // Get the site URL from Netlify environment variables
-    const siteUrl = process.env.DEPLOY_URL || process.env.URL || 'http://localhost:8888';
-
     try {
+        // Verify Stripe API key
+        if (!STRIPE_KEY) {
+            throw new Error('Missing Stripe API key');
+        }
+
         const { priceId, quantity, metadata } = JSON.parse(event.body);
+        console.log('Request data:', { priceId, quantity });
 
         // Validate required fields
         if (!priceId || !quantity) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Missing required fields' })
-            };
+            throw new Error('Missing required fields: priceId and quantity are required');
         }
 
-        const session = await stripe.checkout.sessions.create({
+        // Get the site URL from Netlify environment variables
+        const siteUrl = process.env.DEPLOY_URL || process.env.URL || 'http://localhost:8888';
+
+        // Create Stripe checkout session
+        const sessionConfig = {
             mode: 'payment',
             payment_method_types: ['card'],
             billing_address_collection: 'required',
@@ -45,7 +55,7 @@ exports.handler = async function(event, context) {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: 500, // €5.00
+                            amount: 500,
                             currency: 'eur',
                         },
                         display_name: 'Standard Shipping (Austria)',
@@ -68,7 +78,7 @@ exports.handler = async function(event, context) {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: 1000, // €10.00
+                            amount: 1000,
                             currency: 'eur',
                         },
                         display_name: 'Standard Shipping (Germany)',
@@ -91,7 +101,7 @@ exports.handler = async function(event, context) {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: 1000, // €10.00
+                            amount: 1000,
                             currency: 'eur',
                         },
                         display_name: 'Standard Shipping (EU)',
@@ -120,11 +130,23 @@ exports.handler = async function(event, context) {
             customer_creation: 'always',
             tax_id_collection: {
                 enabled: true
+            },
+            automatic_tax: {
+                enabled: true
             }
-        });
+        };
+
+        console.log('Creating checkout session with config:', JSON.stringify(sessionConfig, null, 2));
+
+        const session = await stripe.checkout.sessions.create(sessionConfig);
+        console.log('Checkout session created:', session.id);
 
         return {
             statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             body: JSON.stringify({ 
                 id: session.id,
                 url: session.url 
@@ -134,6 +156,10 @@ exports.handler = async function(event, context) {
         console.error('Error creating checkout session:', error);
         return {
             statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             body: JSON.stringify({ 
                 error: error.message,
                 details: error.stack 

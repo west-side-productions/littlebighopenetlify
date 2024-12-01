@@ -4,8 +4,7 @@
 const SHIPPING_RATES = {
     AT: { price: 5, label: "Austria (€5)" },
     DE: { price: 10, label: "Germany (€10)" },
-    EU: { price: 10, label: "Europe (€10)" },
-    INT: { price: 15, label: "International (€15)" }
+    EU: { price: 10, label: "Europe (€10)" }
 };
 
 const EU_COUNTRIES = [
@@ -18,18 +17,20 @@ const EU_COUNTRIES = [
 const state = {
     productType: 'book',
     basePrice: 29.99,
-    quantity: 1
+    quantity: 1,
+    shippingCountry: null
 };
 
 // Initialize Stripe
 let stripe;
 async function initStripe() {
     try {
+        console.log('Initializing Stripe...');
         stripe = await Stripe('pk_test_51OQvSBFrPAUGZiHgGYKkHZZiGLCxqSFTXGgxFVOtBtqjlzQxMZWwxjPWmSsGDWmYZkVEqgOULZoNgRVgRGbsVEkB00cXTZQMtw');
-        console.log('Stripe initialized successfully');
+        console.log(' Stripe initialized successfully');
         return true;
     } catch (error) {
-        console.error('Error initializing Stripe:', error);
+        console.error(' Error initializing Stripe:', error);
         return false;
     }
 }
@@ -37,35 +38,32 @@ async function initStripe() {
 // Initialize checkout buttons
 async function initializeCheckoutButtons() {
     try {
+        console.log('Setting up checkout buttons...');
         const checkoutButtons = document.querySelectorAll('[data-stripe-price-id]');
+        console.log('Found checkout buttons:', checkoutButtons.length);
+        
         checkoutButtons.forEach(button => {
+            console.log('Button price ID:', button.dataset.stripePriceId);
             button.addEventListener('click', handleCheckout);
         });
-        console.log('Checkout buttons initialized');
+        
+        console.log(' Checkout buttons initialized');
     } catch (error) {
-        console.error('Error initializing checkout buttons:', error);
+        console.error(' Error initializing checkout buttons:', error);
     }
-}
-
-// Update price display
-function updatePriceDisplay() {
-    const subtotal = state.basePrice * state.quantity;
-    
-    const subtotalElement = document.getElementById('subtotal-price');
-    const totalElement = document.getElementById('total-price');
-    
-    if (subtotalElement) subtotalElement.textContent = subtotal.toFixed(2);
-    if (totalElement) totalElement.textContent = subtotal.toFixed(2);
 }
 
 // Handle checkout button click
 async function handleCheckout(e) {
     e.preventDefault();
-    console.log('Checkout initiated');
+    console.log(' Checkout initiated');
+    
+    const button = e.currentTarget;
     
     try {
         // Check if Stripe is initialized
         if (!stripe) {
+            console.log('Stripe not initialized, attempting to initialize...');
             const stripeInitialized = await initStripe();
             if (!stripeInitialized) {
                 throw new Error('Could not initialize Stripe');
@@ -78,26 +76,38 @@ async function handleCheckout(e) {
             throw new Error('Memberstack not initialized');
         }
 
+        console.log('Checking Memberstack authentication...');
         const user = await memberstack.getCurrentMember();
         if (!user) {
             console.log('User not authenticated, redirecting to signup');
             window.location.href = '/signup';
             return;
         }
+        console.log(' User authenticated:', user.email);
 
-        const button = e.currentTarget;
         const priceId = button.dataset.stripePriceId;
-        
         if (!priceId) {
             throw new Error('No Stripe price ID found on button');
         }
+        console.log('Price ID:', priceId);
 
-        console.log('Creating checkout session with price ID:', priceId);
+        // Show loading state
+        button.disabled = true;
+        button.textContent = 'Creating checkout session...';
         
         const orderId = `order_${Date.now()}`;
+        console.log('Order ID:', orderId);
+        
+        // Get the base URL for the API endpoint
+        const baseUrl = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8888/.netlify/functions'
+            : '/.netlify/functions';
+            
+        console.log('Creating Stripe checkout session...');
+        console.log('API Endpoint:', `${baseUrl}/create-checkout`);
         
         // Create Stripe Checkout Session
-        const response = await fetch('/.netlify/functions/create-checkout', {
+        const response = await fetch(`${baseUrl}/create-checkout`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -110,23 +120,28 @@ async function handleCheckout(e) {
                     product_type: state.productType,
                     base_amount: state.basePrice * state.quantity,
                     memberstack_member_id: user.id,
-                    memberstack_email: user.email
+                    memberstack_email: user.email,
+                    shipping_country: state.shippingCountry || 'not_selected'
                 }
             })
         });
 
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('Server error response:', errorData);
             throw new Error(`Server error: ${errorData.error || response.statusText}`);
         }
 
         const session = await response.json();
+        console.log('Session created:', session);
 
         if (session.error) {
             throw new Error(`Checkout session error: ${session.error}`);
         }
 
-        console.log('Redirecting to Stripe checkout...');
+        console.log(' Redirecting to Stripe checkout...');
         const result = await stripe.redirectToCheckout({
             sessionId: session.id
         });
@@ -135,14 +150,18 @@ async function handleCheckout(e) {
             throw new Error(`Stripe redirect error: ${result.error.message}`);
         }
     } catch (error) {
-        console.error('Checkout error:', error);
+        console.error(' Checkout error:', error);
         alert(`Checkout error: ${error.message}`);
+    } finally {
+        // Reset button state
+        button.disabled = false;
+        button.textContent = 'Proceed to Checkout';
     }
 }
 
 // Initialize the script
 async function init() {
-    console.log('Initializing shopping system...');
+    console.log(' Initializing shopping system...');
 
     try {
         // Initialize Stripe
@@ -153,7 +172,7 @@ async function init() {
         if (productElement) {
             state.productType = productElement.dataset.productType || 'book';
             state.basePrice = parseFloat(productElement.dataset.basePrice) || 29.99;
-            updatePriceDisplay();
+            console.log('Product state:', state);
         }
 
         // Set up quantity change listener
@@ -161,16 +180,16 @@ async function init() {
         if (quantitySelect) {
             quantitySelect.addEventListener('change', function(e) {
                 state.quantity = parseInt(e.target.value);
-                updatePriceDisplay();
+                console.log('Quantity updated:', state.quantity);
             });
         }
 
         // Initialize checkout buttons
         await initializeCheckoutButtons();
         
-        console.log('Shopping system initialized successfully');
+        console.log(' Shopping system initialized successfully');
     } catch (error) {
-        console.error('Initialization error:', error);
+        console.error(' Initialization error:', error);
     }
 }
 
