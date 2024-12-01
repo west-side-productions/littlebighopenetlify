@@ -141,37 +141,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const priceId = button.dataset.msPriceAdd;
                 const orderId = `order_${Date.now()}`;
+                const baseAmount = state.basePrice * state.quantity;
+                const shippingAmount = state.shippingCost;
+                const totalAmount = baseAmount + shippingAmount;
 
                 // Create metadata with all necessary information
                 const metadata = {
                     shipping_country: state.country,
-                    shipping_cost: state.shippingCost,
+                    shipping_cost: shippingAmount,
                     quantity: state.quantity,
                     product_type: state.productType,
-                    requires_shipping: state.productType !== 'course',
+                    requires_shipping: true,
                     order_id: orderId,
-                    total_amount: (state.basePrice * state.quantity) + state.shippingCost
+                    base_amount: baseAmount,
+                    total_amount: totalAmount
                 };
 
                 console.log('Opening checkout with metadata:', metadata);
 
                 const memberstack = await waitForMemberstack();
-                const result = await memberstack.openModal({
-                    type: "CHECKOUT",
+                const result = await memberstack.openModal("CHECKOUT", {
                     priceId: priceId,
                     metadata: metadata,
                     quantity: state.quantity,
-                    successUrl: window.location.origin + "/order-confirmation?order_id=" + orderId,
+                    successUrl: `${window.location.origin}/order-confirmation?order_id=${orderId}`,
                     cancelUrl: window.location.href,
+                    amount: Math.round(totalAmount * 100), // Total amount in cents
                     shipping: {
-                        amount: Math.round(state.shippingCost * 100), // Convert to cents
+                        name: "Standard Shipping",
+                        amount: Math.round(shippingAmount * 100), // Shipping amount in cents
                         description: `Shipping to ${state.country}`
                     }
                 });
 
                 console.log('Checkout result:', result);
 
-                if (result.success && metadata.requires_shipping) {
+                if (result.success) {
                     try {
                         const response = await fetch('/.netlify/functions/process-shipping', {
                             method: 'POST',
@@ -184,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 country: metadata.shipping_country,
                                 customerId: result.data.customerId,
                                 paymentIntentId: result.data.paymentIntentId,
+                                baseAmount: metadata.base_amount,
                                 totalAmount: metadata.total_amount
                             })
                         });

@@ -8,45 +8,61 @@ exports.handler = async function(event, context) {
     try {
         const { 
             orderId, 
-            shippingCost, 
+            shippingCost,
+            baseAmount,
+            totalAmount,
             country, 
             customerId,
-            paymentIntentId,
-            totalAmount 
+            paymentIntentId
         } = JSON.parse(event.body);
 
         console.log('Processing shipping for order:', orderId);
 
         // First, retrieve the original payment intent
-        const originalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const originalIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-        // Update the original payment intent with shipping
-        const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-            amount: Math.round(totalAmount * 100), // Convert to cents
+        // Update the payment intent with the total amount and shipping details
+        const updatedIntent = await stripe.paymentIntents.update(paymentIntentId, {
+            amount: Math.round(totalAmount * 100), // Total amount in cents
+            metadata: {
+                order_id: orderId,
+                shipping_cost: shippingCost,
+                base_amount: baseAmount,
+                shipping_country: country
+            },
             shipping: {
                 address: {
                     country: country
                 },
-                name: originalPaymentIntent.shipping?.name || 'Customer',
+                name: originalIntent.shipping?.name || 'Customer',
                 carrier: 'Standard Shipping',
                 tracking_number: orderId
-            },
-            metadata: {
-                order_id: orderId,
-                shipping_cost: shippingCost,
-                shipping_country: country,
-                total_amount: totalAmount
             }
         });
 
-        console.log('Updated payment intent with shipping:', updatedPaymentIntent.id);
+        // Create a shipping fee as a separate line item
+        const shippingFee = await stripe.charges.create({
+            amount: Math.round(shippingCost * 100),
+            currency: 'eur',
+            customer: customerId,
+            description: `Shipping fee for order ${orderId} to ${country}`,
+            metadata: {
+                order_id: orderId,
+                type: 'shipping_fee'
+            }
+        });
+
+        console.log('Updated payment intent and created shipping fee:', {
+            paymentIntentId: updatedIntent.id,
+            shippingFeeId: shippingFee.id
+        });
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
-                paymentIntentId: updatedPaymentIntent.id,
-                shippingCost: shippingCost,
+                paymentIntentId: updatedIntent.id,
+                shippingFeeId: shippingFee.id,
                 totalAmount: totalAmount
             })
         };
