@@ -1,4 +1,4 @@
-// Unified Shipping Calculator and Checkout for Webflow + Memberstack 2.0
+// Unified Shipping Calculator and Checkout for Webflow + Stripe
 
 // Configuration
 const SHIPPING_RATES = {
@@ -21,32 +21,21 @@ const state = {
     quantity: 1
 };
 
-// Wait for Memberstack 2.0
-function waitForMemberstack(timeout = 5000) {
-    return new Promise((resolve, reject) => {
-        const start = Date.now();
+// Load Stripe
+let stripe;
+loadStripe();
 
-        function checkMemberstack() {
-            if (window.$memberstackDom) {
-                console.log('Memberstack found');
-                resolve(window.$memberstackDom);
-            } else if (Date.now() - start > timeout) {
-                reject(new Error('Memberstack initialization timeout'));
-            } else {
-                setTimeout(checkMemberstack, 100);
-            }
-        }
-
-        checkMemberstack();
-    });
+async function loadStripe() {
+    try {
+        stripe = await Stripe('your_publishable_key'); // Replace with your Stripe publishable key
+    } catch (error) {
+        console.error('Error loading Stripe:', error);
+    }
 }
 
 // Initialize checkout buttons
 async function initializeCheckoutButtons() {
     try {
-        const memberstack = await waitForMemberstack();
-        console.log('Memberstack initialized');
-
         const checkoutButtons = document.querySelectorAll('[data-ms-price-add]');
         checkoutButtons.forEach(button => {
             button.addEventListener('click', handleCheckout);
@@ -74,7 +63,7 @@ async function handleCheckout(e) {
     
     try {
         const button = e.currentTarget;
-        const priceId = button.dataset.msPriceAdd;
+        const priceId = button.dataset.msPriceAdd; // We'll need to replace this with a Stripe price ID
         
         if (!priceId) {
             console.error('No price ID found on button');
@@ -84,112 +73,38 @@ async function handleCheckout(e) {
         console.log('Price ID:', priceId);
         
         const orderId = `order_${Date.now()}`;
-        const metadata = {
-            quantity: state.quantity,
-            product_type: state.productType,
-            requires_shipping: true,
-            order_id: orderId,
-            base_amount: state.basePrice * state.quantity
-        };
-
-        console.log('Opening checkout with metadata:', metadata);
-
-        const memberstack = await waitForMemberstack();
-        const checkoutOptions = {
-            priceId: priceId,
-            metadata: metadata,
-            quantity: state.quantity,
-            successUrl: `${window.location.origin}/order-confirmation?order_id=${orderId}`,
-            cancelUrl: window.location.href,
-            mode: "payment",
-            allowPromotionCodes: true,
-            billingAddressCollection: 'required',
-            shippingAddressCollection: {
-                allowedCountries: ['AT', 'DE', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+        
+        // Create Stripe Checkout Session
+        const response = await fetch('/.netlify/functions/create-checkout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
-            shipping_options: [
-                {
-                    shipping_rate_data: {
-                        display_name: 'Standard Shipping (Austria)',
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 500,
-                            currency: 'eur',
-                        },
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                        }
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        display_name: 'Standard Shipping (Germany)',
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 1000,
-                            currency: 'eur',
-                        },
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                        }
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        display_name: 'Standard Shipping (EU)',
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 1000,
-                            currency: 'eur',
-                        },
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                        }
-                    }
+            body: JSON.stringify({
+                priceId: priceId,
+                quantity: state.quantity,
+                metadata: {
+                    order_id: orderId,
+                    product_type: state.productType,
+                    base_amount: state.basePrice * state.quantity
                 }
-            ]
-        };
+            })
+        });
 
-        console.log('Checkout options:', checkoutOptions);
+        const session = await response.json();
 
-        try {
-            const result = await memberstack.openModal("CHECKOUT", checkoutOptions);
-            console.log('Checkout result:', result);
+        if (session.error) {
+            console.error('Error creating checkout session:', session.error);
+            return;
+        }
 
-            if (result.success) {
-                console.log('Checkout completed successfully');
-                console.log('Payment Intent ID:', result.data?.paymentIntentId);
-                console.log('Customer ID:', result.data?.customerId);
-            }
-        } catch (checkoutError) {
-            console.error('Checkout error:', checkoutError);
-            if (checkoutError.message.includes('not initialized')) {
-                console.log('Retrying checkout after reinitialization...');
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                const reinitResult = await memberstack.openModal("CHECKOUT", checkoutOptions);
-                console.log('Retry result:', reinitResult);
-            }
+        // Redirect to Stripe Checkout
+        const result = await stripe.redirectToCheckout({
+            sessionId: session.id
+        });
+
+        if (result.error) {
+            console.error('Checkout error:', result.error);
         }
     } catch (error) {
         console.error('Error during checkout process:', error);
@@ -220,7 +135,7 @@ async function init() {
             });
         }
 
-        // Initialize checkout buttons after Memberstack is loaded
+        // Initialize checkout buttons
         await initializeCheckoutButtons();
     } catch (error) {
         console.error('Error during initialization:', error);
