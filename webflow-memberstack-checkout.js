@@ -21,25 +21,27 @@ const state = {
     quantity: 1
 };
 
-// Load Stripe
+// Initialize Stripe
 let stripe;
-loadStripe();
-
-async function loadStripe() {
+async function initStripe() {
     try {
-        stripe = await Stripe('your_publishable_key'); // Replace with your Stripe publishable key
+        stripe = await Stripe('pk_test_51OQvSBFrPAUGZiHgGYKkHZZiGLCxqSFTXGgxFVOtBtqjlzQxMZWwxjPWmSsGDWmYZkVEqgOULZoNgRVgRGbsVEkB00cXTZQMtw');
+        console.log('Stripe initialized successfully');
+        return true;
     } catch (error) {
-        console.error('Error loading Stripe:', error);
+        console.error('Error initializing Stripe:', error);
+        return false;
     }
 }
 
 // Initialize checkout buttons
 async function initializeCheckoutButtons() {
     try {
-        const checkoutButtons = document.querySelectorAll('[data-ms-price-add]');
+        const checkoutButtons = document.querySelectorAll('[data-stripe-price-id]');
         checkoutButtons.forEach(button => {
             button.addEventListener('click', handleCheckout);
         });
+        console.log('Checkout buttons initialized');
     } catch (error) {
         console.error('Error initializing checkout buttons:', error);
     }
@@ -62,25 +64,35 @@ async function handleCheckout(e) {
     console.log('Checkout initiated');
     
     try {
+        // Check if Stripe is initialized
+        if (!stripe) {
+            const stripeInitialized = await initStripe();
+            if (!stripeInitialized) {
+                throw new Error('Could not initialize Stripe');
+            }
+        }
+
         // Check if user is authenticated with Memberstack
         const memberstack = window.$memberstackDom;
+        if (!memberstack) {
+            throw new Error('Memberstack not initialized');
+        }
+
         const user = await memberstack.getCurrentMember();
-        
         if (!user) {
             console.log('User not authenticated, redirecting to signup');
-            window.location.href = '/signup'; // Replace with your signup page URL
+            window.location.href = '/signup';
             return;
         }
 
         const button = e.currentTarget;
-        const priceId = button.dataset.msPriceAdd;
+        const priceId = button.dataset.stripePriceId;
         
         if (!priceId) {
-            console.error('No price ID found on button');
-            return;
+            throw new Error('No Stripe price ID found on button');
         }
 
-        console.log('Price ID:', priceId);
+        console.log('Creating checkout session with price ID:', priceId);
         
         const orderId = `order_${Date.now()}`;
         
@@ -103,33 +115,39 @@ async function handleCheckout(e) {
             })
         });
 
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Server error: ${errorData.error || response.statusText}`);
+        }
+
         const session = await response.json();
 
         if (session.error) {
-            console.error('Error creating checkout session:', session.error);
-            return;
+            throw new Error(`Checkout session error: ${session.error}`);
         }
 
-        // Redirect to Stripe Checkout
+        console.log('Redirecting to Stripe checkout...');
         const result = await stripe.redirectToCheckout({
             sessionId: session.id
         });
 
         if (result.error) {
-            console.error('Checkout error:', result.error);
+            throw new Error(`Stripe redirect error: ${result.error.message}`);
         }
     } catch (error) {
-        console.error('Error during checkout process:', error);
+        console.error('Checkout error:', error);
+        alert(`Checkout error: ${error.message}`);
     }
 }
 
 // Initialize the script
 async function init() {
-    console.log('SHIPPING CALCULATOR INITIALIZED');
-    console.log('Current page:', window.location.href);
-    console.log('Page loaded');
+    console.log('Initializing shopping system...');
 
     try {
+        // Initialize Stripe
+        await initStripe();
+
         // Initialize product state
         const productElement = document.querySelector('.product');
         if (productElement) {
@@ -149,8 +167,10 @@ async function init() {
 
         // Initialize checkout buttons
         await initializeCheckoutButtons();
+        
+        console.log('Shopping system initialized successfully');
     } catch (error) {
-        console.error('Error during initialization:', error);
+        console.error('Initialization error:', error);
     }
 }
 

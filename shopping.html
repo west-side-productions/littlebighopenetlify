@@ -136,17 +136,21 @@
         <!-- Checkout Button -->
         <button 
             class="checkout-button" 
-            data-ms-price-add="price_01HKP1GCHVWQ4WBXN8KQXPVP4T">
+            data-ms-price-add="price_01HKP1GCHVWQ4WBXN8KQXPVP4T"
+            data-stripe-price-id="price_01HKP1GCHVWQ4WBXN8KQXPVP4T">
             Proceed to Checkout
         </button>
     </div>
 
     <!-- Memberstack 2.0 Script -->
-    <script src="https://cdn.memberstack.com/js/v2" data-memberstack-id="pk_sb_c2c2e5e4f4d5a3e6b0f6"></script>
+    <script src="https://cdn.memberstack.com/js/v2" data-memberstack-id="app_cm24j3get009s0spw6wz49psh"></script>
+    
+    <!-- Stripe.js Script -->
+    <script src="https://js.stripe.com/v3/"></script>
 
-    <!-- Our checkout script -->
-    <script src="webflow-memberstack-checkout.js"></script>
+    <!-- Our scripts (order matters) -->
     <script src="utils.js"></script>
+    <script src="webflow-memberstack-checkout.js"></script>
     <script src="shopping.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {

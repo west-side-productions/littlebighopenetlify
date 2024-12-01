@@ -14,9 +14,18 @@ exports.handler = async function(event, context) {
     try {
         const { priceId, quantity, metadata } = JSON.parse(event.body);
 
+        // Validate required fields
+        if (!priceId || !quantity) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Missing required fields' })
+            };
+        }
+
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
             payment_method_types: ['card'],
+            billing_address_collection: 'required',
             line_items: [
                 {
                     price: priceId,
@@ -24,7 +33,7 @@ exports.handler = async function(event, context) {
                     adjustable_quantity: {
                         enabled: true,
                         minimum: 1,
-                        maximum: 10
+                        maximum: 5
                     }
                 }
             ],
@@ -36,7 +45,7 @@ exports.handler = async function(event, context) {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: 500,
+                            amount: 500, // €5.00
                             currency: 'eur',
                         },
                         display_name: 'Standard Shipping (Austria)',
@@ -59,7 +68,7 @@ exports.handler = async function(event, context) {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: 1000,
+                            amount: 1000, // €10.00
                             currency: 'eur',
                         },
                         display_name: 'Standard Shipping (Germany)',
@@ -82,7 +91,7 @@ exports.handler = async function(event, context) {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: 1000,
+                            amount: 1000, // €10.00
                             currency: 'eur',
                         },
                         display_name: 'Standard Shipping (EU)',
@@ -99,20 +108,36 @@ exports.handler = async function(event, context) {
                     }
                 }
             ],
-            metadata: metadata,
+            allow_promotion_codes: true,
+            metadata: {
+                ...metadata,
+                shipping_config: 'eu_book_shipping'
+            },
             success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${siteUrl}/cancel`,
+            locale: 'auto',
+            currency: 'eur',
+            customer_creation: 'always',
+            tax_id_collection: {
+                enabled: true
+            }
         });
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ id: session.id })
+            body: JSON.stringify({ 
+                id: session.id,
+                url: session.url 
+            })
         };
     } catch (error) {
         console.error('Error creating checkout session:', error);
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ 
+                error: error.message,
+                details: error.stack 
+            })
         };
     }
 };
