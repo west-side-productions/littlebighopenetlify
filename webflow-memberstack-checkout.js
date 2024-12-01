@@ -110,8 +110,9 @@ async function handleCheckout(e) {
 
         console.log('Starting Stripe checkout...');
         
-        // Create Stripe Checkout Session
-        const response = await fetch('/create-checkout-session', {
+        // Create Stripe Checkout Session using Netlify function
+        const NETLIFY_DOMAIN = 'https://little-big-hope.netlify.app';
+        const response = await fetch(`${NETLIFY_DOMAIN}/.netlify/functions/create-checkout-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -123,15 +124,19 @@ async function handleCheckout(e) {
             }),
         });
 
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Checkout session creation failed:', errorData);
+            throw new Error(`Failed to create checkout session: ${response.status}`);
+        }
+
         const session = await response.json();
-
-        // Redirect to Stripe Checkout
-        const result = await stripe.redirectToCheckout({
-            sessionId: session.id
-        });
-
-        if (result.error) {
-            throw new Error(result.error.message);
+        
+        if (session.url) {
+            // Redirect to Stripe's hosted checkout page
+            window.location.href = session.url;
+        } else {
+            throw new Error('No checkout URL received');
         }
         
     } catch (error) {
