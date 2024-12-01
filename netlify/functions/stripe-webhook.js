@@ -1,5 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const memberstack = require('@memberstack/sdk');
+const fetch = require('node-fetch');
 
 exports.handler = async function(event, context) {
     if (event.httpMethod !== 'POST') {
@@ -20,28 +20,31 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // Initialize Memberstack
-    const ms = memberstack.init(process.env.MEMBERSTACK_SECRET_KEY);
-
     if (stripeEvent.type === 'checkout.session.completed') {
         const session = stripeEvent.data.object;
         
         try {
             // Get member ID from metadata
             const memberstackMemberId = session.metadata.memberstack_member_id;
-            const memberstackEmail = session.metadata.memberstack_email;
             
-            // Add plan to member
-            await ms.members.update({
-                id: memberstackMemberId,
-                planConnections: [{
-                    planId: process.env.MEMBERSTACK_COOKBOOK_PLAN_ID,
-                    status: "ACTIVE"
-                }]
+            // Add plan to member using Memberstack REST API
+            const response = await fetch(`https://api.memberstack.io/v1/members/${memberstackMemberId}/add-plan`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                },
+                body: JSON.stringify({
+                    planId: process.env.MEMBERSTACK_COOKBOOK_PLAN_ID
+                })
             });
 
+            if (!response.ok) {
+                throw new Error(`Memberstack API error: ${response.statusText}`);
+            }
+
             // Send confirmation email (you can implement this part)
-            // await sendConfirmationEmail(memberstackEmail, session.metadata.order_id);
+            // await sendConfirmationEmail(session.metadata.memberstack_email, session.metadata.order_id);
 
             return {
                 statusCode: 200,

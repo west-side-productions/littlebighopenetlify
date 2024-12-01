@@ -1,7 +1,7 @@
 {
   "name": "lbhtest",
   "version": "1.0.0",
-  "description": "",
+  "description": "A Webflow-based shopping system with Memberstack 2.0 integration and custom shipping handling.",
   "main": "memberstack-checkout.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,6 +10,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@netlify/functions": "^2.8.2",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
     "stripe": "^17.4.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/west-side-productions/littlebighopenetlify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/west-side-productions/littlebighopenetlify/issues"
+  },
+  "homepage": "https://github.com/west-side-productions/littlebighopenetlify#readme"
 }
