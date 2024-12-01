@@ -100,5 +100,39 @@
 
     <script src="utils.js"></script>
     <script src="shopping.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Configuration
+            const SHIPPING_RATES = {
+                AT: { price: 5, label: "Austria (€5)" },
+                DE: { price: 10, label: "Germany (€10)" },
+                EU: { price: 10, label: "Europe (€10)" },
+                INT: { price: 15, label: "International (€15)" }
+            };
+
+            const EU_COUNTRIES = [
+                'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+                'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+                'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+            ];
+
+            // Get Memberstack instance
+            const memberstack = window.$memberstackDom;
+            if (!memberstack) {
+                console.error('Memberstack not found');
+                return;
+            }
+
+            let state = {
+                productType: '',
+                quantity: 1,
+                country: '',
+                basePrice: 0,
+                shippingCost: 0
+            };
+
+            // Initialize UI elements
+        });
+    </script>
 </body>
 </html>

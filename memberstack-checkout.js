@@ -29,6 +29,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         shippingCost: 0
     };
 
+    // Populate country dropdown with shipping options
+    function populateCountryDropdown() {
+        const countrySelect = document.getElementById('shipping-country');
+        if (!countrySelect) return;
+
+        // Clear existing options
+        countrySelect.innerHTML = '';
+
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select Country';
+        countrySelect.appendChild(defaultOption);
+
+        // Add Austria as first option
+        const atOption = document.createElement('option');
+        atOption.value = 'AT';
+        atOption.textContent = SHIPPING_RATES.AT.label;
+        countrySelect.appendChild(atOption);
+
+        // Add Germany as second option
+        const deOption = document.createElement('option');
+        deOption.value = 'DE';
+        deOption.textContent = SHIPPING_RATES.DE.label;
+        countrySelect.appendChild(deOption);
+
+        // Add other EU countries
+        EU_COUNTRIES.forEach(country => {
+            if (country !== 'AT' && country !== 'DE') {
+                const option = document.createElement('option');
+                option.value = country;
+                option.textContent = `${country} (€${SHIPPING_RATES.EU.price})`;
+                countrySelect.appendChild(option);
+            }
+        });
+
+        // Add International option at the end
+        const intOption = document.createElement('option');
+        intOption.value = 'INT';
+        intOption.textContent = SHIPPING_RATES.INT.label;
+        countrySelect.appendChild(intOption);
+    }
+
     // Initialize UI elements
     function initializeUI() {
         const productElement = document.querySelector('[data-product-type]');
