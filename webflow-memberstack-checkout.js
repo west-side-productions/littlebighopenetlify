@@ -13,10 +13,12 @@ const EU_COUNTRIES = [
     'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
 ];
 
+// Configuration object
 const CONFIG = {
-    retryAttempts: 20,
-    retryDelay: 500,
-    priceId: "price_01HKP1GCHVWQ4WBXN8KQXPVP4T"
+    // TODO: Replace with your Stripe price ID (starts with prc_) for Memberstack 2.0
+    priceId: 'prc_buch-tp2106tu', // Stripe price ID for Memberstack 2.0
+    successUrl: `${window.location.origin}/success`,
+    cancelUrl: `${window.location.origin}/cancel`
 };
 
 // State management
@@ -29,6 +31,24 @@ const state = {
 
 // Utility function for delay
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Retry function with exponential backoff
+async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (i === maxRetries - 1) throw error; // Last attempt, throw the error
+            if (error?.message?.includes('rate limit')) {
+                const waitTime = baseDelay * Math.pow(2, i);
+                console.log(`Rate limit hit, waiting ${waitTime}ms before retry ${i + 1}/${maxRetries}`);
+                await delay(waitTime);
+                continue;
+            }
+            throw error; // Not a rate limit error, throw immediately
+        }
+    }
+}
 
 // Initialize Stripe
 let stripe;
@@ -44,99 +64,74 @@ async function initStripe() {
     }
 }
 
-// Wait for Memberstack to be ready
-function waitForMemberstack(callback, maxAttempts = CONFIG.retryAttempts) {
-    let attempts = 0;
-    
-    const checkMemberstack = () => {
-        attempts++;
-        console.log('Checking for Memberstack...', attempts);
-        
-        if (window.$memberstackDom) {
-            console.log('Memberstack 2.0 found!');
-            callback(window.$memberstackDom);
-        } else if (attempts < maxAttempts) {
-            setTimeout(checkMemberstack, CONFIG.retryDelay);
-        } else {
-            console.error('Memberstack failed to load after', attempts, 'attempts');
-        }
-    };
-    
-    checkMemberstack();
-}
+// Initialize Memberstack
+let memberstackDom;
 
-// Initialize checkout buttons
-async function initializeCheckoutButtons(memberstack) {
-    try {
-        console.log('Setting up checkout buttons...');
-        const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"]');
-        console.log('Found checkout buttons:', checkoutButtons.length);
-        
-        checkoutButtons.forEach(button => {
-            button.addEventListener('click', (e) => handleCheckout(e, memberstack));
-        });
-        
-        console.log('Checkout buttons initialized');
-    } catch (error) {
-        console.error('Error initializing checkout buttons:', error);
+async function initializeMemberstack() {
+    // Wait for Memberstack to be available
+    while (!window.$memberstackDom) {
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
+    memberstackDom = window.$memberstackDom;
+    
+    // Log available methods
+    console.log('Available Memberstack methods:', Object.keys(memberstackDom));
+    console.log('Memberstack initialized:', memberstackDom);
+    return memberstackDom;
 }
 
 // Handle checkout button click
-async function handleCheckout(e, memberstack) {
+async function handleCheckout(e) {
     e.preventDefault();
-    e.stopPropagation();
-    
-    const button = e.currentTarget;
     
     try {
-        // Disable button during process
-        button.disabled = true;
-        button.style.opacity = '0.7';
-        button.textContent = 'Processing...';
+        // Initialize Stripe first
+        if (!stripe) {
+            const stripeInitialized = await initStripe();
+            if (!stripeInitialized) {
+                throw new Error('Stripe not initialized');
+            }
+        }
 
-        // Check authentication
+        // Check authentication with Memberstack
+        const memberstack = await initializeMemberstack();
+        if (!memberstack) {
+            throw new Error('Memberstack not initialized');
+        }
+
         const member = await memberstack.getCurrentMember();
         console.log('Current member:', member);
         
         if (!member) {
             console.log('User not authenticated, redirecting to login');
             await memberstack.openModal('login');
-            button.disabled = false;
-            button.style.opacity = '1';
-            button.textContent = 'Proceed to Checkout';
             return;
         }
 
-        console.log('Starting checkout with price:', CONFIG.priceId);
+        console.log('Starting Stripe checkout...');
         
-        try {
-            // Try direct checkout first
-            await memberstack.redirectToCheckout({
+        // Create Stripe Checkout Session
+        const response = await fetch('/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
                 priceId: CONFIG.priceId,
-                successUrl: `${window.location.origin}/success`,
-                cancelUrl: `${window.location.origin}/cancel`,
-                mode: "payment"
-            });
-        } catch (checkoutError) {
-            console.error('Direct checkout failed:', checkoutError);
-            
-            // Fallback to session creation
-            console.log('Attempting fallback to session creation...');
-            const session = await memberstack.payments.createSession({
-                priceId: CONFIG.priceId,
-                successUrl: `${window.location.origin}/success`,
-                cancelUrl: `${window.location.origin}/cancel`,
-                mode: "payment"
-            });
+                successUrl: CONFIG.successUrl,
+                cancelUrl: CONFIG.cancelUrl,
+            }),
+        });
 
-            console.log('Session created:', session);
+        const session = await response.json();
 
-            if (session?.url) {
-                window.location.href = session.url;
-            } else {
-                throw new Error('No checkout URL received from session');
-            }
+        // Redirect to Stripe Checkout
+        const result = await stripe.redirectToCheckout({
+            sessionId: session.id
+        });
+
+        if (result.error) {
+            throw new Error(result.error.message);
         }
         
     } catch (error) {
@@ -146,27 +141,51 @@ async function handleCheckout(e, memberstack) {
             error: error
         });
         
-        button.disabled = false;
-        button.style.opacity = '1';
-        button.textContent = 'Proceed to Checkout';
-        
         if (errorMessage.includes('rate limit')) {
-            alert('Service is temporarily busy. Please try again in a moment.');
+            alert('The service is experiencing high traffic. Please try again in a moment.');
+        } else if (errorMessage.includes('auth')) {
+            alert('Please log in to continue with your purchase.');
         } else {
             alert('There was a problem processing your request. Please try again.');
         }
     }
 }
 
-// Initialize the shopping system
-function initShoppingSystem() {
-    console.log('Initializing shopping system...');
+// Initialize checkout buttons
+async function initializeCheckoutButtons() {
+    console.log('Setting up checkout buttons...');
+    // Target both checkout buttons
+    const checkoutButtons = document.querySelectorAll('#checkoutButton, button.checkout-button');
+    console.log('Found checkout buttons:', checkoutButtons.length);
     
-    waitForMemberstack((memberstack) => {
-        console.log('Shopping system initialized with Memberstack 2.0');
-        initializeCheckoutButtons(memberstack);
+    checkoutButtons.forEach(button => {
+        // Remove any existing click handlers
+        button.removeEventListener('click', handleCheckout);
+        // Add our new click handler
+        button.addEventListener('click', handleCheckout);
     });
+    
+    console.log('Checkout buttons initialized');
 }
 
-// Start initialization when DOM is ready
-document.addEventListener('DOMContentLoaded', initShoppingSystem);
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Initializing shopping system...');
+    
+    try {
+        // Initialize Memberstack
+        console.log('Checking for Memberstack...', window.$memberstackDom ? 1 : 0);
+        const memberstack = await initializeMemberstack();
+        if (memberstack) {
+            console.log('Memberstack 2.0 found!');
+        }
+        
+        console.log('Shopping system initialized with Memberstack 2.0');
+        
+        // Initialize checkout buttons
+        await initializeCheckoutButtons();
+        
+    } catch (error) {
+        console.error('Error initializing shopping system:', error);
+    }
+});
