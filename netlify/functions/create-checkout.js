@@ -1,8 +1,4 @@
-require('dotenv').config();
-
-// Temporarily use test key for development
-const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_51OQvSBFrPAUGZiHgwDHSIJRQEpnTLWTkVZDaKiMvLXJGOlPAUwdDxTDTCWdnO7vKHLQBNgLYKtQTnLQhVVbVtFKe00zLQjPaXS';
-const stripe = require('stripe')(STRIPE_KEY);
+const stripe = require('stripe')('sk_test_51OQvSBFrPAUGZiHgwDHSIJRQEpnTLWTkVZDaKiMvLXJGOlPAUwdDxTDTCWdnO7vKHLQBNgLYKtQTnLQhVVbVtFKe00zLQjPaXS');
 
 exports.handler = async function(event, context) {
     console.log('Received checkout request');
@@ -16,7 +12,7 @@ exports.handler = async function(event, context) {
 
     try {
         // Verify Stripe API key
-        if (!STRIPE_KEY) {
+        if (!stripe) {
             throw new Error('Missing Stripe API key');
         }
 
