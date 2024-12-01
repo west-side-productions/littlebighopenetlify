@@ -15,8 +15,8 @@ const EU_COUNTRIES = [
 
 // Configuration object
 const CONFIG = {
-    // TODO: Replace with your Stripe price ID (starts with prc_) for Memberstack 2.0
-    priceId: 'prc_buch-tp2106tu', // Stripe price ID for Memberstack 2.0
+    // Memberstack 2.0 price ID (starts with prc_)
+    priceId: 'prc_buch-tp2106tu',
     successUrl: `${window.location.origin}/success`,
     cancelUrl: `${window.location.origin}/cancel`
 };
