@@ -106,7 +106,69 @@ async function handleCheckout(e) {
             billingAddressCollection: 'required',
             shippingAddressCollection: {
                 allowedCountries: ['AT', 'DE', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
-            }
+            },
+            shipping_options: [
+                {
+                    shipping_rate_data: {
+                        display_name: 'Standard Shipping (Austria)',
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 500,
+                            currency: 'eur',
+                        },
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        display_name: 'Standard Shipping (Germany)',
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 1000,
+                            currency: 'eur',
+                        },
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        display_name: 'Standard Shipping (EU)',
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 1000,
+                            currency: 'eur',
+                        },
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        }
+                    }
+                }
+            ]
         };
 
         console.log('Checkout options:', checkoutOptions);
