@@ -62,8 +62,18 @@ async function handleCheckout(e) {
     console.log('Checkout initiated');
     
     try {
+        // Check if user is authenticated with Memberstack
+        const memberstack = window.$memberstackDom;
+        const user = await memberstack.getCurrentMember();
+        
+        if (!user) {
+            console.log('User not authenticated, redirecting to signup');
+            window.location.href = '/signup'; // Replace with your signup page URL
+            return;
+        }
+
         const button = e.currentTarget;
-        const priceId = button.dataset.msPriceAdd; // We'll need to replace this with a Stripe price ID
+        const priceId = button.dataset.msPriceAdd;
         
         if (!priceId) {
             console.error('No price ID found on button');
@@ -86,7 +96,9 @@ async function handleCheckout(e) {
                 metadata: {
                     order_id: orderId,
                     product_type: state.productType,
-                    base_amount: state.basePrice * state.quantity
+                    base_amount: state.basePrice * state.quantity,
+                    memberstack_member_id: user.id,
+                    memberstack_email: user.email
                 }
             })
         });
