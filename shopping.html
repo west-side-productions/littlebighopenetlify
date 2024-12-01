@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .accordion {
+            cursor: pointer;
+            padding: 10px;
+            border: none;
+            text-align: left;
+            outline: none;
+            transition: background-color 0.4s;
+            background-color: #eee;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .accordion.active, .accordion:hover {
+            background-color: #ccc;
+        }
+
+        .panel {
+            padding: 0 10px;
+            display: none;
+            overflow: hidden;
+            background-color: white;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            transition: max-height 0.4s ease-in-out;
+        }
+
+        #btnClear.btn-saving {
+            background-color: #ffa500;
+        }
+
+        #btnClear.btn-saved {
+            background-color: #4caf50;
+        }
+
+        .delete-btn {
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: red;
+            font-weight: bold;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+
+        #ingredientList {
+            margin-top: 20px;
+            padding: 10px;
+        }
+
+        #ingredientList ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #ingredientList li {
+            display: flex;
+            align-items: center;
+        }
+
+        #ingredientList input[type="checkbox"] {
+            margin-right: 10px;
+        }
+
+        .crossed {
+            text-decoration: line-through;
+            color: grey;
+        }
+    </style>
+</head>
+<body>
+    <div id="list"></div>
+    
+    <div id="ingredientList">
+        <h3>Alle Zutaten</h3>
+        <ul id="allIngredients"></ul>
+    </div>
+
+    <div id="seasoning">
+        <h4>Gewürze</h4>
+        <ul>
+            <li>1 TL Salz</li>
+            <li>½ TL Pfeffer</li>
+        </ul>
+    </div>
+
+    <template id="receipe">
+        <button class="accordion"></button>
+        <div class="panel">
+            <ul id="ulItems"></ul>
+        </div>
+    </template>
+
+    <script src="utils.js"></script>
+    <script src="shopping.js"></script>
+</body>
+</html>
