@@ -17,6 +17,7 @@ const EU_COUNTRIES = [
 const CONFIG = {
     // Memberstack 2.0 price ID (starts with prc_)
     priceId: 'prc_buch-tp2106tu',
+    stripeProductId: 'your_stripe_product_id', // Add Stripe product ID
     successUrl: `${window.location.origin}/success`,
     cancelUrl: `${window.location.origin}/cancel`
 };
@@ -124,9 +125,18 @@ async function handleCheckout(e) {
             credentials: 'include',
             mode: 'cors',
             body: JSON.stringify({
-                priceId: CONFIG.priceId,
+                priceId: CONFIG.stripeProductId, // Use Stripe product ID instead of Memberstack
                 successUrl: CONFIG.successUrl,
-                cancelUrl: CONFIG.cancelUrl
+                cancelUrl: CONFIG.cancelUrl,
+                customerEmail: member.email,
+                shipping: {
+                    allowedCountries: ['AT', 'DE', 'CH'],
+                    collectShippingAddress: true
+                },
+                metadata: {
+                    memberstackUserId: member.id,
+                    memberstackPlanId: CONFIG.priceId // Store original Memberstack plan ID
+                }
             })
         });
 
@@ -150,18 +160,14 @@ async function handleCheckout(e) {
         }
         
     } catch (error) {
-        const errorMessage = error?.message || 'Unknown error occurred';
-        console.error('Checkout error:', {
-            message: errorMessage,
-            error: error
-        });
-        
-        if (errorMessage.includes('rate limit')) {
-            alert('The service is experiencing high traffic. Please try again in a moment.');
-        } else if (errorMessage.includes('auth')) {
-            alert('Please log in to continue with your purchase.');
-        } else {
-            alert('There was a problem processing your request. Please try again.');
+        console.error('Checkout error:', { message: error.message, error });
+        // Show error to user
+        if (memberstackDom) {
+            memberstackDom._showMessage({ 
+                type: 'error',
+                title: 'Checkout Error',
+                text: 'There was a problem starting the checkout. Please try again.'
+            });
         }
     }
 }

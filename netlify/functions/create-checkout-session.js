@@ -9,6 +9,13 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000'
 ];
 
+// Shipping rate configuration
+const SHIPPING_RATES = {
+    AT: { amount: 500, label: 'Austria Shipping' },  // €5.00
+    DE: { amount: 1000, label: 'Germany Shipping' }, // €10.00
+    CH: { amount: 1000, label: 'Switzerland Shipping' } // €10.00
+};
+
 function getAllowedOriginHeader(requestOrigin) {
   // During development, allow any origin if not in production
   if (process.env.NODE_ENV !== 'production') {
@@ -64,109 +71,71 @@ exports.handler = async function(event, context) {
 
   try {
     console.log('Processing POST request');
-    const { priceId, successUrl, cancelUrl } = JSON.parse(event.body);
+    const data = JSON.parse(event.body);
+    const { priceId, successUrl, cancelUrl, customerEmail, shipping, metadata } = data;
 
-    if (!priceId || !successUrl || !cancelUrl) {
-      console.log('Missing required parameters:', { priceId, successUrl, cancelUrl });
+    if (!priceId || !successUrl || !cancelUrl || !customerEmail || !shipping) {
+      console.log('Missing required parameters:', { priceId, successUrl, cancelUrl, customerEmail, shipping });
       return {
         statusCode: 400,
         headers: addCorsHeaders(origin),
         body: JSON.stringify({ 
           error: 'Missing required parameters',
-          received: { priceId, successUrl, cancelUrl }
+          received: { priceId, successUrl, cancelUrl, customerEmail, shipping }
         })
       };
     }
 
+    // Create dynamic shipping options
+    const shipping_options = Object.entries(SHIPPING_RATES).map(([country, rate]) => ({
+      shipping_rate_data: {
+        type: 'fixed_amount',
+        fixed_amount: {
+          amount: rate.amount,
+          currency: 'eur',
+        },
+        display_name: rate.label,
+        delivery_estimate: {
+          minimum: {
+            unit: 'business_day',
+            value: 3,
+          },
+          maximum: {
+            unit: 'business_day',
+            value: 5,
+          },
+        },
+      }
+    }));
+
     console.log('Creating checkout session with:', { 
       priceId,
       successUrl,
-      cancelUrl 
+      cancelUrl,
+      customerEmail,
+      shipping,
+      metadata 
     });
 
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [{
         price: priceId,
-        quantity: 1,
+        quantity: 1
       }],
-      shipping_address_collection: {
-        allowed_countries: ['AT', 'DE', 'CH'],
-      },
-      shipping_options: [
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: {
-              amount: 500,
-              currency: 'eur',
-            },
-            display_name: 'Standard Shipping - Austria',
-            delivery_estimate: {
-              minimum: {
-                unit: 'business_day',
-                value: 3,
-              },
-              maximum: {
-                unit: 'business_day',
-                value: 5,
-              },
-            },
-            metadata: {
-              country: 'AT'
-            }
-          },
-        },
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: {
-              amount: 1000,
-              currency: 'eur',
-            },
-            display_name: 'Standard Shipping - Germany',
-            delivery_estimate: {
-              minimum: {
-                unit: 'business_day',
-                value: 3,
-              },
-              maximum: {
-                unit: 'business_day',
-                value: 5,
-              },
-            },
-            metadata: {
-              country: 'DE'
-            }
-          },
-        },
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: {
-              amount: 1000,
-              currency: 'eur',
-            },
-            display_name: 'Standard Shipping - Switzerland',
-            delivery_estimate: {
-              minimum: {
-                unit: 'business_day',
-                value: 5,
-              },
-              maximum: {
-                unit: 'business_day',
-                value: 7,
-              },
-            },
-            metadata: {
-              country: 'CH'
-            }
-          },
-        },
-      ],
       success_url: successUrl,
       cancel_url: cancelUrl,
+      customer_email: customerEmail,
+      shipping_address_collection: {
+        allowed_countries: shipping.allowedCountries
+      },
+      shipping_options,
+      metadata: {
+        ...metadata,
+        source: 'little-big-hope'
+      }
     });
 
     console.log('Checkout session created:', session.id);
@@ -181,12 +150,15 @@ exports.handler = async function(event, context) {
     };
   } catch (error) {
     console.error('Error creating checkout session:', error);
+    
     return {
       statusCode: 500,
       headers: addCorsHeaders(origin),
       body: JSON.stringify({ 
-        error: error.message,
-        type: error.type
+        error: {
+          message: error.message,
+          type: error.type
+        }
       })
     };
   }
