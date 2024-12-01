@@ -1,10 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// Price ID mapping from Memberstack to Stripe
-const PRICE_ID_MAPPING = {
-  'prc_buch-tp2106tu': process.env.STRIPE_PRICE_ID // Make sure to set this in your Netlify environment variables
-};
-
 // Allow requests from Webflow and Netlify domains
 const ALLOWED_ORIGINS = [
   'https://little-big-hope-2971af-688db640ffff8f55.webflow.io',
@@ -83,23 +78,8 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Map Memberstack price ID to Stripe price ID
-    const stripePriceId = PRICE_ID_MAPPING[priceId];
-    if (!stripePriceId) {
-      console.error('Invalid price ID mapping:', priceId);
-      return {
-        statusCode: 400,
-        headers: addCorsHeaders(origin),
-        body: JSON.stringify({ 
-          error: 'Invalid price ID',
-          message: 'The provided price ID is not configured in the system'
-        })
-      };
-    }
-
     console.log('Creating checkout session with:', { 
-      memberstackPriceId: priceId,
-      stripePriceId,
+      priceId,
       successUrl,
       cancelUrl 
     });
@@ -108,7 +88,7 @@ exports.handler = async function(event, context) {
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [{
-        price: stripePriceId,
+        price: priceId,
         quantity: 1,
       }],
       shipping_address_collection: {
