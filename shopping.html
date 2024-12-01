@@ -83,7 +83,16 @@
     
     <div id="ingredientList">
         <h3>Alle Zutaten</h3>
-        <ul id="allIngredients"></ul>
+        <div id="ingredients"></div>
+        
+        <!-- Add checkout button -->
+        <button 
+            id="checkoutButton"
+            data-stripe-price-id="price_1QRJp1JRMXFic4sWz3gLoCy6"
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;"
+        >
+            Proceed to Checkout (€20.00)
+        </button>
     </div>
 
     <div id="seasoning">
@@ -92,6 +101,11 @@
             <li>1 TL Salz</li>
             <li>½ TL Pfeffer</li>
         </ul>
+    </div>
+
+    <div id="seasoning">
+        <h3>Gewürze</h3>
+        <ul id="seasonings"></ul>
     </div>
 
     <template id="receipe">
@@ -143,7 +157,7 @@
     </div>
 
     <!-- Memberstack 2.0 Script -->
-    <script src="https://cdn.memberstack.com/js/v2" data-memberstack-id="app_cm24j3get009s0spw6wz49psh"></script>
+    <script src="https://cdn.memberstack.com/js/v2" data-memberstack-id="app_cm24j3get009s0spw6w9z49psh"></script>
     
     <!-- Stripe.js Script -->
     <script src="https://js.stripe.com/v3/"></script>

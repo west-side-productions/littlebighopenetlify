@@ -56,106 +56,34 @@ async function initializeCheckoutButtons() {
 // Handle checkout button click
 async function handleCheckout(e) {
     e.preventDefault();
-    console.log(' Checkout initiated');
-    
-    const button = e.currentTarget;
-    
+    console.log('Handling checkout...');
+
     try {
-        // Check if Stripe is initialized
-        if (!stripe) {
-            console.log('Stripe not initialized, attempting to initialize...');
-            const stripeInitialized = await initStripe();
-            if (!stripeInitialized) {
-                throw new Error('Could not initialize Stripe');
-            }
-        }
+        const priceId = e.target.dataset.stripePriceId || 'price_1QRJp1JRMXFic4sWz3gLoCy6';
+        const quantity = state.quantity || 1;
 
-        // Check if user is authenticated with Memberstack
-        const memberstack = window.$memberstackDom;
-        if (!memberstack) {
-            throw new Error('Memberstack not initialized');
-        }
-
-        console.log('Checking Memberstack authentication...');
-        const user = await memberstack.getCurrentMember();
-        if (!user) {
-            console.log('User not authenticated, redirecting to signup');
-            window.location.href = '/signup';
-            return;
-        }
-        console.log(' User authenticated:', user.email);
-
-        const priceId = button.dataset.stripePriceId;
-        if (!priceId) {
-            throw new Error('No Stripe price ID found on button');
-        }
-        console.log('Price ID:', priceId);
-
-        // Show loading state
-        button.disabled = true;
-        button.textContent = 'Creating checkout session...';
-        
-        const orderId = `order_${Date.now()}`;
-        console.log('Order ID:', orderId);
-        
-        // Get the base URL for the API endpoint
-        const baseUrl = window.location.hostname === 'localhost' 
-            ? 'http://localhost:8888/.netlify/functions'
-            : '/.netlify/functions';
-            
-        console.log('Creating Stripe checkout session...');
-        console.log('API Endpoint:', `${baseUrl}/create-checkout`);
-        
-        // Create Stripe Checkout Session
-        const response = await fetch(`${baseUrl}/create-checkout`, {
+        const response = await fetch('/.netlify/functions/create-checkout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                priceId: priceId,
-                quantity: state.quantity,
-                metadata: {
-                    order_id: orderId,
-                    product_type: state.productType,
-                    base_amount: state.basePrice * state.quantity,
-                    memberstack_member_id: user.id,
-                    memberstack_email: user.email,
-                    shipping_country: state.shippingCountry || 'not_selected'
-                }
+                priceId,
+                quantity
             })
         });
 
-        console.log('Response status:', response.status);
+        const { url } = await response.json();
         
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Server error response:', errorData);
-            throw new Error(`Server error: ${errorData.error || response.statusText}`);
-        }
-
-        const session = await response.json();
-        console.log('Session created:', session);
-
-        if (session.error) {
-            throw new Error(`Checkout session error: ${session.error}`);
-        }
-
-        console.log(' Redirecting to Stripe checkout...');
-        const result = await stripe.redirectToCheckout({
-            sessionId: session.id
-        });
-
-        if (result.error) {
-            throw new Error(`Stripe redirect error: ${result.error.message}`);
+        if (url) {
+            window.location.href = url;
+        } else {
+            console.error('No checkout URL received');
+            alert('Sorry, there was a problem creating the checkout session. Please try again.');
         }
     } catch (error) {
-        console.error(' Checkout error:', error);
-        alert(`Checkout error: ${error.message}`);
-    } finally {
-        // Reset button state
-        button.disabled = false;
-        button.textContent = 'Proceed to Checkout';
+        console.error('Checkout error:', error);
+        alert('Sorry, there was a problem processing your request. Please try again.');
     }
 }
 
