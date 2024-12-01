@@ -127,116 +127,99 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Handle checkout
     async function handleCheckout(e) {
+        console.log('Checkout initiated');
         const button = e.currentTarget;
         
         try {
             if (state.productType !== 'course') {
                 e.preventDefault();
+                console.log('Processing physical product checkout');
                 
                 const priceId = button.dataset.msPriceAdd;
+                console.log('Price ID:', priceId);
+                
                 const orderId = `order_${Date.now()}`;
                 const baseAmount = state.basePrice * state.quantity;
 
-                // Create metadata with all necessary information
-                const metadata = {
-                    quantity: state.quantity,
-                    product_type: state.productType,
-                    requires_shipping: true,
-                    order_id: orderId,
-                    base_amount: baseAmount
-                };
-
-                console.log('Opening checkout with metadata:', metadata);
-
-                const memberstack = await waitForMemberstack();
-                const result = await memberstack.openModal("CHECKOUT", {
-                    priceId: priceId,
-                    metadata: metadata,
-                    quantity: state.quantity,
-                    successUrl: `${window.location.origin}/order-confirmation?order_id=${orderId}`,
-                    cancelUrl: window.location.href,
-                    shipping_address_collection: {
-                        allowed_countries: ['AT', 'DE', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
-                    },
-                    shipping_options: [
-                        {
-                            shipping_rate_data: {
-                                display_name: 'Standard Shipping',
-                                type: 'fixed_amount',
-                                fixed_amount: {
-                                    amount: 500, // €5 for Austria
-                                    currency: 'eur',
-                                },
-                                delivery_estimate: {
-                                    minimum: {
-                                        unit: 'business_day',
-                                        value: 3,
-                                    },
-                                    maximum: {
-                                        unit: 'business_day',
-                                        value: 5,
-                                    },
-                                },
-                                metadata: {
-                                    type: 'standard',
-                                    country: 'AT'
-                                }
-                            }
+                // First call the shipping function to get shipping rates
+                try {
+                    const shippingResponse = await fetch('/.netlify/functions/process-shipping', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
                         },
-                        {
-                            shipping_rate_data: {
-                                display_name: 'Standard Shipping',
-                                type: 'fixed_amount',
-                                fixed_amount: {
-                                    amount: 1000, // €10 for Germany and EU
-                                    currency: 'eur',
-                                },
-                                delivery_estimate: {
-                                    minimum: {
-                                        unit: 'business_day',
-                                        value: 5,
-                                    },
-                                    maximum: {
-                                        unit: 'business_day',
-                                        value: 7,
-                                    },
-                                },
-                                metadata: {
-                                    type: 'standard',
-                                    country: 'EU'
-                                }
-                            }
+                        body: JSON.stringify({
+                            orderId: orderId,
+                            baseAmount: baseAmount,
+                            quantity: state.quantity,
+                            action: 'get_rates'
+                        })
+                    });
+
+                    if (!shippingResponse.ok) {
+                        throw new Error(`Shipping function error: ${await shippingResponse.text()}`);
+                    }
+
+                    const shippingData = await shippingResponse.json();
+                    console.log('Shipping rates received:', shippingData);
+
+                    // Create metadata with all necessary information
+                    const metadata = {
+                        quantity: state.quantity,
+                        product_type: state.productType,
+                        requires_shipping: true,
+                        order_id: orderId,
+                        base_amount: baseAmount
+                    };
+
+                    console.log('Opening checkout with metadata:', metadata);
+
+                    const memberstack = await waitForMemberstack();
+                    const result = await memberstack.openModal("CHECKOUT", {
+                        priceId: priceId,
+                        metadata: metadata,
+                        quantity: state.quantity,
+                        successUrl: `${window.location.origin}/order-confirmation?order_id=${orderId}`,
+                        cancelUrl: window.location.href,
+                        mode: "payment",
+                        allowPromotionCodes: true,
+                        billingAddressCollection: 'required',
+                        shippingAddressCollection: {
+                            allowedCountries: ['AT', 'DE', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
                         },
-                        {
-                            shipping_rate_data: {
-                                display_name: 'International Shipping',
-                                type: 'fixed_amount',
-                                fixed_amount: {
-                                    amount: 1500, // €15 for international
-                                    currency: 'eur',
-                                },
-                                delivery_estimate: {
-                                    minimum: {
-                                        unit: 'business_day',
-                                        value: 7,
-                                    },
-                                    maximum: {
-                                        unit: 'business_day',
-                                        value: 14,
-                                    },
-                                },
-                                metadata: {
-                                    type: 'international'
-                                }
-                            }
+                        shippingRates: shippingData.shippingRates
+                    });
+
+                    console.log('Checkout result:', result);
+
+                    if (result.success) {
+                        console.log('Checkout successful, processing shipping...');
+                        
+                        // Update shipping with final details
+                        const finalShippingResponse = await fetch('/.netlify/functions/process-shipping', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                orderId: orderId,
+                                customerId: result.data.customerId,
+                                paymentIntentId: result.data.paymentIntentId,
+                                baseAmount: baseAmount,
+                                action: 'process_payment'
+                            })
+                        });
+
+                        if (!finalShippingResponse.ok) {
+                            console.error('Error processing final shipping:', await finalShippingResponse.text());
+                        } else {
+                            const finalShippingResult = await finalShippingResponse.json();
+                            console.log('Final shipping processed:', finalShippingResult);
                         }
-                    ]
-                });
-
-                console.log('Checkout result:', result);
-
-                if (result.success) {
-                    console.log('Checkout completed successfully');
+                    }
+                } catch (error) {
+                    console.error('Error processing shipping:', error);
+                    alert('There was an issue processing shipping. Please try again.');
                 }
             }
         } catch (error) {
