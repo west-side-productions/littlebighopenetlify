@@ -119,13 +119,15 @@ async function handleCheckout(e) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
             },
+            credentials: 'include',
+            mode: 'cors',
             body: JSON.stringify({
                 priceId: CONFIG.priceId,
                 successUrl: CONFIG.successUrl,
-                cancelUrl: CONFIG.cancelUrl,
-            }),
-            credentials: 'include', 
+                cancelUrl: CONFIG.cancelUrl
+            })
         });
 
         if (!response.ok) {

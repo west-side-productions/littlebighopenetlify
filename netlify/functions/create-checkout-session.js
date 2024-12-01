@@ -3,6 +3,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 // Allow requests from Webflow and Netlify domains
 const ALLOWED_ORIGINS = [
   'https://little-big-hope-2971af-688db640ffff8f55.webflow.io',
+  'https://lillebighopefunctions.netlify.app',
   'https://lbhtest.netlify.app',
   'http://localhost:8888',
   'http://localhost:3000'
@@ -13,7 +14,23 @@ function getAllowedOriginHeader(requestOrigin) {
   if (process.env.NODE_ENV !== 'production') {
     return requestOrigin || '*';
   }
-  return ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : ALLOWED_ORIGINS[0];
+  // Check if the origin is in our allowed list
+  if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+  // Default to the first allowed origin if none match
+  return ALLOWED_ORIGINS[0];
+}
+
+// Helper function to add CORS headers
+function addCorsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
+  };
 }
 
 exports.handler = async function(event, context) {
@@ -30,13 +47,7 @@ exports.handler = async function(event, context) {
     console.log('Handling OPTIONS request');
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Max-Age': '86400'
-      },
+      headers: addCorsHeaders(origin),
       body: ''
     };
   }
@@ -46,11 +57,7 @@ exports.handler = async function(event, context) {
     console.log('Method not allowed:', event.httpMethod);
     return {
       statusCode: 405,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Credentials': 'true',
-        'Content-Type': 'application/json'
-      },
+      headers: addCorsHeaders(origin),
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
@@ -63,11 +70,7 @@ exports.handler = async function(event, context) {
       console.log('Missing required parameters:', { priceId, successUrl, cancelUrl });
       return {
         statusCode: 400,
-        headers: {
-          'Access-Control-Allow-Origin': origin,
-          'Access-Control-Allow-Credentials': 'true',
-          'Content-Type': 'application/json'
-        },
+        headers: addCorsHeaders(origin),
         body: JSON.stringify({ 
           error: 'Missing required parameters',
           received: { priceId, successUrl, cancelUrl }
@@ -166,13 +169,7 @@ exports.handler = async function(event, context) {
 
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Credentials': 'true',
-        'Content-Type': 'application/json'
-      },
+      headers: addCorsHeaders(origin),
       body: JSON.stringify({ 
         id: session.id,
         url: session.url
@@ -182,13 +179,7 @@ exports.handler = async function(event, context) {
     console.error('Error creating checkout session:', error);
     return {
       statusCode: 500,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Credentials': 'true',
-        'Content-Type': 'application/json'
-      },
+      headers: addCorsHeaders(origin),
       body: JSON.stringify({ 
         error: error.message,
         type: error.type
