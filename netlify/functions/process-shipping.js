@@ -3,6 +3,17 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 exports.handler = async function(event, context) {
     console.log('Shipping function called');
     
+    // Validate Stripe key
+    if (!process.env.STRIPE_SECRET_KEY) {
+        console.error('STRIPE_SECRET_KEY is not set in environment variables');
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: 'Server configuration error - Stripe key not set'
+            })
+        };
+    }
+    
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -17,12 +28,16 @@ exports.handler = async function(event, context) {
             // Return predefined shipping rates
             return {
                 statusCode: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 body: JSON.stringify({
                     success: true,
                     shippingRates: [
                         {
                             displayName: 'Standard Shipping (Austria)',
-                            amount: 500,
+                            amount: 500, // €5.00
                             metadata: {
                                 type: 'standard',
                                 country: 'AT'
@@ -34,8 +49,21 @@ exports.handler = async function(event, context) {
                             countries: ['AT']
                         },
                         {
+                            displayName: 'Standard Shipping (Germany)',
+                            amount: 1000, // €10.00
+                            metadata: {
+                                type: 'standard',
+                                country: 'DE'
+                            },
+                            deliveryEstimate: {
+                                minimum: { value: 3, unit: 'business_day' },
+                                maximum: { value: 5, unit: 'business_day' }
+                            },
+                            countries: ['DE']
+                        },
+                        {
                             displayName: 'Standard Shipping (EU)',
-                            amount: 1000,
+                            amount: 1000, // €10.00
                             metadata: {
                                 type: 'standard',
                                 country: 'EU'
@@ -44,7 +72,7 @@ exports.handler = async function(event, context) {
                                 minimum: { value: 5, unit: 'business_day' },
                                 maximum: { value: 7, unit: 'business_day' }
                             },
-                            countries: ['DE', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+                            countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
                         },
                         {
                             displayName: 'International Shipping',
@@ -159,11 +187,11 @@ exports.handler = async function(event, context) {
             throw new Error('Invalid action specified');
         }
     } catch (error) {
-        console.error('Error in shipping function:', error);
+        console.error('Error processing request:', error);
         return {
             statusCode: 500,
             body: JSON.stringify({
-                error: 'Failed to process shipping',
+                error: 'Internal server error',
                 details: error.message
             })
         };

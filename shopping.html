@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <style>
         .accordion {
@@ -74,6 +74,9 @@
             color: grey;
         }
     </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Little Big Hope Shop</title>
 </head>
 <body>
     <div id="list"></div>
@@ -98,6 +101,51 @@
         </div>
     </template>
 
+    <div class="product-section">
+        <!-- Example for a Book Product -->
+        <div class="product" data-product-type="book" data-base-price="29.99">
+            <h2>Cookbook</h2>
+            <p>Price: €29.99</p>
+            
+            <!-- Quantity Selector (only for book) -->
+            <div class="quantity-section">
+                <label for="book-quantity">Quantity:</label>
+                <select id="book-quantity">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Price Summary -->
+        <div class="price-summary">
+            <div class="price-display">
+                <span>Subtotal: €</span>
+                <span id="subtotal-price">29.99</span>
+            </div>
+            <div class="price-display total">
+                <span>Total: €</span>
+                <span id="total-price">29.99</span>
+            </div>
+            <p class="shipping-note">Shipping costs will be calculated at checkout based on your delivery address.</p>
+        </div>
+
+        <!-- Checkout Button -->
+        <button 
+            class="checkout-button" 
+            data-ms-price-add="price_01HKP1GCHVWQ4WBXN8KQXPVP4T">
+            Proceed to Checkout
+        </button>
+    </div>
+
+    <!-- Memberstack 2.0 Script -->
+    <script src="https://cdn.memberstack.com/js/v2" data-memberstack-id="pk_sb_c2c2e5e4f4d5a3e6b0f6"></script>
+
+    <!-- Our checkout script -->
+    <script src="webflow-memberstack-checkout.js"></script>
     <script src="utils.js"></script>
     <script src="shopping.js"></script>
     <script>
@@ -134,15 +182,5 @@
             // Initialize UI elements
         });
     </script>
-    <script>
-        (function(w,d) {
-            w.memberstack = { site: "ms_a2e8d0" }; // Replace with your Project ID
-            var s = d.createElement("script");
-            s.src = "https://api.memberstack.io/static/memberstack.js?custom";
-            s.async = true;
-            d.body.appendChild(s);
-        })(window, document);
-    </script>
-    <script src="memberstack-checkout.js"></script>
 </body>
 </html>
