@@ -27,10 +27,10 @@ async function initStripe() {
     try {
         console.log('Initializing Stripe...');
         stripe = await Stripe('pk_test_51OQvSBFrPAUGZiHgGYKkHZZiGLCxqSFTXGgxFVOtBtqjlzQxMZWwxjPWmSsGDWmYZkVEqgOULZoNgRVgRGbsVEkB00cXTZQMtw');
-        console.log(' Stripe initialized successfully');
+        console.log('Stripe initialized successfully');
         return true;
     } catch (error) {
-        console.error(' Error initializing Stripe:', error);
+        console.error('Error initializing Stripe:', error);
         return false;
     }
 }
@@ -47,9 +47,9 @@ async function initializeCheckoutButtons() {
             button.addEventListener('click', handleCheckout);
         });
         
-        console.log(' Checkout buttons initialized');
+        console.log('Checkout buttons initialized');
     } catch (error) {
-        console.error(' Error initializing checkout buttons:', error);
+        console.error('Error initializing checkout buttons:', error);
     }
 }
 
@@ -59,6 +59,23 @@ async function handleCheckout(e) {
     console.log('Handling checkout...');
 
     try {
+        // Check Memberstack authentication
+        const memberstack = window.$memberstackDom;
+        if (!memberstack) {
+            console.error('Memberstack not initialized');
+            window.location.href = '/login';
+            return;
+        }
+
+        const member = await memberstack.getCurrentMember();
+        if (!member) {
+            console.log('User not authenticated, redirecting to login');
+            window.location.href = '/login';
+            return;
+        }
+
+        console.log('User authenticated:', member.email);
+
         const priceId = e.target.dataset.stripePriceId || 'price_1QRJp1JRMXFic4sWz3gLoCy6';
         const quantity = state.quantity || 1;
 
@@ -69,7 +86,11 @@ async function handleCheckout(e) {
             },
             body: JSON.stringify({
                 priceId,
-                quantity
+                quantity,
+                metadata: {
+                    memberstack_id: member.id,
+                    memberstack_email: member.email
+                }
             })
         });
 
@@ -83,41 +104,40 @@ async function handleCheckout(e) {
         }
     } catch (error) {
         console.error('Checkout error:', error);
-        alert('Sorry, there was a problem processing your request. Please try again.');
+        if (error.message.includes('Memberstack')) {
+            window.location.href = '/login';
+        } else {
+            alert('Sorry, there was a problem processing your request. Please try again.');
+        }
     }
 }
 
 // Initialize the script
 async function init() {
-    console.log(' Initializing shopping system...');
+    console.log('Initializing shopping system...');
 
     try {
+        // Wait for Memberstack to initialize
+        await new Promise(resolve => {
+            const checkMemberstack = () => {
+                if (window.$memberstackDom) {
+                    resolve();
+                } else {
+                    setTimeout(checkMemberstack, 100);
+                }
+            };
+            checkMemberstack();
+        });
+
         // Initialize Stripe
         await initStripe();
 
-        // Initialize product state
-        const productElement = document.querySelector('.product');
-        if (productElement) {
-            state.productType = productElement.dataset.productType || 'book';
-            state.basePrice = parseFloat(productElement.dataset.basePrice) || 29.99;
-            console.log('Product state:', state);
-        }
-
-        // Set up quantity change listener
-        const quantitySelect = document.getElementById('book-quantity');
-        if (quantitySelect) {
-            quantitySelect.addEventListener('change', function(e) {
-                state.quantity = parseInt(e.target.value);
-                console.log('Quantity updated:', state.quantity);
-            });
-        }
-
         // Initialize checkout buttons
         await initializeCheckoutButtons();
-        
-        console.log(' Shopping system initialized successfully');
+
+        console.log('Shopping system initialized');
     } catch (error) {
-        console.error(' Initialization error:', error);
+        console.error('Initialization error:', error);
     }
 }
 
