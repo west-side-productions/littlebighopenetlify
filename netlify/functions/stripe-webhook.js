@@ -1,81 +1,115 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const axios = require('axios');
 
-exports.handler = async (event, context) => {
-    const headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS'
-    };
+const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
-    // Handle preflight requests
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 204,
-            headers,
-            body: ''
-        };
-    }
-
+exports.handler = async (event) => {
     try {
-        // Get the raw body string
-        const rawBody = event.body;
-        const signature = event.headers['stripe-signature'];
+        if (event.httpMethod !== 'POST') {
+            return { statusCode: 405, body: 'Method Not Allowed' };
+        }
+
+        const sig = event.headers['stripe-signature'];
+        const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
         let stripeEvent;
         
         try {
-            // Verify and construct the webhook event
-            stripeEvent = stripe.webhooks.constructEvent(
-                rawBody,
-                signature,
-                process.env.STRIPE_WEBHOOK_SECRET
-            );
+            stripeEvent = Stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
         } catch (err) {
             console.error('Webhook signature verification failed:', err.message);
             return {
                 statusCode: 400,
-                headers,
-                body: JSON.stringify({
-                    error: `Webhook signature verification failed: ${err.message}`
-                })
+                body: JSON.stringify({ error: `Webhook Error: ${err.message}` })
             };
         }
 
-        // Handle specific event types
+        // Handle the event
         switch (stripeEvent.type) {
             case 'checkout.session.completed':
                 const session = stripeEvent.data.object;
                 
-                // Log the successful checkout
-                console.log('Checkout completed:', {
-                    sessionId: session.id,
-                    customerId: session.customer,
-                    amount: session.amount_total,
-                    metadata: session.metadata
-                });
+                try {
+                    // Get member ID and plan ID from metadata
+                    const { memberstackUserId, memberstackPlanId, totalWeight, productWeight, packagingWeight } = session.metadata;
+                    
+                    if (!memberstackUserId || !memberstackPlanId) {
+                        throw new Error('Missing required metadata: memberstackUserId or memberstackPlanId');
+                    }
 
-                // Here you can add additional processing:
-                // - Update order status in your database
-                // - Send confirmation emails
-                // - Update inventory
-                // - etc.
+                    // Log the weight information
+                    console.log('Order weight details:', {
+                        totalWeight,
+                        productWeight,
+                        packagingWeight,
+                        memberstackUserId,
+                        memberstackPlanId
+                    });
 
-                break;
+                    // Update the payment intent with the metadata if it's not already there
+                    if (session.payment_intent) {
+                        const paymentIntent = await Stripe.paymentIntents.update(
+                            session.payment_intent,
+                            {
+                                metadata: {
+                                    ...session.metadata,
+                                    totalWeight,
+                                    productWeight,
+                                    packagingWeight
+                                }
+                            }
+                        );
+                        console.log('Updated payment intent metadata:', paymentIntent.metadata);
+                    }
 
-            case 'payment_intent.succeeded':
-                const paymentIntent = stripeEvent.data.object;
-                console.log('Payment succeeded:', paymentIntent.id);
-                break;
+                    console.log('Adding plan to member:', {
+                        memberstackUserId,
+                        memberstackPlanId,
+                        sessionId: session.id
+                    });
+
+                    // Add plan to member using Memberstack REST API
+                    const response = await axios({
+                        method: 'POST',
+                        url: `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/add-plan`,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                        },
+                        data: {
+                            planId: memberstackPlanId,
+                            status: 'ACTIVE',
+                            type: 'ONETIME'
+                        }
+                    });
+
+                    console.log('Successfully added plan to member:', response.data);
+
+                    return {
+                        statusCode: 200,
+                        body: JSON.stringify({ 
+                            received: true,
+                            memberstackUserId,
+                            memberstackPlanId
+                        })
+                    };
+                } catch (error) {
+                    console.error('Error processing webhook:', error.response ? error.response.data : error.message);
+                    return {
+                        statusCode: 500,
+                        body: JSON.stringify({ 
+                            error: error.response ? error.response.data : error.message 
+                        })
+                    };
+                }
 
             case 'payment_intent.payment_failed':
-                const failedPayment = stripeEvent.data.object;
+                const paymentIntent = stripeEvent.data.object;
                 console.error('Payment failed:', {
-                    paymentIntentId: failedPayment.id,
-                    error: failedPayment.last_payment_error
+                    customer: paymentIntent.customer,
+                    error: paymentIntent.last_payment_error
                 });
                 break;
-
-            // Add more event types as needed
 
             default:
                 console.log(`Unhandled event type: ${stripeEvent.type}`);
@@ -83,19 +117,13 @@ exports.handler = async (event, context) => {
 
         return {
             statusCode: 200,
-            headers,
             body: JSON.stringify({ received: true })
         };
-
     } catch (error) {
-        console.error('Webhook error:', error.message);
-        
+        console.error('Webhook error:', error);
         return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({
-                error: `Webhook error: ${error.message}`
-            })
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Webhook handler failed' })
         };
     }
 };
