@@ -1,10 +1,11 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// CORS headers
+// CORS headers for all responses
 const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
 };
 
 exports.handler = async (event, context) => {
@@ -17,7 +18,7 @@ exports.handler = async (event, context) => {
         };
     }
 
-    // Only allow POST
+    // Only allow POST requests
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
@@ -30,20 +31,23 @@ exports.handler = async (event, context) => {
         const data = JSON.parse(event.body);
         console.log('Received checkout request:', data);
 
+        // Validate required fields
         if (!data.priceId) {
-            throw new Error('Missing priceId in request');
+            throw new Error('Missing required field: priceId');
         }
 
+        // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
             payment_method_types: ['card'],
             line_items: [{
                 price: data.priceId,
                 quantity: data.quantity || 1
             }],
-            success_url: data.successUrl,
-            cancel_url: data.cancelUrl,
-            customer_email: data.customerEmail
+            mode: 'payment',
+            success_url: data.successUrl || `${process.env.URL}/success`,
+            cancel_url: data.cancelUrl || `${process.env.URL}/cancel`,
+            customer_email: data.customerEmail,
+            metadata: data.metadata || {}
         });
 
         console.log('Created checkout session:', session.id);
@@ -51,18 +55,18 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({
-                url: session.url
-            })
+            body: JSON.stringify({ url: session.url })
         };
+
     } catch (error) {
         console.error('Checkout error:', error);
         
         return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({
-                error: error.message
+            body: JSON.stringify({ 
+                error: error.message,
+                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
             })
         };
     }

@@ -70,36 +70,32 @@ function loadScript(src) {
 
 // Initialize dependencies
 async function initializeDependencies() {
-    log('Initializing shopping system...');
-
-    // Initialize Stripe
-    if (!window.Stripe) {
-        log('Loading Stripe.js...');
-        await loadScript('https://js.stripe.com/v3/');
-    } else {
-        log('Stripe.js already loaded');
-    }
-
-    log('Initializing Stripe...');
-    window.stripe = Stripe(CONFIG.stripePublicKey);
-    log('Stripe initialized successfully');
+    console.log('Initializing shopping system...');
 
     // Initialize Memberstack
-    if (!window.$memberstackDom) {
-        log('Loading Memberstack...');
-        await loadScript('https://cdn.memberstack.com/js/v2');
+    const memberstackDOM = window.$memberstackDom;
+    console.log('Initializing Memberstack...');
+
+    // Initialize Stripe
+    let stripe;
+    try {
+        if (window.Stripe) {
+            console.log('Stripe.js already loaded');
+            stripe = Stripe('pk_live_51OPYr9JRMXFic4sWvXxVEWJqhTUkz6OyX0fCxGPFGAZBGQXrDjqO7OyQbqwA1QQsgfjBPGBGtxUJBjvLjBtSADVm00wXF4WBVT');
+            console.log('Stripe initialized successfully');
+        } else {
+            console.error('Stripe.js not found');
+        }
+    } catch (error) {
+        console.error('Error initializing Stripe:', error);
     }
 
-    const memberstack = window.$memberstackDom;
-    log('Available Memberstack methods:', Object.keys(memberstack));
-    log('Memberstack initialized:', memberstack);
-
-    return { stripe: window.stripe, memberstack };
+    return { stripe, memberstackDOM };
 }
 
 // Initialize checkout button
 async function initializeCheckoutButton() {
-    log('Setting up checkout button...');
+    console.log('Setting up checkout button...');
     const button = document.querySelector('.checkout-button');
     
     if (!button) {
@@ -107,8 +103,8 @@ async function initializeCheckoutButton() {
         return;
     }
 
-    const memberstack = window.$memberstackDom;
-    if (!memberstack) {
+    const memberstackDOM = window.$memberstackDom;
+    if (!memberstackDOM) {
         console.error('Memberstack not initialized');
         return;
     }
@@ -117,7 +113,7 @@ async function initializeCheckoutButton() {
         await handleCheckout(event);
     });
 
-    log('Checkout button initialized');
+    console.log('Checkout button initialized');
 }
 
 // Get the base URL for API endpoints
@@ -140,7 +136,9 @@ async function handleCheckout(event) {
     button.textContent = 'Processing...';
     
     try {
-        const member = await memberstack.getCurrentMember();
+        // Get current member using Memberstack DOM API
+        const member = await window.$memberstackDom.getCurrentMember();
+        console.log('Current member:', member);
         
         // Prepare checkout data
         const checkoutData = {
@@ -148,7 +146,10 @@ async function handleCheckout(event) {
             quantity: 1,
             successUrl: `${window.location.origin}/success`,
             cancelUrl: `${window.location.origin}/cancel`,
-            customerEmail: member?.email || 'office@west-side-productions.at'
+            customerEmail: member?.data?.email || 'office@west-side-productions.at',
+            metadata: {
+                memberstackUserId: member?.id
+            }
         };
 
         console.log('Starting checkout process:', checkoutData);
