@@ -48,7 +48,7 @@ exports.handler = async function(event, context) {
                 url: `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/plans`,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                    'X-API-KEY': process.env.MEMBERSTACK_SECRET_KEY
                 },
                 data: {
                     id: memberstackPlanId,
