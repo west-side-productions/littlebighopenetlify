@@ -164,20 +164,23 @@ async function handleCheckout(event) {
         const response = await fetch(endpointUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
+            mode: 'cors',
+            credentials: 'same-origin',
             body: JSON.stringify(checkoutData)
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
+            const errorData = await response.text().catch(() => 'No error details available');
             console.error('Error response:', {
                 status: response.status,
                 statusText: response.statusText,
-                body: errorText,
+                body: errorData,
                 url: endpointUrl
             });
-            throw new Error(`Failed to create checkout session: ${response.status}`);
+            throw new Error(`Failed to create checkout session: ${response.status} - ${errorData}`);
         }
 
         const session = await response.json();

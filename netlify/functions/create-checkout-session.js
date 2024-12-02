@@ -1,14 +1,20 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// CORS headers for all responses
 const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
 };
 
 exports.handler = async (event, context) => {
+    // Log request details for debugging
+    console.log('Request details:', {
+        method: event.httpMethod,
+        headers: event.headers,
+        path: event.path
+    });
+
     // Handle preflight requests
     if (event.httpMethod === 'OPTIONS') {
         return {
@@ -23,7 +29,10 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 405,
             headers,
-            body: JSON.stringify({ error: 'Method not allowed' })
+            body: JSON.stringify({ 
+                error: 'Method not allowed',
+                allowedMethods: ['POST', 'OPTIONS']
+            })
         };
     }
 
