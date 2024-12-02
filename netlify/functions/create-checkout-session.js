@@ -1,9 +1,16 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2024-06-20',
+    maxNetworkRetries: 2,
+    timeout: 20000,
+    host: 'api.stripe.com',
+    protocol: 'https',
+    telemetry: false
+});
 
 // CORS headers
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, stripe-signature',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '2592000',
     'Content-Type': 'application/json'
@@ -27,6 +34,13 @@ const successResponse = (data) => ({
 });
 
 exports.handler = async (event, context) => {
+    console.log('Request received:', {
+        method: event.httpMethod,
+        path: event.path,
+        headers: event.headers,
+        body: event.body ? JSON.parse(event.body) : null
+    });
+
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
         return {

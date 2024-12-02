@@ -17,7 +17,11 @@ const EU_COUNTRIES = [
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
-    debug: true
+    debug: true,
+    // For local development, use localhost. For production, use relative URL
+    baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
+    // For testing with Netlify Dev
+    isLocalDev: window.location.hostname === 'localhost' || window.location.hostname.includes('192.168.') || window.location.hostname.includes('.local')
 };
 
 // Debug flag
@@ -134,7 +138,7 @@ async function initializeCheckoutButton() {
 async function handleCheckout(button, member) {
     try {
         const memberId = member?.id;
-        const contentId = 'prc_buch-tp2106tu'; // Hardcoded for now since it's our only product
+        const contentId = 'prc_buch-tp2106tu';
         const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
         const customerEmail = member?.data?.auth?.email;
 
@@ -143,10 +147,9 @@ async function handleCheckout(button, member) {
             throw new Error('No email found in member data');
         }
 
-        // Get the product configuration and price ID based on the content ID
         const productConfig = {
             'prc_buch-tp2106tu': {
-                priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
+                priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
                 weight: 1000,
                 packagingWeight: 50
             }
@@ -164,7 +167,8 @@ async function handleCheckout(button, member) {
             quantity,
             priceId: config.priceId,
             customerEmail,
-            config
+            config,
+            isLocalDev: CONFIG.isLocalDev
         });
 
         // Disable the button and show loading state
@@ -172,11 +176,24 @@ async function handleCheckout(button, member) {
         button.textContent = 'Loading...';
 
         try {
-            const response = await fetch(`${CONFIG.functionsUrl}/create-checkout-session`, {
+            // Construct the checkout endpoint URL
+            let checkoutEndpoint;
+            if (CONFIG.isLocalDev) {
+                // Use localhost URL for local development
+                checkoutEndpoint = `${CONFIG.baseUrl}${CONFIG.functionsUrl}/create-checkout-session`;
+            } else {
+                // Use relative URL for production
+                checkoutEndpoint = `${CONFIG.functionsUrl}/create-checkout-session`;
+            }
+            
+            console.log('Calling checkout endpoint:', checkoutEndpoint);
+
+            const response = await fetch(checkoutEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: CONFIG.isLocalDev ? 'include' : 'same-origin',
                 body: JSON.stringify({
                     priceId: config.priceId,
                     quantity: quantity,
@@ -196,9 +213,14 @@ async function handleCheckout(button, member) {
             });
 
             if (!response.ok) {
-                const errorData = await response.text();
-                console.error('Error creating checkout session:', errorData);
-                throw new Error('Failed to create checkout session');
+                const errorText = await response.text();
+                console.error('Error response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText,
+                    url: checkoutEndpoint
+                });
+                throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
             }
 
             const { url } = await response.json();
@@ -218,6 +240,8 @@ async function handleCheckout(button, member) {
     } catch (error) {
         console.error('Checkout error:', error);
         alert('An error occurred during checkout. Please try again.');
+        button.disabled = false;
+        button.textContent = 'Buy Now';
     }
 }
 
