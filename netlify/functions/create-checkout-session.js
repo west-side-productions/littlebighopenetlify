@@ -7,61 +7,51 @@ const SHIPPING_RATES = {
     CH: { amount: 1000, label: 'Switzerland Shipping' } // €10.00
 };
 
-exports.handler = async function(event, context) {
-    // Enable CORS
-    const headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS'
-    };
-
-    // Handle preflight request
+exports.handler = async (event, context) => {
+    // Handle CORS
     if (event.httpMethod === 'OPTIONS') {
-        return { statusCode: 200, headers };
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            },
+            body: ''
+        };
+    }
+
+    // Only allow POST
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ error: 'Method not allowed' })
+        };
     }
 
     try {
-        if (event.httpMethod !== 'POST') {
-            throw new Error('Method not allowed');
-        }
-
         const data = JSON.parse(event.body);
-        const { priceId, successUrl, cancelUrl, customerEmail, shipping, metadata } = data;
+        const { priceId, quantity, successUrl, cancelUrl, customerEmail, shipping, metadata } = data;
 
         // Validate required fields
         if (!priceId || !successUrl || !cancelUrl || !customerEmail || !shipping) {
             console.error('Missing required parameters:', { priceId, successUrl, cancelUrl, customerEmail, shipping });
             return {
                 statusCode: 400,
-                headers,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     error: 'Missing required parameters',
                     received: { priceId, successUrl, cancelUrl, customerEmail, shipping }
                 })
             };
         }
-
-        // Create dynamic shipping options
-        const shipping_options = Object.entries(SHIPPING_RATES).map(([country, rate]) => ({
-            shipping_rate_data: {
-                type: 'fixed_amount',
-                fixed_amount: {
-                    amount: rate.amount,
-                    currency: 'eur',
-                },
-                display_name: rate.label,
-                delivery_estimate: {
-                    minimum: {
-                        unit: 'business_day',
-                        value: 3,
-                    },
-                    maximum: {
-                        unit: 'business_day',
-                        value: 5,
-                    },
-                },
-            }
-        }));
 
         // First, try to find or create a customer
         let customer;
@@ -98,18 +88,42 @@ exports.handler = async function(event, context) {
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             customer: customer.id,
-            line_items: [{
-                price: priceId,
-                quantity: 1,
-            }],
+            payment_method_types: ['card'],
             mode: 'payment',
+            line_items: [
+                {
+                    price: priceId,
+                    quantity: quantity
+                }
+            ],
             success_url: successUrl,
             cancel_url: cancelUrl,
-            shipping_options,
+            customer_email: customerEmail,
             shipping_address_collection: {
-                allowed_countries: ['AT', 'DE', 'CH'],
+                allowed_countries: ['AT', 'DE', 'CH']
             },
-            billing_address_collection: 'required',
+            shipping_options: [
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: shipping.weight <= 1000 ? 500 : 1000,
+                            currency: 'eur',
+                        },
+                        display_name: shipping.weight <= 1000 ? 'Standard Shipping' : 'Heavy Item Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        },
+                    },
+                }
+            ],
             metadata: {
                 memberstackUserId: metadata.memberstackUserId,
                 memberstackPlanId: metadata.memberstackPlanId,
@@ -138,24 +152,27 @@ exports.handler = async function(event, context) {
 
         return {
             statusCode: 200,
-            headers,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({
                 sessionId: session.id,
                 url: session.url
             })
         };
-
     } catch (error) {
         console.error('Error creating checkout session:', error);
         
         return {
             statusCode: 500,
-            headers,
-            body: JSON.stringify({ 
-                error: {
-                    message: error.message,
-                    type: error.type
-                }
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                error: 'Failed to create checkout session',
+                details: error.message
             })
         };
     }

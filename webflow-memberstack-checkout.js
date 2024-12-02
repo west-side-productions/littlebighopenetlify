@@ -3,8 +3,8 @@
 // Configuration
 const SHIPPING_RATES = {
     AT: { price: 5, label: "Austria (€5)" },
-    DE: { price: 10, label: "Germany (€10)" },
-    EU: { price: 10, label: "Europe (€10)" }
+    DE: { price: 10, label: "Germany Shipping" },
+    EU: { price: 10, label: "Europe Shipping" }
 };
 
 const EU_COUNTRIES = [
@@ -15,26 +15,25 @@ const EU_COUNTRIES = [
 
 // Configuration object
 const CONFIG = {
-    // Memberstack 2.0 price ID (starts with prc_)
-    priceId: 'prc_buch-tp2106tu',
-    // Replace with your actual Stripe price ID (starts with price_)
-    stripeProductId: 'price_1QRIZnJRMXFic4sWptbw8uuA',
-    successUrl: `${window.location.origin}/success`,
-    cancelUrl: `${window.location.origin}/cancel`,
-    // Netlify Functions URL
-    functionsUrl: 'https://lillebighopefunctions.netlify.app/.netlify/functions'
+    stripeKey: 'pk_test_51QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
+    functionsUrl: '/.netlify/functions',
+    mode: 'test'
 };
 
-// State management
-const state = {
-    productType: 'book',
-    basePrice: 29.99,
-    quantity: 1,
-    shippingCountry: null
-};
+// Debug flag
+const DEBUG = true;
 
-// Utility function for delay
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+// Logging utility
+function log(...args) {
+    if (DEBUG) {
+        console.log(...args);
+    }
+}
+
+// Delay function for retries
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // Retry function with exponential backoff
 async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
@@ -54,130 +53,89 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
     }
 }
 
-// Load Stripe.js script
-async function loadStripeScript() {
+// Load script utility
+function loadScript(src) {
     return new Promise((resolve, reject) => {
-        if (document.querySelector('script[src*="stripe.com/v3"]')) {
-            console.log('Stripe.js already loaded');
-            resolve();
-            return;
-        }
-
         const script = document.createElement('script');
-        script.src = 'https://js.stripe.com/v3/';
-        script.onload = () => {
-            console.log('Stripe.js loaded successfully');
-            resolve();
-        };
-        script.onerror = (error) => {
-            console.error('Failed to load Stripe.js:', error);
-            reject(error);
-        };
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
         document.head.appendChild(script);
     });
 }
 
-// Initialize Stripe
-let stripe;
-async function initStripe() {
-    try {
-        console.log('Initializing Stripe...');
-        if (typeof Stripe === 'undefined') {
-            throw new Error('Stripe.js not loaded');
-        }
-        stripe = Stripe('pk_live_51Q8eVRJRMXFic4sWxwFhvnHZqWNHhHyFVBwZFhTzAZZGwWXhK4zNNAvBKcZqYHoFpBQZnQeRcTa8kHPNvwEcGlDN00aDqtGSFh');
-        console.log('Stripe initialized successfully');
-    } catch (error) {
-        console.error('Failed to initialize Stripe:', error);
-        throw error;
+// Initialize dependencies
+async function initializeDependencies() {
+    log('Initializing shopping system...');
+
+    // Initialize Stripe
+    if (!window.Stripe) {
+        log('Loading Stripe.js...');
+        await loadScript('https://js.stripe.com/v3/');
+    } else {
+        log('Stripe.js already loaded');
     }
+
+    log('Initializing Stripe...');
+    window.stripe = Stripe(CONFIG.stripeKey);
+    log('Stripe initialized successfully');
+
+    // Initialize Memberstack
+    if (!window.$memberstackDom) {
+        log('Loading Memberstack...');
+        await loadScript('https://cdn.memberstack.com/js/v2');
+    }
+
+    const memberstack = window.$memberstackDom;
+    log('Available Memberstack methods:', Object.keys(memberstack));
+    log('Memberstack initialized:', memberstack);
+
+    return { stripe: window.stripe, memberstack };
 }
 
-// Initialize Memberstack
-let memberstackDom;
-
-async function initializeMemberstack() {
-    // Wait for Memberstack to be available
-    while (!window.$memberstackDom) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+// Initialize checkout button
+async function initializeCheckoutButton() {
+    log('Setting up checkout button...');
+    const button = document.querySelector('.checkout-button');
+    
+    if (!button) {
+        console.error('No checkout button found');
+        return;
     }
-    memberstackDom = window.$memberstackDom;
-    
-    // Log available methods
-    console.log('Available Memberstack methods:', Object.keys(memberstackDom));
-    console.log('Memberstack initialized:', memberstackDom);
-    return memberstackDom;
-}
 
-// Initialize checkout buttons
-async function initializeCheckoutButtons() {
-    console.log('Setting up checkout buttons...');
-    
-    // Target buttons with Memberstack 2.0 attributes
-    const checkoutButtons = document.querySelectorAll('#checkoutButton.ms-button');
-    console.log('Found checkout buttons:', checkoutButtons.length);
-    
-    // Set up quantity change handler
-    const quantitySelect = document.getElementById('book-quantity');
-    if (quantitySelect) {
-        quantitySelect.addEventListener('change', (e) => {
-            const quantity = parseInt(e.target.value);
-            const basePrice = parseFloat(document.querySelector('[data-product-type="book"]').getAttribute('data-base-price'));
-            const subtotal = (basePrice * quantity).toFixed(2);
-            
-            // Update price displays
-            document.getElementById('subtotal-price').textContent = subtotal;
-            document.getElementById('total-price').textContent = subtotal;
-            
-            // Update checkout button text
-            const button = document.getElementById('checkoutButton');
-            if (button) {
-                button.textContent = `Proceed to Checkout (€${subtotal})`;
-            }
-        });
+    const memberstack = window.$memberstackDom;
+    if (!memberstack) {
+        console.error('Memberstack not initialized');
+        return;
     }
-    
-    checkoutButtons.forEach(button => {
-        // Remove any existing click handlers
-        const oldHandler = button.onclick;
-        button.onclick = null;
+
+    button.addEventListener('click', async (event) => {
+        event.preventDefault();
+        const member = await memberstack.getCurrentMember();
         
-        // Add our new click handler
-        button.onclick = async (e) => {
-            e.preventDefault();
-            console.log('Checkout button clicked');
-            
-            try {
-                // Get current member
-                const member = await memberstackDom.getCurrentMember();
-                if (!member) {
-                    console.log('No member found, redirecting to registration');
-                    window.location.href = '/registrieren';
-                    return;
-                }
-                
-                // Get quantity
-                const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
-                
-                // Store quantity in button for checkout handler
-                button.setAttribute('data-quantity', quantity.toString());
-                
-                await handleCheckout(button, member);
-            } catch (error) {
-                console.error('Error in checkout button handler:', error);
-                alert('An error occurred. Please try again or contact support if the problem persists.');
-            }
-        };
+        if (!member) {
+            log('User not logged in, redirecting to login');
+            await memberstack.openModal('login');
+            return;
+        }
+
+        try {
+            await handleCheckout(button, member);
+        } catch (error) {
+            console.error('Error during checkout:', error);
+            alert('An error occurred during checkout. Please try again.');
+        }
     });
-    
-    console.log('Checkout buttons initialized');
+
+    log('Checkout button initialized');
 }
 
+// Handle checkout process
 async function handleCheckout(button, member) {
     try {
         const memberId = member.id;
-        const contentId = button.getAttribute('data-memberstack-content-id') || button.getAttribute('data-ms-content');
-        const quantity = parseInt(button.getAttribute('data-quantity') || '1');
+        const contentId = 'prc_buch-tp2106tu'; // Hardcoded for now since it's our only product
+        const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
         const customerEmail = member.data?.auth?.email;
 
         if (!customerEmail) {
@@ -185,27 +143,10 @@ async function handleCheckout(button, member) {
             throw new Error('No email found in member data');
         }
 
-        if (!contentId) {
-            console.error('No content ID found on button');
-            throw new Error('Missing content ID configuration');
-        }
-
-        console.log('Debug - Button attributes:', {
-            contentId,
-            quantity,
-            allAttributes: Array.from(button.attributes).map(attr => `${attr.name}=${attr.value}`).join(', '),
-            innerHTML: button.innerHTML
-        });
-
         // Get the product configuration and price ID based on the content ID
         const productConfig = {
             'prc_buch-tp2106tu': {
                 priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
-                weight: 1000,
-                packagingWeight: 50
-            },
-            'prc_online-kochkurs-8b540kc2': {
-                priceId: 'price_1Q8fMCJRMXFic4sWGYGdz1TS',
                 weight: 1000,
                 packagingWeight: 50
             }
@@ -214,15 +155,14 @@ async function handleCheckout(button, member) {
         const config = productConfig[contentId];
         if (!config) {
             console.error('Product configuration not found for contentId:', contentId);
-            console.log('Available configurations:', Object.keys(productConfig));
             throw new Error('Invalid product configuration');
         }
 
-        console.log('Starting checkout process:', {
+        log('Starting checkout process:', {
             memberId,
             contentId,
-            priceId: config.priceId,
             quantity,
+            priceId: config.priceId,
             customerEmail,
             config
         });
@@ -269,18 +209,36 @@ async function handleCheckout(button, member) {
     }
 }
 
-// Initialize when DOM is loaded
+// Update price display
+function updatePriceDisplay() {
+    const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
+    const basePrice = 29.99;
+    const subtotal = (basePrice * quantity).toFixed(2);
+    
+    document.getElementById('subtotal-price').textContent = subtotal;
+    document.getElementById('total-price').textContent = subtotal;
+    
+    const button = document.querySelector('.checkout-button');
+    if (button) {
+        button.textContent = `Proceed to Checkout (€${subtotal})`;
+    }
+}
+
+// Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Initializing shopping system...');
-    
-    // Wait for Memberstack initialization
-    await initializeMemberstack();
-    
-    // Initialize Stripe
-    await loadStripeScript();
-    await initStripe();
-    
-    // Initialize checkout buttons
-    initializeCheckoutButtons();
-    console.log('Checkout buttons initialized');
+    try {
+        await initializeDependencies();
+        await initializeCheckoutButton();
+        
+        // Set up quantity change handler
+        const quantitySelect = document.getElementById('book-quantity');
+        if (quantitySelect) {
+            quantitySelect.addEventListener('change', updatePriceDisplay);
+        }
+        
+        // Initial price update
+        updatePriceDisplay();
+    } catch (error) {
+        console.error('Initialization error:', error);
+    }
 });
