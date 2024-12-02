@@ -117,6 +117,15 @@ exports.handler = async function(event, context) {
                 productWeight: `${shipping.weight}g`,
                 packagingWeight: `${shipping.packagingWeight}g`
             },
+            payment_intent_data: {
+                metadata: {
+                    memberstackUserId: metadata.memberstackUserId,
+                    memberstackPlanId: metadata.memberstackPlanId,
+                    totalWeight: `${shipping.weight + shipping.packagingWeight}g`,
+                    productWeight: `${shipping.weight}g`,
+                    packagingWeight: `${shipping.packagingWeight}g`
+                }
+            },
             allow_promotion_codes: true,
             customer_update: {
                 address: 'auto',

@@ -29,11 +29,35 @@ exports.handler = async function(event, context) {
         
         try {
             // Get member ID and plan ID from metadata
-            const memberstackUserId = session.metadata.memberstackUserId;
-            const memberstackPlanId = session.metadata.memberstackPlanId;
+            const { memberstackUserId, memberstackPlanId, totalWeight, productWeight, packagingWeight } = session.metadata;
             
             if (!memberstackUserId || !memberstackPlanId) {
                 throw new Error('Missing required metadata: memberstackUserId or memberstackPlanId');
+            }
+
+            // Log the weight information
+            console.log('Order weight details:', {
+                totalWeight,
+                productWeight,
+                packagingWeight,
+                memberstackUserId,
+                memberstackPlanId
+            });
+
+            // Update the payment intent with the metadata if it's not already there
+            if (session.payment_intent) {
+                const paymentIntent = await stripe.paymentIntents.update(
+                    session.payment_intent,
+                    {
+                        metadata: {
+                            ...session.metadata,
+                            totalWeight,
+                            productWeight,
+                            packagingWeight
+                        }
+                    }
+                );
+                console.log('Updated payment intent metadata:', paymentIntent.metadata);
             }
 
             console.log('Adding plan to member:', {
