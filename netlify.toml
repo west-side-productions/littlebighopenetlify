@@ -2,12 +2,17 @@
   functions = "netlify/functions"
   publish = "."
 
-[dev]
-  framework = "#static"
-  port = 8888
-  targetPort = 8888
-  publish = "."
-  autoLaunch = true
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+  [redirects.headers]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, HEAD, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization, stripe-signature"
+    Access-Control-Allow-Credentials = "true"
+    Access-Control-Max-Age = "86400"
 
 [[headers]]
   for = "/*"
@@ -16,12 +21,7 @@
     Access-Control-Allow-Methods = "GET, HEAD, POST, PUT, DELETE, OPTIONS"
     Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization, stripe-signature"
     Access-Control-Allow-Credentials = "true"
-
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
+    Access-Control-Max-Age = "86400"
 
 [[redirects]]
   from = "/*"

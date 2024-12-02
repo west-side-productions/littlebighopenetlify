@@ -1,18 +1,12 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2024-06-20',
-    maxNetworkRetries: 2,
-    timeout: 20000,
-    host: 'api.stripe.com',
-    protocol: 'https',
-    telemetry: false
-});
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // CORS headers
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, stripe-signature',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Max-Age': '2592000',
+    'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, stripe-signature',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
     'Content-Type': 'application/json'
 };
 
@@ -34,6 +28,7 @@ const successResponse = (data) => ({
 });
 
 exports.handler = async (event, context) => {
+    // Log request details
     console.log('Request received:', {
         method: event.httpMethod,
         path: event.path,
@@ -62,6 +57,8 @@ exports.handler = async (event, context) => {
         if (!data.priceId) {
             return errorResponse(400, 'Missing required field: priceId');
         }
+
+        console.log('Creating checkout session with data:', data);
 
         // Create the checkout session
         const session = await stripe.checkout.sessions.create({
@@ -97,6 +94,7 @@ exports.handler = async (event, context) => {
             }],
         });
 
+        console.log('Checkout session created:', session.id);
         return successResponse({ url: session.url });
 
     } catch (error) {
