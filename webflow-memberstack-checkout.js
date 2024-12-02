@@ -115,133 +115,107 @@ async function initializeCheckoutButton() {
 
     button.addEventListener('click', async (event) => {
         event.preventDefault();
-        const member = await memberstack.getCurrentMember();
+        const button = event.target;
+        button.disabled = true;
+        button.textContent = 'Processing...';
         
-        if (!member) {
-            log('User not logged in, redirecting to login');
-            await memberstack.openModal('login');
-            return;
-        }
-
         try {
-            await handleCheckout(button, member);
+            const member = await memberstack.getCurrentMember();
+            
+            // Prepare checkout data
+            const contentId = 'prc_buch-tp2106tu';
+            const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
+            const customerEmail = member?.data?.auth?.email;
+            const productConfig = {
+                'prc_buch-tp2106tu': {
+                    priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
+                    weight: 1000,
+                    packagingWeight: 50
+                }
+            };
+
+            const config = productConfig[contentId];
+            if (!config) {
+                console.error('Product configuration not found for contentId:', contentId);
+                throw new Error('Invalid product configuration');
+            }
+
+            const checkoutData = {
+                priceId: config.priceId,
+                quantity: quantity,
+                successUrl: `${window.location.origin}/success`,
+                cancelUrl: `${window.location.origin}/cancel`,
+                customerEmail: customerEmail,
+                shipping: {
+                    weight: config.weight * quantity,
+                    packagingWeight: config.packagingWeight
+                },
+                metadata: {
+                    memberstackUserId: member?.id,
+                    memberstackPlanId: contentId,
+                    quantity: quantity.toString()
+                }
+            };
+
+            console.log('Starting checkout process:', checkoutData);
+            
+            // Get the base URL for the API endpoint
+            const baseUrl = getBaseUrl();
+            const endpointUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
+            
+            console.log('Calling checkout endpoint:', endpointUrl);
+
+            // Make the API call
+            const response = await fetch(endpointUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(checkoutData)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.log('Error response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText,
+                    url: endpointUrl
+                });
+                throw new Error(`Failed to create checkout session: ${response.status}`);
+            }
+
+            const session = await response.json();
+            
+            // Redirect to Stripe Checkout
+            if (session.url) {
+                window.location.href = session.url;
+            } else {
+                throw new Error('No checkout URL in the response');
+            }
+
         } catch (error) {
-            console.error('Error during checkout:', error);
-            alert('An error occurred during checkout. Please try again.');
+            console.log('Checkout error:', error);
+            button.disabled = false;
+            button.textContent = 'Buy Now';
+            // Show error to customer
+            alert('Sorry, there was a problem starting the checkout process. Please try again or contact support if the problem persists.');
         }
     });
 
     log('Checkout button initialized');
 }
 
-// Handle checkout process
-async function handleCheckout(button, member) {
-    try {
-        const memberId = member?.id;
-        const contentId = 'prc_buch-tp2106tu';
-        const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
-        const customerEmail = member?.data?.auth?.email;
-
-        if (!customerEmail) {
-            console.error('No email found in member data');
-            throw new Error('No email found in member data');
-        }
-
-        const productConfig = {
-            'prc_buch-tp2106tu': {
-                priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
-                weight: 1000,
-                packagingWeight: 50
-            }
-        };
-
-        const config = productConfig[contentId];
-        if (!config) {
-            console.error('Product configuration not found for contentId:', contentId);
-            throw new Error('Invalid product configuration');
-        }
-
-        log('Starting checkout process:', {
-            memberId,
-            contentId,
-            quantity,
-            priceId: config.priceId,
-            customerEmail,
-            config,
-            isLocalDev: CONFIG.isLocalDev
-        });
-
-        // Disable the button and show loading state
-        button.disabled = true;
-        button.textContent = 'Loading...';
-
-        try {
-            // Construct the checkout endpoint URL
-            let checkoutEndpoint;
-            if (CONFIG.isLocalDev) {
-                // Use localhost URL for local development
-                checkoutEndpoint = `${CONFIG.baseUrl}${CONFIG.functionsUrl}/create-checkout-session`;
-            } else {
-                // Use relative URL for production
-                checkoutEndpoint = `${CONFIG.functionsUrl}/create-checkout-session`;
-            }
-            
-            console.log('Calling checkout endpoint:', checkoutEndpoint);
-
-            const response = await fetch(checkoutEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: CONFIG.isLocalDev ? 'include' : 'same-origin',
-                body: JSON.stringify({
-                    priceId: config.priceId,
-                    quantity: quantity,
-                    successUrl: `${window.location.origin}/success`,
-                    cancelUrl: `${window.location.origin}/cancel`,
-                    customerEmail: customerEmail,
-                    shipping: {
-                        weight: config.weight * quantity,
-                        packagingWeight: config.packagingWeight
-                    },
-                    metadata: {
-                        memberstackUserId: memberId,
-                        memberstackPlanId: contentId,
-                        quantity: quantity.toString()
-                    }
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Error response:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    body: errorText,
-                    url: checkoutEndpoint
-                });
-                throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
-            }
-
-            const { url } = await response.json();
-            if (!url) {
-                throw new Error('No checkout URL returned');
-            }
-
-            // Redirect to Stripe Checkout
-            window.location.href = url;
-        } catch (error) {
-            throw error;
-        } finally {
-            // Re-enable the button and restore text
-            button.disabled = false;
-            button.textContent = 'Buy Now';
-        }
-    } catch (error) {
-        console.error('Checkout error:', error);
-        alert('An error occurred during checkout. Please try again.');
-        button.disabled = false;
-        button.textContent = 'Buy Now';
+// Get the base URL for API endpoints
+function getBaseUrl() {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:8888';
+    } else if (window.location.hostname.includes('.netlify.live')) {
+        return window.location.origin;
+    } else {
+        return window.location.origin;  // Use full origin for production
     }
 }
 
