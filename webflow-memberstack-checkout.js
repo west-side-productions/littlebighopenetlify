@@ -15,9 +15,9 @@ const EU_COUNTRIES = [
 
 // Configuration object
 const CONFIG = {
-    stripeKey: 'pk_test_51QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
     functionsUrl: '/.netlify/functions',
-    mode: 'test'
+    stripePublicKey: 'pk_test_51QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
+    debug: true
 };
 
 // Debug flag
@@ -77,7 +77,7 @@ async function initializeDependencies() {
     }
 
     log('Initializing Stripe...');
-    window.stripe = Stripe(CONFIG.stripeKey);
+    window.stripe = Stripe(CONFIG.stripePublicKey);
     log('Stripe initialized successfully');
 
     // Initialize Memberstack
@@ -133,10 +133,10 @@ async function initializeCheckoutButton() {
 // Handle checkout process
 async function handleCheckout(button, member) {
     try {
-        const memberId = member.id;
+        const memberId = member?.id;
         const contentId = 'prc_buch-tp2106tu'; // Hardcoded for now since it's our only product
         const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
-        const customerEmail = member.data?.auth?.email;
+        const customerEmail = member?.data?.auth?.email;
 
         if (!customerEmail) {
             console.error('No email found in member data');
@@ -167,42 +167,54 @@ async function handleCheckout(button, member) {
             config
         });
 
-        const response = await fetch(`${CONFIG.functionsUrl}/create-checkout-session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                priceId: config.priceId,
-                quantity: quantity,
-                successUrl: `${window.location.origin}/success`,
-                cancelUrl: `${window.location.origin}/cancel`,
-                customerEmail: customerEmail,
-                shipping: {
-                    weight: config.weight * quantity,
-                    packagingWeight: config.packagingWeight
+        // Disable the button and show loading state
+        button.disabled = true;
+        button.textContent = 'Loading...';
+
+        try {
+            const response = await fetch(`${CONFIG.functionsUrl}/create-checkout-session`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                 },
-                metadata: {
-                    memberstackUserId: memberId,
-                    memberstackPlanId: contentId,
-                    quantity: quantity.toString()
-                }
-            })
-        });
+                body: JSON.stringify({
+                    priceId: config.priceId,
+                    quantity: quantity,
+                    successUrl: `${window.location.origin}/success`,
+                    cancelUrl: `${window.location.origin}/cancel`,
+                    customerEmail: customerEmail,
+                    shipping: {
+                        weight: config.weight * quantity,
+                        packagingWeight: config.packagingWeight
+                    },
+                    metadata: {
+                        memberstackUserId: memberId,
+                        memberstackPlanId: contentId,
+                        quantity: quantity.toString()
+                    }
+                })
+            });
 
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error('Error creating checkout session:', errorData);
-            throw new Error('Failed to create checkout session');
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('Error creating checkout session:', errorData);
+                throw new Error('Failed to create checkout session');
+            }
+
+            const { url } = await response.json();
+            if (!url) {
+                throw new Error('No checkout URL returned');
+            }
+
+            // Redirect to Stripe Checkout
+            window.location.href = url;
+        } catch (error) {
+            throw error;
+        } finally {
+            // Re-enable the button and restore text
+            button.disabled = false;
+            button.textContent = 'Buy Now';
         }
-
-        const { url } = await response.json();
-        if (!url) {
-            throw new Error('No checkout URL returned');
-        }
-
-        // Redirect to Stripe Checkout
-        window.location.href = url;
     } catch (error) {
         console.error('Checkout error:', error);
         alert('An error occurred during checkout. Please try again.');
