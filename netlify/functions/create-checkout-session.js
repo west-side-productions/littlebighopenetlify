@@ -63,6 +63,29 @@ exports.handler = async function(event, context) {
             }
         }));
 
+        // First, try to find or create a customer
+        let customer;
+        try {
+            const customers = await stripe.customers.list({
+                email: customerEmail,
+                limit: 1
+            });
+            
+            if (customers.data.length > 0) {
+                customer = customers.data[0];
+            } else {
+                customer = await stripe.customers.create({
+                    email: customerEmail,
+                    metadata: {
+                        memberstackUserId: metadata.memberstackUserId
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error finding/creating customer:', error);
+            throw error;
+        }
+
         console.log('Creating checkout session with:', { 
             priceId,
             successUrl,
@@ -74,6 +97,7 @@ exports.handler = async function(event, context) {
 
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
+            customer: customer.id,
             line_items: [{
                 price: priceId,
                 quantity: 1,
@@ -81,7 +105,6 @@ exports.handler = async function(event, context) {
             mode: 'payment',
             success_url: successUrl,
             cancel_url: cancelUrl,
-            customer_email: customerEmail,
             shipping_options,
             shipping_address_collection: {
                 allowed_countries: ['AT', 'DE', 'CH'],
@@ -99,7 +122,8 @@ exports.handler = async function(event, context) {
                 enabled: true
             },
             customer_update: {
-                address: 'auto'
+                address: 'auto',
+                shipping: 'auto'
             },
             locale: 'de'
         });
