@@ -2,6 +2,7 @@ const Stripe = require('stripe');
 const axios = require('axios');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const MEMBERSTACK_API_URL = 'https://admin.memberstack.com/api';
 
 exports.handler = async function(event, context) {
     if (event.httpMethod !== 'POST') {
@@ -44,15 +45,14 @@ exports.handler = async function(event, context) {
             // Add plan to member using Memberstack REST API
             const response = await axios({
                 method: 'POST',
-                url: `https://api.memberstack.io/v1/members/${memberstackUserId}/add-plan`,
+                url: `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/plans`,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                 },
                 data: {
-                    planId: memberstackPlanId,
-                    status: 'ACTIVE',
-                    type: 'ONETIME'
+                    id: memberstackPlanId,
+                    status: 'active'
                 }
             });
 
