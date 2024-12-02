@@ -112,7 +112,7 @@ async function initializeCheckoutButtons() {
     console.log('Setting up checkout buttons...');
     
     // Target buttons with Memberstack 2.0 attributes
-    const checkoutButtons = document.querySelectorAll('#checkoutButton.ms-buy-button');
+    const checkoutButtons = document.querySelectorAll('#checkoutButton.ms-button');
     console.log('Found checkout buttons:', checkoutButtons.length);
     
     // Set up quantity change handler
@@ -174,8 +174,7 @@ async function initializeCheckoutButtons() {
 async function handleCheckout(button, member) {
     try {
         const memberId = member.id;
-        const priceId = button.getAttribute('data-ms-price');
-        const productId = button.getAttribute('data-ms-product');
+        const contentId = button.getAttribute('data-memberstack-content-id') || button.getAttribute('data-ms-content');
         const quantity = parseInt(button.getAttribute('data-quantity') || '1');
         const customerEmail = member.data?.auth?.email;
 
@@ -184,42 +183,43 @@ async function handleCheckout(button, member) {
             throw new Error('No email found in member data');
         }
 
-        if (!priceId) {
-            console.error('No price ID found on button');
-            throw new Error('Missing price ID configuration');
+        if (!contentId) {
+            console.error('No content ID found on button');
+            throw new Error('Missing content ID configuration');
         }
 
         console.log('Debug - Button attributes:', {
-            priceId,
-            productId,
+            contentId,
             quantity,
             allAttributes: Array.from(button.attributes).map(attr => `${attr.name}=${attr.value}`).join(', '),
             innerHTML: button.innerHTML
         });
 
-        // Get the product configuration based on the product ID
+        // Get the product configuration and price ID based on the content ID
         const productConfig = {
             'prc_buch-tp2106tu': {
+                priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
                 weight: 1000,
                 packagingWeight: 50
             },
             'prc_online-kochkurs-8b540kc2': {
+                priceId: 'price_1Q8fMCJRMXFic4sWGYGdz1TS',
                 weight: 1000,
                 packagingWeight: 50
             }
         };
 
-        const config = productConfig[productId];
+        const config = productConfig[contentId];
         if (!config) {
-            console.error('Product configuration not found for productId:', productId);
+            console.error('Product configuration not found for contentId:', contentId);
             console.log('Available configurations:', Object.keys(productConfig));
             throw new Error('Invalid product configuration');
         }
 
         console.log('Starting checkout process:', {
             memberId,
-            priceId,
-            productId,
+            contentId,
+            priceId: config.priceId,
             quantity,
             customerEmail,
             config
@@ -231,7 +231,7 @@ async function handleCheckout(button, member) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                priceId: priceId,
+                priceId: config.priceId,
                 quantity: quantity,
                 successUrl: `${window.location.origin}/success`,
                 cancelUrl: `${window.location.origin}/cancel`,
@@ -242,7 +242,7 @@ async function handleCheckout(button, member) {
                 },
                 metadata: {
                     memberstackUserId: memberId,
-                    memberstackPlanId: productId,
+                    memberstackPlanId: contentId,
                     quantity: quantity.toString()
                 }
             })
