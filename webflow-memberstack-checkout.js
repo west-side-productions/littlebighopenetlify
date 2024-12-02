@@ -111,7 +111,14 @@ async function handleCheckout(e) {
             return;
         }
 
+        const customerEmail = member.data?.auth?.email;
+        if (!customerEmail) {
+            console.error('No email found in member data');
+            throw new Error('No email found in member data');
+        }
+
         console.log('Starting Stripe checkout...');
+        console.log('Customer email:', customerEmail);
         
         // Create Stripe Checkout Session using Netlify function
         const NETLIFY_DOMAIN = 'https://lillebighopefunctions.netlify.app';  
@@ -127,7 +134,7 @@ async function handleCheckout(e) {
                 priceId: CONFIG.stripeProductId,
                 successUrl: CONFIG.successUrl,
                 cancelUrl: CONFIG.cancelUrl,
-                customerEmail: member.data?.email || member.auth?.email,
+                customerEmail,
                 shipping: {
                     allowedCountries: ['AT', 'DE', 'CH'],
                     collectShippingAddress: true
