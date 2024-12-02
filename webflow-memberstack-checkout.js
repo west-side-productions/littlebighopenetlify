@@ -18,7 +18,7 @@ const CONFIG = {
     // Memberstack 2.0 price ID (starts with prc_)
     priceId: 'prc_buch-tp2106tu',
     // Replace with your actual Stripe price ID (starts with price_)
-    stripeProductId: 'price_1QRIZnJRMXFic4sWptbw8uuA',  // TODO: Replace with your actual Stripe price ID
+    stripeProductId: 'price_1QRIZnJRMXFic4sWptbw8uuA',
     successUrl: `${window.location.origin}/success`,
     cancelUrl: `${window.location.origin}/cancel`,
     // Netlify Functions URL
