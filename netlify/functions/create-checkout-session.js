@@ -50,128 +50,62 @@ exports.handler = async (event, context) => {
         };
     }
 
-    // Validate HTTP method
+    // Validate request method
     if (event.httpMethod !== 'POST') {
-        return errorResponse(405, 'Method not allowed');
+        return errorResponse(405, 'Method Not Allowed');
     }
 
     try {
-        // Parse and validate request body
-        let data;
-        try {
-            data = JSON.parse(event.body);
-        } catch (e) {
-            return errorResponse(400, 'Invalid JSON payload');
+        // Parse and validate the request body
+        const data = JSON.parse(event.body);
+        
+        if (!data.priceId) {
+            return errorResponse(400, 'Missing required field: priceId');
         }
 
-        const { priceId, quantity, successUrl, cancelUrl, customerEmail, shipping, metadata } = data;
-
-        // Validate required fields
-        if (!priceId || !successUrl || !cancelUrl || !customerEmail || !shipping) {
-            return errorResponse(400, 'Missing required parameters', {
-                received: { priceId, successUrl, cancelUrl, customerEmail, shipping }
-            });
-        }
-
-        // Find or create customer
-        let customer;
-        try {
-            const customers = await stripe.customers.list({
-                email: customerEmail,
-                limit: 1
-            });
-            
-            customer = customers.data.length > 0 
-                ? customers.data[0] 
-                : await stripe.customers.create({
-                    email: customerEmail,
-                    metadata: {
-                        memberstackUserId: metadata?.memberstackUserId
-                    }
-                });
-        } catch (error) {
-            console.error('Error managing customer:', error);
-            return errorResponse(500, 'Failed to manage customer', error.message);
-        }
-
-        console.log('Creating checkout session:', { 
-            priceId,
-            quantity,
-            customerId: customer.id,
-            shipping,
-            metadata 
-        });
-
-        // Create checkout session
+        // Create the checkout session
         const session = await stripe.checkout.sessions.create({
-            customer: customer.id,
             payment_method_types: ['card'],
+            line_items: [{
+                price: data.priceId,
+                quantity: data.quantity || 1
+            }],
             mode: 'payment',
-            line_items: [
-                {
-                    price: priceId,
-                    quantity: parseInt(quantity) || 1
-                }
-            ],
-            success_url: successUrl,
-            cancel_url: cancelUrl,
-            shipping_address_collection: {
-                allowed_countries: ['AT', 'DE', 'CH']
-            },
-            shipping_options: [
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: shipping.weight <= 1000 ? 500 : 1000,
-                            currency: 'eur',
+            success_url: data.successUrl || `${process.env.URL}/success`,
+            cancel_url: data.cancelUrl || `${process.env.URL}/cancel`,
+            customer_email: data.customerEmail,
+            metadata: data.metadata || {},
+            shipping_options: [{
+                shipping_rate_data: {
+                    type: 'fixed_amount',
+                    fixed_amount: {
+                        amount: 0,
+                        currency: 'eur',
+                    },
+                    display_name: 'Digital Delivery',
+                    delivery_estimate: {
+                        minimum: {
+                            unit: 'business_day',
+                            value: 1,
                         },
-                        display_name: shipping.weight <= 1000 ? 'Standard Shipping' : 'Heavy Item Shipping',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
+                        maximum: {
+                            unit: 'business_day',
+                            value: 1,
                         },
                     },
-                }
-            ],
-            metadata: {
-                memberstackUserId: metadata?.memberstackUserId,
-                memberstackPlanId: metadata?.memberstackPlanId,
-                totalWeight: `${shipping.weight + shipping.packagingWeight}g`,
-                productWeight: `${shipping.weight}g`,
-                packagingWeight: `${shipping.packagingWeight}g`
-            },
-            payment_intent_data: {
-                metadata: {
-                    memberstackUserId: metadata?.memberstackUserId,
-                    memberstackPlanId: metadata?.memberstackPlanId,
-                    totalWeight: `${shipping.weight + shipping.packagingWeight}g`,
-                    productWeight: `${shipping.weight}g`,
-                    packagingWeight: `${shipping.packagingWeight}g`
-                }
-            },
-            allow_promotion_codes: true,
-            customer_update: {
-                address: 'auto',
-                shipping: 'auto'
-            },
-            locale: 'de'
+                },
+            }],
         });
 
-        console.log('Checkout session created:', session.id);
-        return successResponse({
-            sessionId: session.id,
-            url: session.url
-        });
+        return successResponse({ url: session.url });
 
     } catch (error) {
         console.error('Error creating checkout session:', error);
-        return errorResponse(500, 'Failed to create checkout session', error.message);
+        
+        return errorResponse(
+            500,
+            'Failed to create checkout session',
+            error.message
+        );
     }
 };
