@@ -12,8 +12,7 @@ exports.handler = async (event, context) => {
     console.log('Request details:', {
         method: event.httpMethod,
         headers: event.headers,
-        path: event.path,
-        body: event.body
+        path: event.path
     });
 
     // Handle preflight requests
@@ -46,25 +45,18 @@ exports.handler = async (event, context) => {
             throw new Error('Missing required field: priceId');
         }
 
-        if (!data.quantity || data.quantity < 1) {
-            throw new Error('Invalid quantity');
-        }
-
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
                 price: data.priceId,
-                quantity: data.quantity
+                quantity: data.quantity || 1
             }],
             mode: 'payment',
             success_url: data.successUrl || `${process.env.URL}/success`,
             cancel_url: data.cancelUrl || `${process.env.URL}/cancel`,
             customer_email: data.customerEmail,
-            metadata: {
-                ...data.metadata,
-                environment: process.env.NODE_ENV || 'development'
-            }
+            metadata: data.metadata || {}
         });
 
         console.log('Created checkout session:', session.id);
@@ -72,10 +64,7 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ 
-                url: session.url,
-                sessionId: session.id
-            })
+            body: JSON.stringify({ url: session.url })
         };
 
     } catch (error) {

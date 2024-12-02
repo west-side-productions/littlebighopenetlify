@@ -16,9 +16,12 @@ const EU_COUNTRIES = [
 // Configuration object
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
-    stripePublicKey: 'pk_live_51OPYr9JRMXFic4sWvXxVEWJqhTUkz6OyX0fCxGPFGAZBGQXrDjqO7OyQbqwA1QQsgfjBPGBGtxUJBjvLjBtSADVm00wXF4WBVT',
+    stripePublicKey: 'pk_test_51QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
     debug: true,
-    baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : ''
+    // For local development, use localhost. For production, use relative URL
+    baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
+    // For testing with Netlify Dev
+    isLocalDev: window.location.hostname === 'localhost' || window.location.hostname.includes('192.168.') || window.location.hostname.includes('.local')
 };
 
 // Debug flag
@@ -120,9 +123,10 @@ function getBaseUrl() {
     
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:8888';
+    } else {
+        // For production and preview deployments
+        return window.location.origin;
     }
-    // For production, use relative path
-    return '';
 }
 
 async function handleCheckout(event) {
@@ -139,10 +143,10 @@ async function handleCheckout(event) {
         // Prepare checkout data
         const checkoutData = {
             priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
-            quantity: parseInt(document.getElementById('book-quantity')?.value || '1'),
+            quantity: 1,
             successUrl: `${window.location.origin}/success`,
             cancelUrl: `${window.location.origin}/cancel`,
-            customerEmail: member?.data?.email || '',
+            customerEmail: member?.data?.email || 'office@west-side-productions.at',
             metadata: {
                 memberstackUserId: member?.id
             }
@@ -164,6 +168,7 @@ async function handleCheckout(event) {
                 'Accept': 'application/json'
             },
             mode: 'cors',
+            credentials: 'same-origin',
             body: JSON.stringify(checkoutData)
         });
 
