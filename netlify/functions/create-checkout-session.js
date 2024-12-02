@@ -45,16 +45,18 @@ exports.handler = async (event, context) => {
             throw new Error('Missing required field: priceId');
         }
 
+        const { priceId, successUrl, cancelUrl } = data;
+
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
+            mode: 'payment',
             payment_method_types: ['card'],
             line_items: [{
-                price: data.priceId,
+                price: priceId,
                 quantity: data.quantity || 1
             }],
-            mode: 'payment',
-            success_url: data.successUrl || `${process.env.URL}/success`,
-            cancel_url: data.cancelUrl || `${process.env.URL}/cancel`,
+            success_url: successUrl || `${process.env.URL}/success`,
+            cancel_url: cancelUrl || `${process.env.URL}/cancel`,
             customer_email: data.customerEmail,
             metadata: data.metadata || {}
         });
@@ -64,7 +66,7 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ url: session.url })
+            body: JSON.stringify({ sessionId: session.id })
         };
 
     } catch (error) {
