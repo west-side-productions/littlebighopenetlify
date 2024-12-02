@@ -1,8 +1,9 @@
-import Stripe from 'stripe';
+const Stripe = require('stripe');
+const axios = require('axios');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-export const handler = async function(event, context) {
+exports.handler = async function(event, context) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -41,31 +42,21 @@ export const handler = async function(event, context) {
             });
 
             // Add plan to member using Memberstack REST API
-            const response = await fetch(`https://api.memberstack.io/v1/members/${memberstackUserId}/add-plan`, {
+            const response = await axios({
                 method: 'POST',
+                url: `https://api.memberstack.io/v1/members/${memberstackUserId}/add-plan`,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                 },
-                body: JSON.stringify({
+                data: {
                     planId: memberstackPlanId,
                     status: 'ACTIVE',
                     type: 'ONETIME'
-                })
+                }
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Memberstack API error:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    error: errorText
-                });
-                throw new Error(`Memberstack API error: ${response.status} ${response.statusText}`);
-            }
-
-            const result = await response.json();
-            console.log('Successfully added plan to member:', result);
+            console.log('Successfully added plan to member:', response.data);
 
             return {
                 statusCode: 200,
@@ -76,10 +67,12 @@ export const handler = async function(event, context) {
                 })
             };
         } catch (error) {
-            console.error('Error processing webhook:', error);
+            console.error('Error processing webhook:', error.response ? error.response.data : error.message);
             return {
                 statusCode: 500,
-                body: JSON.stringify({ error: error.message })
+                body: JSON.stringify({ 
+                    error: error.response ? error.response.data : error.message 
+                })
             };
         }
     }
