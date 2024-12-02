@@ -1,7 +1,9 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const fetch = require('node-fetch');
+import Stripe from 'stripe';
+import fetch from 'node-fetch';
 
-exports.handler = async function(event, context) {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+export const handler = async function(event, context) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -14,6 +16,7 @@ exports.handler = async function(event, context) {
     try {
         stripeEvent = stripe.webhooks.constructEvent(event.body, sig, webhookSecret);
     } catch (err) {
+        console.error('Webhook signature verification failed:', err.message);
         return { 
             statusCode: 400, 
             body: `Webhook Error: ${err.message}`
