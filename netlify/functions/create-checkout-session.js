@@ -59,7 +59,7 @@ exports.handler = async function(event, context) {
                         unit: 'business_day',
                         value: 5,
                     },
-                }
+                },
             }
         }));
 
@@ -115,12 +115,6 @@ exports.handler = async function(event, context) {
                 memberstackPlanId: metadata.memberstackPlanId
             },
             allow_promotion_codes: true,
-            automatic_tax: {
-                enabled: true
-            },
-            tax_id_collection: {
-                enabled: true
-            },
             customer_update: {
                 address: 'auto',
                 shipping: 'auto'
