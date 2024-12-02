@@ -52,17 +52,42 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
     }
 }
 
+// Load Stripe.js script
+async function loadStripeScript() {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector('script[src*="stripe.com/v3"]')) {
+            console.log('Stripe.js already loaded');
+            resolve();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.onload = () => {
+            console.log('Stripe.js loaded successfully');
+            resolve();
+        };
+        script.onerror = (error) => {
+            console.error('Failed to load Stripe.js:', error);
+            reject(error);
+        };
+        document.head.appendChild(script);
+    });
+}
+
 // Initialize Stripe
 let stripe;
 async function initStripe() {
     try {
         console.log('Initializing Stripe...');
-        stripe = await Stripe('pk_test_51OQvSBFrPAUGZiHgGYKkHZZiGLCxqSFTXGgxFVOtBtqjlzQxMZWwxjPWmSsGDWmYZkVEqgOULZoNgRVgRGbsVEkB00cXTZQMtw');
+        if (typeof Stripe === 'undefined') {
+            throw new Error('Stripe.js not loaded');
+        }
+        stripe = Stripe('pk_live_51Q8eVRJRMXFic4sWxwFhvnHZqWNHhHyFVBwZFhTzAZZGwWXhK4zNNAvBKcZqYHoFpBQZnQeRcTa8kHPNvwEcGlDN00aDqtGSFh');
         console.log('Stripe initialized successfully');
-        return true;
     } catch (error) {
-        console.error('Error initializing Stripe:', error);
-        return false;
+        console.error('Failed to initialize Stripe:', error);
+        throw error;
     }
 }
 
@@ -82,179 +107,122 @@ async function initializeMemberstack() {
     return memberstackDom;
 }
 
-// Handle checkout button click
-async function handleCheckout(e) {
-    e.preventDefault();
-    
-    try {
-        // Initialize Stripe first
-        if (!stripe) {
-            const stripeInitialized = await initStripe();
-            if (!stripeInitialized) {
-                throw new Error('Stripe not initialized');
-            }
-        }
-
-        // Check authentication with Memberstack
-        const memberstack = await initializeMemberstack();
-        if (!memberstack) {
-            throw new Error('Memberstack not initialized');
-        }
-
-        const member = await memberstack.getCurrentMember();
-        console.log('Current member:', member);
-        console.log('Full member object:', JSON.stringify(member, null, 2));
-        
-        if (!member) {
-            console.log('User not authenticated, redirecting to login');
-            await memberstack.openModal('login');
-            return;
-        }
-
-        const customerEmail = member.data?.auth?.email;
-        if (!customerEmail) {
-            console.error('No email found in member data');
-            throw new Error('No email found in member data');
-        }
-
-        console.log('Starting Stripe checkout...');
-        console.log('Customer email:', customerEmail);
-        
-        // Create Stripe Checkout Session using Netlify function
-        const NETLIFY_DOMAIN = 'https://lillebighopefunctions.netlify.app';  
-        const checkoutEndpoint = `${NETLIFY_DOMAIN}/.netlify/functions/create-checkout-session`;
-        console.log('Calling checkout endpoint:', checkoutEndpoint);
-
-        const response = await fetch(checkoutEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                priceId: CONFIG.stripeProductId,
-                successUrl: CONFIG.successUrl,
-                cancelUrl: CONFIG.cancelUrl,
-                customerEmail,
-                shipping: {
-                    allowedCountries: ['AT', 'DE', 'CH'],
-                    collectShippingAddress: true
-                },
-                metadata: {
-                    memberstackUserId: member.data?.id,
-                    memberstackPlanId: CONFIG.priceId
-                }
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error('Checkout session creation failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorData
-            });
-            throw new Error(`Failed to create checkout session: ${response.status}`);
-        }
-
-        const session = await response.json();
-        
-        if (session.url) {
-            // Redirect to Stripe's hosted checkout page
-            window.location.href = session.url;
-        } else {
-            throw new Error('No checkout URL received');
-        }
-        
-    } catch (error) {
-        console.error('Checkout error:', { message: error.message, error });
-        // Show error to user
-        if (memberstackDom) {
-            memberstackDom._showMessage({ 
-                type: 'error',
-                title: 'Checkout Error',
-                text: 'There was a problem starting the checkout. Please try again.'
-            });
-        }
-    }
-}
-
 // Initialize checkout buttons
 async function initializeCheckoutButtons() {
     console.log('Setting up checkout buttons...');
-    // Target both checkout buttons
-    const checkoutButtons = document.querySelectorAll('#checkoutButton, button.checkout-button');
+    
+    // Target buttons with Memberstack 2.0 attributes
+    const checkoutButtons = document.querySelectorAll('#checkoutButton.ms-buy-button');
     console.log('Found checkout buttons:', checkoutButtons.length);
+    
+    // Set up quantity change handler
+    const quantitySelect = document.getElementById('book-quantity');
+    if (quantitySelect) {
+        quantitySelect.addEventListener('change', (e) => {
+            const quantity = parseInt(e.target.value);
+            const basePrice = parseFloat(document.querySelector('[data-product-type="book"]').getAttribute('data-base-price'));
+            const subtotal = (basePrice * quantity).toFixed(2);
+            
+            // Update price displays
+            document.getElementById('subtotal-price').textContent = subtotal;
+            document.getElementById('total-price').textContent = subtotal;
+            
+            // Update checkout button text
+            const button = document.getElementById('checkoutButton');
+            if (button) {
+                button.textContent = `Proceed to Checkout (€${subtotal})`;
+            }
+        });
+    }
     
     checkoutButtons.forEach(button => {
         // Remove any existing click handlers
-        button.removeEventListener('click', handleCheckout);
+        const oldHandler = button.onclick;
+        button.onclick = null;
+        
         // Add our new click handler
-        button.addEventListener('click', handleCheckout);
+        button.onclick = async (e) => {
+            e.preventDefault();
+            console.log('Checkout button clicked');
+            
+            try {
+                // Get current member
+                const member = await memberstackDom.getCurrentMember();
+                if (!member) {
+                    console.log('No member found, redirecting to registration');
+                    window.location.href = '/registrieren';
+                    return;
+                }
+                
+                // Get quantity
+                const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
+                
+                // Store quantity in button for checkout handler
+                button.setAttribute('data-quantity', quantity.toString());
+                
+                await handleCheckout(button, member);
+            } catch (error) {
+                console.error('Error in checkout button handler:', error);
+                alert('An error occurred. Please try again or contact support if the problem persists.');
+            }
+        };
     });
     
     console.log('Checkout buttons initialized');
 }
 
-// Update checkout flow to handle non-logged-in users
-document.addEventListener('DOMContentLoaded', async function() {
-    const buyButtons = document.querySelectorAll('[data-ms-buy]');
-    if (!buyButtons.length) return;
-
-    // Store checkout intent in sessionStorage when a buy button is clicked
-    buyButtons.forEach(button => {
-        button.addEventListener('click', async (e) => {
-            e.preventDefault();
-            
-            // Store checkout information in sessionStorage
-            sessionStorage.setItem('checkoutIntent', JSON.stringify({
-                productId: button.getAttribute('data-ms-buy'),
-                returnUrl: window.location.href
-            }));
-
-            // Check if user is logged in
-            const member = await window.$memberstackDom.getCurrentMember();
-            
-            if (!member) {
-                // Redirect to registration page if not logged in
-                window.location.href = '/registrieren';
-                return;
-            }
-
-            // If logged in, proceed with checkout
-            await handleCheckout(button, member);
-        });
-    });
-
-    // Check for returning user after registration
-    const checkoutIntent = sessionStorage.getItem('checkoutIntent');
-    if (checkoutIntent) {
-        const member = await window.$memberstackDom.getCurrentMember();
-        if (member) {
-            // Parse stored checkout information
-            const { productId, returnUrl } = JSON.parse(checkoutIntent);
-            
-            // Find the corresponding button
-            const button = document.querySelector(`[data-ms-buy="${productId}"]`);
-            
-            if (button) {
-                // Clear the stored intent
-                sessionStorage.removeItem('checkoutIntent');
-                
-                // Proceed with checkout
-                await handleCheckout(button, member);
-            }
-        }
-    }
-});
-
 async function handleCheckout(button, member) {
     try {
         const memberId = member.id;
-        const planId = button.getAttribute('data-ms-buy');
+        const priceId = button.getAttribute('data-ms-price');
+        const productId = button.getAttribute('data-ms-product');
+        const quantity = parseInt(button.getAttribute('data-quantity') || '1');
+        const customerEmail = member.data?.auth?.email;
+
+        if (!customerEmail) {
+            console.error('No email found in member data');
+            throw new Error('No email found in member data');
+        }
+
+        if (!priceId) {
+            console.error('No price ID found on button');
+            throw new Error('Missing price ID configuration');
+        }
+
+        console.log('Debug - Button attributes:', {
+            priceId,
+            productId,
+            quantity,
+            allAttributes: Array.from(button.attributes).map(attr => `${attr.name}=${attr.value}`).join(', '),
+            innerHTML: button.innerHTML
+        });
+
+        // Get the product configuration based on the product ID
+        const productConfig = {
+            'prc_buch-tp2106tu': {
+                weight: 1000,
+                packagingWeight: 50
+            },
+            'prc_online-kochkurs-8b540kc2': {
+                weight: 1000,
+                packagingWeight: 50
+            }
+        };
+
+        const config = productConfig[productId];
+        if (!config) {
+            console.error('Product configuration not found for productId:', productId);
+            console.log('Available configurations:', Object.keys(productConfig));
+            throw new Error('Invalid product configuration');
+        }
 
         console.log('Starting checkout process:', {
             memberId,
-            planId
+            priceId,
+            productId,
+            quantity,
+            customerEmail,
+            config
         });
 
         const response = await fetch('/.netlify/functions/create-checkout-session', {
@@ -263,8 +231,20 @@ async function handleCheckout(button, member) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                memberstackUserId: memberId,
-                memberstackPlanId: planId
+                priceId: priceId,
+                quantity: quantity,
+                successUrl: `${window.location.origin}/success`,
+                cancelUrl: `${window.location.origin}/cancel`,
+                customerEmail: customerEmail,
+                shipping: {
+                    weight: config.weight * quantity,
+                    packagingWeight: config.packagingWeight
+                },
+                metadata: {
+                    memberstackUserId: memberId,
+                    memberstackPlanId: productId,
+                    quantity: quantity.toString()
+                }
             })
         });
 
@@ -274,19 +254,31 @@ async function handleCheckout(button, member) {
             throw new Error('Failed to create checkout session');
         }
 
-        const { sessionId } = await response.json();
-        const stripe = Stripe('pk_test_51OQvSBFrPAUGZiHgcDMPtPECPPEYBhYQBOTJYxnHKQpWtNKkQtwhZlrxXmQGWsAHJqQXrJCPBQZGFBXDGJHEBWEY00zLQjPaXS');
-        
-        const { error } = await stripe.redirectToCheckout({
-            sessionId
-        });
-
-        if (error) {
-            console.error('Stripe checkout error:', error);
-            throw new Error(error.message);
+        const { url } = await response.json();
+        if (!url) {
+            throw new Error('No checkout URL returned');
         }
+
+        // Redirect to Stripe Checkout
+        window.location.href = url;
     } catch (error) {
         console.error('Checkout error:', error);
         alert('An error occurred during checkout. Please try again.');
     }
 }
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Initializing shopping system...');
+    
+    // Wait for Memberstack initialization
+    await initializeMemberstack();
+    
+    // Initialize Stripe
+    await loadStripeScript();
+    await initStripe();
+    
+    // Initialize checkout buttons
+    initializeCheckoutButtons();
+    console.log('Checkout buttons initialized');
+});

@@ -26,17 +26,17 @@ exports.handler = async function(event, context) {
         }
 
         const data = JSON.parse(event.body);
-        const { priceId, successUrl, cancelUrl, customerEmail, shipping, metadata } = data;
+        const { priceId, quantity, successUrl, cancelUrl, customerEmail, shipping, metadata } = data;
 
         // Validate required fields
         if (!priceId || !successUrl || !cancelUrl || !customerEmail || !shipping) {
-            console.error('Missing required parameters:', { priceId, successUrl, cancelUrl, customerEmail, shipping });
+            console.error('Missing required parameters:', { priceId, quantity, successUrl, cancelUrl, customerEmail, shipping });
             return {
                 statusCode: 400,
                 headers,
                 body: JSON.stringify({
                     error: 'Missing required parameters',
-                    received: { priceId, successUrl, cancelUrl, customerEmail, shipping }
+                    received: { priceId, quantity, successUrl, cancelUrl, customerEmail, shipping }
                 })
             };
         }
@@ -88,6 +88,7 @@ exports.handler = async function(event, context) {
 
         console.log('Creating checkout session with:', { 
             priceId,
+            quantity,
             successUrl,
             cancelUrl,
             customerEmail,
@@ -100,7 +101,7 @@ exports.handler = async function(event, context) {
             customer: customer.id,
             line_items: [{
                 price: priceId,
-                quantity: 1,
+                quantity: quantity || 1,
             }],
             mode: 'payment',
             success_url: successUrl,
@@ -112,7 +113,8 @@ exports.handler = async function(event, context) {
             billing_address_collection: 'required',
             metadata: {
                 memberstackUserId: metadata.memberstackUserId,
-                memberstackPlanId: metadata.memberstackPlanId
+                memberstackPlanId: metadata.memberstackPlanId,
+                quantity: metadata.quantity
             },
             allow_promotion_codes: true,
             customer_update: {
