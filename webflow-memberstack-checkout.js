@@ -195,24 +195,98 @@ async function initializeCheckoutButtons() {
     console.log('Checkout buttons initialized');
 }
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Initializing shopping system...');
-    
-    try {
-        // Initialize Memberstack
-        console.log('Checking for Memberstack...', window.$memberstackDom ? 1 : 0);
-        const memberstack = await initializeMemberstack();
-        if (memberstack) {
-            console.log('Memberstack 2.0 found!');
+// Update checkout flow to handle non-logged-in users
+document.addEventListener('DOMContentLoaded', async function() {
+    const buyButtons = document.querySelectorAll('[data-ms-buy]');
+    if (!buyButtons.length) return;
+
+    // Store checkout intent in sessionStorage when a buy button is clicked
+    buyButtons.forEach(button => {
+        button.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            // Store checkout information in sessionStorage
+            sessionStorage.setItem('checkoutIntent', JSON.stringify({
+                productId: button.getAttribute('data-ms-buy'),
+                returnUrl: window.location.href
+            }));
+
+            // Check if user is logged in
+            const member = await window.$memberstackDom.getCurrentMember();
+            
+            if (!member) {
+                // Redirect to registration page if not logged in
+                window.location.href = '/registrieren';
+                return;
+            }
+
+            // If logged in, proceed with checkout
+            await handleCheckout(button, member);
+        });
+    });
+
+    // Check for returning user after registration
+    const checkoutIntent = sessionStorage.getItem('checkoutIntent');
+    if (checkoutIntent) {
+        const member = await window.$memberstackDom.getCurrentMember();
+        if (member) {
+            // Parse stored checkout information
+            const { productId, returnUrl } = JSON.parse(checkoutIntent);
+            
+            // Find the corresponding button
+            const button = document.querySelector(`[data-ms-buy="${productId}"]`);
+            
+            if (button) {
+                // Clear the stored intent
+                sessionStorage.removeItem('checkoutIntent');
+                
+                // Proceed with checkout
+                await handleCheckout(button, member);
+            }
         }
-        
-        console.log('Shopping system initialized with Memberstack 2.0');
-        
-        // Initialize checkout buttons
-        await initializeCheckoutButtons();
-        
-    } catch (error) {
-        console.error('Error initializing shopping system:', error);
     }
 });
+
+async function handleCheckout(button, member) {
+    try {
+        const memberId = member.id;
+        const planId = button.getAttribute('data-ms-buy');
+
+        console.log('Starting checkout process:', {
+            memberId,
+            planId
+        });
+
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                memberstackUserId: memberId,
+                memberstackPlanId: planId
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Error creating checkout session:', errorData);
+            throw new Error('Failed to create checkout session');
+        }
+
+        const { sessionId } = await response.json();
+        const stripe = Stripe('pk_test_51OQvSBFrPAUGZiHgcDMPtPECPPEYBhYQBOTJYxnHKQpWtNKkQtwhZlrxXmQGWsAHJqQXrJCPBQZGFBXDGJHEBWEY00zLQjPaXS');
+        
+        const { error } = await stripe.redirectToCheckout({
+            sessionId
+        });
+
+        if (error) {
+            console.error('Stripe checkout error:', error);
+            throw new Error(error.message);
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        alert('An error occurred during checkout. Please try again.');
+    }
+}
