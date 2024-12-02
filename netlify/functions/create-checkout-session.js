@@ -74,20 +74,34 @@ exports.handler = async function(event, context) {
 
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
-            payment_method_types: ['card'],
             line_items: [{
                 price: priceId,
-                quantity: 1
+                quantity: 1,
             }],
+            mode: 'payment',
             success_url: successUrl,
             cancel_url: cancelUrl,
             customer_email: customerEmail,
-            shipping_address_collection: {
-                allowed_countries: shipping.allowedCountries
-            },
             shipping_options,
-            metadata
+            shipping_address_collection: {
+                allowed_countries: ['AT', 'DE', 'CH'],
+            },
+            billing_address_collection: 'required',
+            metadata: {
+                memberstackUserId: metadata.memberstackUserId,
+                memberstackPlanId: metadata.memberstackPlanId
+            },
+            allow_promotion_codes: true,
+            automatic_tax: {
+                enabled: true
+            },
+            tax_id_collection: {
+                enabled: true
+            },
+            customer_update: {
+                address: 'auto'
+            },
+            locale: 'de'
         });
 
         console.log('Checkout session created:', session.id);
@@ -95,9 +109,9 @@ exports.handler = async function(event, context) {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ 
-                url: session.url,
-                sessionId: session.id
+            body: JSON.stringify({
+                sessionId: session.id,
+                url: session.url
             })
         };
 
