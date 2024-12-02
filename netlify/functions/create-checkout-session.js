@@ -112,7 +112,10 @@ exports.handler = async function(event, context) {
             billing_address_collection: 'required',
             metadata: {
                 memberstackUserId: metadata.memberstackUserId,
-                memberstackPlanId: metadata.memberstackPlanId
+                memberstackPlanId: metadata.memberstackPlanId,
+                totalWeight: `${shipping.weight + shipping.packagingWeight}g`,
+                productWeight: `${shipping.weight}g`,
+                packagingWeight: `${shipping.packagingWeight}g`
             },
             allow_promotion_codes: true,
             customer_update: {
