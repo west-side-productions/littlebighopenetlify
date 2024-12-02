@@ -9,10 +9,6 @@
   publish = "."
   autoLaunch = true
 
-[context.development.environment]
-  STRIPE_SECRET_KEY = "sk_test_51OQvSBFrPAUGZiHgwDHSIJRQEpnTLWTkVZDaKiMvLXJGOlPAUwdDxTDTCWdnO7vKHLQBNgLYKtQTnLQhVVbVtFKe00zLQjPaXS"
-  MEMBERSTACK_SECRET_KEY = "ms_sb_prod_key_d5d0c7b0sqh4qt059hq"
-
 [[redirects]]
   from = "/*"
   to = "/index.html"
