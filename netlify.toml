@@ -2,29 +2,36 @@
   functions = "netlify/functions"
   publish = "."
 
+[dev]
+  framework = "#static"
+  port = 8888
+  targetPort = 8888
+  publish = "."
+  autoLaunch = true
+
 [[redirects]]
   from = "/.netlify/functions/*"
   to = "/.netlify/functions/:splat"
   status = 200
   force = true
-  [redirects.headers]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "GET, HEAD, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization, stripe-signature"
-    Access-Control-Allow-Credentials = "true"
-    Access-Control-Max-Age = "86400"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "GET, HEAD, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization, stripe-signature"
-    Access-Control-Allow-Credentials = "true"
-    Access-Control-Max-Age = "86400"
+  methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = false
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "POST, OPTIONS"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept"
+    Access-Control-Max-Age = "86400"

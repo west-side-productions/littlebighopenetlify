@@ -127,11 +127,9 @@ function getBaseUrl() {
     
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:8888';
-    } else if (hostname.includes('.netlify.live')) {
-        return window.location.origin;
     } else {
-        // For production, ensure we're using HTTPS
-        return `https://${hostname}`;
+        // For production and preview deployments
+        return window.location.origin;
     }
 }
 
@@ -142,41 +140,15 @@ async function handleCheckout(event) {
     button.textContent = 'Processing...';
     
     try {
-        const member = await window.$memberstackDom.getCurrentMember();
+        const member = await memberstack.getCurrentMember();
         
         // Prepare checkout data
-        const contentId = 'prc_buch-tp2106tu';
-        const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
-        const customerEmail = member?.data?.auth?.email;
-        const productConfig = {
-            'prc_buch-tp2106tu': {
-                priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
-                weight: 1000,
-                packagingWeight: 50
-            }
-        };
-
-        const config = productConfig[contentId];
-        if (!config) {
-            console.error('Product configuration not found for contentId:', contentId);
-            throw new Error('Invalid product configuration');
-        }
-
         const checkoutData = {
-            priceId: config.priceId,
-            quantity: quantity,
+            priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
+            quantity: 1,
             successUrl: `${window.location.origin}/success`,
             cancelUrl: `${window.location.origin}/cancel`,
-            customerEmail: customerEmail,
-            shipping: {
-                weight: config.weight * quantity,
-                packagingWeight: config.packagingWeight
-            },
-            metadata: {
-                memberstackUserId: member?.id,
-                memberstackPlanId: contentId,
-                quantity: quantity.toString()
-            }
+            customerEmail: member?.email || 'office@west-side-productions.at'
         };
 
         console.log('Starting checkout process:', checkoutData);
@@ -186,29 +158,19 @@ async function handleCheckout(event) {
         const endpointUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
         
         console.log('Calling checkout endpoint:', endpointUrl);
-        console.log('Request headers:', {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        });
 
         // Make the API call
         const response = await fetch(endpointUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Content-Type': 'application/json'
             },
-            mode: 'cors', // Add CORS mode explicitly
-            credentials: 'include', // Include credentials for all environments
             body: JSON.stringify(checkoutData)
         });
 
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries([...response.headers]));
-
         if (!response.ok) {
             const errorText = await response.text();
-            console.log('Error response:', {
+            console.error('Error response:', {
                 status: response.status,
                 statusText: response.statusText,
                 body: errorText,
@@ -228,11 +190,10 @@ async function handleCheckout(event) {
         }
 
     } catch (error) {
-        console.log('Checkout error:', error);
+        console.error('Checkout error:', error);
         button.disabled = false;
         button.textContent = 'Buy Now';
-        // Show error to customer
-        alert('Sorry, there was a problem starting the checkout process. Please try again or contact support if the problem persists.');
+        alert('Sorry, there was a problem starting the checkout process. Please try again.');
     }
 }
 
