@@ -3,16 +3,15 @@
   publish = "."
 
 [[redirects]]
-  from = "/.netlify/functions/*"
+  from = "/*"
   to = "/.netlify/functions/:splat"
   status = 200
   force = true
-  methods = ["POST", "OPTIONS"]
-  headers = {Access-Control-Allow-Origin = "*", Access-Control-Allow-Headers = "Content-Type", Access-Control-Allow-Methods = "POST, OPTIONS"}
 
 [[headers]]
-  for = "/*"
+  for = "/.netlify/functions/*"
   [headers.values]
     Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "POST, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "*"
+    Access-Control-Max-Age = "86400"
