@@ -20,7 +20,9 @@ const CONFIG = {
     // Replace with your actual Stripe price ID (starts with price_)
     stripeProductId: 'price_1QRIZnJRMXFic4sWptbw8uuA',  // TODO: Replace with your actual Stripe price ID
     successUrl: `${window.location.origin}/success`,
-    cancelUrl: `${window.location.origin}/cancel`
+    cancelUrl: `${window.location.origin}/cancel`,
+    // Netlify Functions URL
+    functionsUrl: 'https://lillebighopefunctions.netlify.app/.netlify/functions'
 };
 
 // State management
@@ -225,7 +227,7 @@ async function handleCheckout(button, member) {
             config
         });
 
-        const response = await fetch('/.netlify/functions/create-checkout-session', {
+        const response = await fetch(`${CONFIG.functionsUrl}/create-checkout-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
