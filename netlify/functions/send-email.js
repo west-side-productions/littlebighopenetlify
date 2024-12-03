@@ -2,7 +2,8 @@ const sgMail = require('@sendgrid/mail');
 const templates = {
   de: require('./email-templates/de'),
   en: require('./email-templates/en'),
-  // Add fr and it templates when ready
+  fr: require('./email-templates/fr'),
+  it: require('./email-templates/it')
 };
 
 // Initialize SendGrid with your API key

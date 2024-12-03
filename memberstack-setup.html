@@ -1,0 +1,51 @@
+<!-- Add this in your HTML head section -->
+<script src="https://auth.memberstack.com/js"></script>
+<script src="/memberstack-auth.js"></script>
+
+<!-- Add this where you want to handle language selection -->
+<select id="languageSelect" onchange="handleLanguageChange(event)">
+    <option value="en">English</option>
+    <option value="de">Deutsch</option>
+    <option value="fr">Français</option>
+    <option value="it">Italiano</option>
+</select>
+
+<script>
+// Handle language change
+async function handleLanguageChange(event) {
+    const language = event.target.value;
+    const memberstack = await window.$memberstackDom.init({
+        appId: "YOUR_MEMBERSTACK_APP_ID" // Replace with your Memberstack App ID
+    });
+    
+    const member = await memberstack.getCurrentMember();
+    if (member) {
+        // Update member's language preference
+        await memberstack.updateMember({
+            customFields: {
+                language: language
+            }
+        });
+        
+        // Update current language for email system
+        window.currentUserLanguage = language;
+    }
+}
+
+// Set initial language based on user's preference or browser
+document.addEventListener('DOMContentLoaded', async () => {
+    const memberstack = await window.$memberstackDom.init({
+        appId: "YOUR_MEMBERSTACK_APP_ID" // Replace with your Memberstack App ID
+    });
+    
+    const member = await memberstack.getCurrentMember();
+    if (member && member.customFields?.language) {
+        document.getElementById('languageSelect').value = member.customFields.language;
+    } else {
+        const browserLang = navigator.language.substring(0,2);
+        if (['en', 'de', 'fr', 'it'].includes(browserLang)) {
+            document.getElementById('languageSelect').value = browserLang;
+        }
+    }
+});
+</script>
