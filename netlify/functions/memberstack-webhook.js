@@ -125,13 +125,13 @@ async function handleMemberCreated(data) {
     let language = customFields.language || 
                   customFields['Language'] || 
                   customFields['preferred_language'] ||
-                  'en';
+                  'de';  // Default to German
 
     // Validate language is supported
     const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
     if (!SUPPORTED_LANGUAGES.includes(language)) {
-        console.warn(`Unsupported language ${language}, falling back to en`);
-        language = 'en';
+        console.warn(`Unsupported language ${language}, falling back to de`);
+        language = 'de';
     }
 
     console.log('Detected language:', language);
@@ -143,10 +143,10 @@ async function handleMemberCreated(data) {
         await sendEmail({
             to: email,
             templateName: 'welcome',
-            language: language,  // Explicitly use the validated language
+            language,  // Use the validated language
             variables: {
                 firstName,
-                language  // Pass language to email template
+                language
             }
         });
         

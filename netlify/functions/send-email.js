@@ -9,15 +9,7 @@ const templates = {
 // Initialize SendGrid with your API key
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-const defaultLanguage = 'en';
-
-const replaceTemplateVariables = (template, variables) => {
-  let text = template;
-  Object.keys(variables).forEach(key => {
-    text = text.replace(new RegExp(`{{${key}}}`, 'g'), variables[key]);
-  });
-  return text;
-};
+const defaultLanguage = 'de';
 
 exports.handler = async (event, context) => {
   console.log('=== Email Sending Function Started ===');
@@ -45,6 +37,7 @@ exports.handler = async (event, context) => {
     } = JSON.parse(event.body);
 
     console.log('Email request details:', {
+      to,
       templateName,
       language,
       hasVariables: Object.keys(variables).length > 0,
