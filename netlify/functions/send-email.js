@@ -20,6 +20,13 @@ const replaceTemplateVariables = (template, variables) => {
 };
 
 exports.handler = async (event, context) => {
+  console.log('=== Email Sending Function Started ===');
+  console.log('Request details:', {
+    method: event.httpMethod,
+    path: event.path,
+    headers: event.headers
+  });
+
   if (event.httpMethod !== 'POST') {
     console.log('Method not allowed:', event.httpMethod);
     return {
@@ -29,6 +36,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log('Parsing request body...');
     const { 
       to, 
       templateName, 
@@ -37,16 +45,17 @@ exports.handler = async (event, context) => {
     } = JSON.parse(event.body);
 
     // Log incoming request (without sensitive data)
-    console.log('Processing email request:', {
+    console.log('Email request details:', {
       templateName,
       language,
       hasVariables: Object.keys(variables).length > 0,
-      variables: { ...variables, email: undefined }  // Log variables without email
+      variableKeys: Object.keys(variables),
+      toEmailDomain: to ? to.split('@')[1] : undefined
     });
 
     // Validate required fields
     if (!to || !templateName) {
-      console.log('Missing required fields:', { to: !!to, templateName: !!templateName });
+      console.error('Missing required fields:', { to: !!to, templateName: !!templateName });
       return {
         statusCode: 400,
         body: JSON.stringify({ 
@@ -59,94 +68,49 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Validate language
-    const validLanguages = Object.keys(templates);
-    if (!validLanguages.includes(language)) {
-      console.warn(`Invalid language ${language}, falling back to ${defaultLanguage}`);
-      language = defaultLanguage;
-    }
-
-    // Get template for specified language
-    const langTemplates = templates[language];
-    if (!langTemplates) {
-      console.error(`No templates found for language: ${language}`);
+    // Check if template exists for language
+    console.log('Checking template availability...');
+    const templateSet = templates[language] || templates[defaultLanguage];
+    if (!templateSet) {
+      console.error('Template set not found for language:', language);
       return {
-        statusCode: 500,
+        statusCode: 400,
         body: JSON.stringify({ 
-          message: 'Template configuration error',
+          message: `Template set not found for language: ${language}`,
           details: `Templates not found for language: ${language}`
         })
       };
     }
 
-    console.log('Using templates for language:', language);
-    console.log('Available templates:', Object.keys(langTemplates));
-    
-    const template = langTemplates[templateName];
+    const template = templateSet[templateName];
     if (!template) {
-      console.error(`Template '${templateName}' not found in ${language} templates`);
+      console.error('Template not found:', { language, templateName });
       return {
-        statusCode: 404,
+        statusCode: 400,
         body: JSON.stringify({ 
-          message: 'Template not found',
+          message: `Template not found: ${templateName}`,
           details: `Template '${templateName}' not found in ${language} templates`
         })
       };
     }
 
-    console.log('Using template:', {
-      name: templateName,
-      language,
-      hasSubject: !!template.subject,
-      hasHtmlFunction: typeof template.html === 'function'
-    });
-
-    // Get HTML content from template function
-    const htmlContent = template.html(variables);
-    console.log('Generated HTML preview:', htmlContent.substring(0, 200) + '...');
-
-    const subject = template.subject;
-
-    // Prepare email
-    const msg = {
+    console.log('Processing template with variables...');
+    const { subject, html, text } = template;
+    const processedEmail = {
       to,
       from: process.env.SENDGRID_FROM_EMAIL,
-      subject,
-      text: htmlContent.replace(/<[^>]*>/g, ''), // Strip HTML tags for text version
-      html: htmlContent
+      subject: replaceTemplateVariables(subject, variables),
+      html: replaceTemplateVariables(html, variables),
+      text: replaceTemplateVariables(text, variables)
     };
 
-    // Validate SendGrid configuration
-    if (!process.env.SENDGRID_API_KEY) {
-      console.error('SendGrid API key not configured');
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ 
-          message: 'Email service not configured',
-          details: 'SendGrid API key is missing'
-        })
-      };
-    }
-
-    if (!process.env.SENDGRID_FROM_EMAIL) {
-      console.error('SendGrid sender email not configured');
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ 
-          message: 'Email service not configured',
-          details: 'Sender email is missing'
-        })
-      };
-    }
-
-    // Send email
-    console.log('Sending email in language:', language);
-    await sgMail.send(msg);
-    console.log('Email sent successfully');
+    console.log('Sending email via SendGrid...');
+    await sgMail.send(processedEmail);
+    console.log('Email sent successfully!');
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         message: 'Email sent successfully',
         details: {
           to,
@@ -156,8 +120,13 @@ exports.handler = async (event, context) => {
       })
     };
   } catch (error) {
-    console.error('Error sending email:', error);
-    
+    console.error('Error processing email request:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+
     // Handle SendGrid specific errors
     if (error.response && error.response.body) {
       const { message, code } = error.response.body;
@@ -171,11 +140,12 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Return appropriate error response
     return {
-      statusCode: 500,
-      body: JSON.stringify({ 
+      statusCode: error.code === 'ENOENT' ? 404 : 500,
+      body: JSON.stringify({
         message: 'Error sending email',
-        details: error.message
+        error: error.message
       })
     };
   }

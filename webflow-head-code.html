@@ -2,29 +2,43 @@
 // Language configuration
 const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
 const DEFAULT_LANGUAGE = 'en';
+const DEBUG = true;
+
+function debugLog(...args) {
+    if (DEBUG) {
+        console.log('%c[Language Debug]', 'background: #ffeb3b; color: black; padding: 2px 5px; border-radius: 3px;', ...args);
+    }
+}
 
 // Detect language from URL path or browser settings
 function detectLanguage() {
+    debugLog('Starting language detection...');
+    
     // Try to get language from URL path
     const pathSegments = window.location.pathname.split('/').filter(Boolean);
     const pathLanguage = pathSegments[0]?.toLowerCase();
+    debugLog('URL path:', window.location.pathname);
+    debugLog('Path segments:', pathSegments);
+    debugLog('Potential path language:', pathLanguage);
     
     if (SUPPORTED_LANGUAGES.includes(pathLanguage)) {
-        console.log('Using URL path language:', pathLanguage);
+        debugLog('✓ Using URL path language:', pathLanguage);
         return pathLanguage;
     }
 
     // Try to get language from browser settings
     const browserLanguage = navigator.language || navigator.userLanguage;
     const shortBrowserLang = browserLanguage.split('-')[0].toLowerCase();
+    debugLog('Browser language (full):', browserLanguage);
+    debugLog('Browser language (short):', shortBrowserLang);
     
     if (SUPPORTED_LANGUAGES.includes(shortBrowserLang)) {
-        console.log('Using browser language:', shortBrowserLang);
+        debugLog('✓ Using browser language:', shortBrowserLang);
         return shortBrowserLang;
     }
 
     // Fallback to default language
-    console.log('Using default language:', DEFAULT_LANGUAGE);
+    debugLog('✓ Using default language:', DEFAULT_LANGUAGE);
     return DEFAULT_LANGUAGE;
 }
 
@@ -43,9 +57,6 @@ function waitForMemberstack() {
 }
 
 async function initializeMemberstack() {
-    const language = detectLanguage();
-    console.log('Initializing Memberstack with language:', language);
-
     try {
         // Wait for Memberstack to be available
         const MemberStack = await waitForMemberstack();
@@ -85,19 +96,18 @@ async function initializeMemberstack() {
         if (passwordInput) {
             passwordInput.setAttribute('autocomplete', 'new-password');
         }
-        
-        // Get price element
-        const priceElement = document.querySelector('[data-ms-price]');
-        if (priceElement) {
-            console.log('Price element found:', priceElement.getAttribute('data-ms-price'));
-        }
 
         // Add form submission handler
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            console.log('Form submitted!');
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            debugLog('=== Form Submission Started ===');
             
             try {
+                // Get current language at submission time
+                debugLog('Detecting language at form submission...');
+                const detectedLanguage = detectLanguage();
+                debugLog('Language detection result:', detectedLanguage);
+
                 // Get form data
                 const email = emailInput?.value;
                 const password = passwordInput?.value;
@@ -107,39 +117,51 @@ async function initializeMemberstack() {
                     throw new Error('Email and password are required');
                 }
 
-                console.log('Creating member with data:', { email, firstName, language });
+                // Prepare custom fields with explicit language settings
+                const customFields = {
+                    'first-name': firstName,
+                    'language': detectedLanguage,
+                    'Language': detectedLanguage,
+                    'preferred_language': detectedLanguage
+                };
+
+                debugLog('Preparing member data:', { 
+                    email, 
+                    firstName, 
+                    language: detectedLanguage,
+                    customFields 
+                });
 
                 // Create member with Memberstack 2.0
+                debugLog('Calling Memberstack signup...');
                 const { data: newMember, error } = await window.$memberstackDom.signup({
                     email,
                     password,
                     redirectUrl: window.location.origin + '/email-verification',
-                    customFields: {
-                        'first-name': firstName,
-                        'language': language,
-                        'preferred_language': language
-                    }
+                    customFields
                 });
 
                 if (error) {
+                    console.error('Signup error:', error);
                     throw new Error(error.message);
                 }
 
-                console.log('Member created successfully:', newMember);
+                debugLog('Member created successfully:', newMember);
+                debugLog('Member custom fields:', newMember.customFields);
 
                 // Send verification email with correct language
                 const emailData = {
                     to: email,
                     templateName: 'email_verification',
-                    language: language,
+                    language: detectedLanguage,
                     variables: {
-                        firstName: firstName,
-                        language: language,
+                        firstName,
+                        language: detectedLanguage,
                         verificationLink: `${window.location.origin}/verify-email?token=${newMember.loginRedirectUrl.split('token=')[1]}`
                     }
                 };
 
-                console.log('Sending verification email with data:', emailData);
+                debugLog('Sending verification email with data:', emailData);
 
                 const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                     method: 'POST',
@@ -149,18 +171,20 @@ async function initializeMemberstack() {
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Email API error: ${response.status} - ${errorText}`);
+                    throw new Error(`Failed to send verification email: ${errorText}`);
                 }
 
                 const result = await response.json();
-                console.log('Verification email sent:', result);
+                debugLog('Verification email sent:', result);
 
                 // Redirect to verification page
-                window.location.href = `/${language}/email-verification`;
+                debugLog('Redirecting to verification page...');
+                window.location.href = `/${detectedLanguage}/email-verification`;
 
             } catch (error) {
                 console.error('Error during signup:', error);
-                alert('An error occurred during signup. Please try again.');
+                debugLog('❌ Error during signup:', error);
+                alert(error.message);
             }
         });
 
@@ -169,7 +193,7 @@ async function initializeMemberstack() {
             window.$memberstackDom.passwordResetRequested.subscribe(async ({ member, token }) => {
                 try {
                     // Get user's language preference or fallback to current language
-                    const userLanguage = member.customFields?.language || language;
+                    const userLanguage = member.customFields?.language || detectLanguage();
                     if (!SUPPORTED_LANGUAGES.includes(userLanguage)) {
                         console.warn(`Unsupported language ${userLanguage}, falling back to ${DEFAULT_LANGUAGE}`);
                         userLanguage = DEFAULT_LANGUAGE;
