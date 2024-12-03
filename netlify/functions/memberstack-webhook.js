@@ -106,8 +106,27 @@ exports.handler = async (event) => {
 };
 
 async function handleMemberCreated(data) {
-    console.log('Handling member created:', data);
+    console.log('Handling member created with full data:', JSON.stringify(data, null, 2));
     const { auth: { email }, customFields = {} } = data;
+    
+    // Log the exact structure of customFields
+    console.log('Custom fields received:', JSON.stringify(customFields, null, 2));
+
+    // Try different possible field names for first name
+    const firstName = customFields['first-name'] || 
+                     customFields['firstName'] || 
+                     customFields['firstname'] || 
+                     customFields['First Name'] || 
+                     'User';
+    
+    // Get language with English fallback
+    const language = customFields.language || 
+                    customFields['Language'] || 
+                    customFields['preferred_language'] || 
+                    'en';
+
+    console.log('Using firstName:', firstName);
+    console.log('Using language:', language);
 
     try {
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
@@ -118,15 +137,16 @@ async function handleMemberCreated(data) {
             body: JSON.stringify({
                 to: email,
                 templateName: 'welcome',
-                language: customFields.language || 'de',
+                language,
                 variables: {
-                    firstName: customFields['first-name'] || 'User'
+                    firstName
                 }
             })
         });
 
         if (!response.ok) {
-            throw new Error(`Email API responded with status: ${response.status}`);
+            const errorText = await response.text();
+            throw new Error(`Email API responded with status: ${response.status}, body: ${errorText}`);
         }
 
         const responseData = await response.json();
