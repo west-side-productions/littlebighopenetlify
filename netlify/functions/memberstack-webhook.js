@@ -5,7 +5,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // CORS headers
 const headers = {
-    'Access-Control-Allow-Origin': 'https://littlebighope.com',
+    'Access-Control-Allow-Origin': 'https://lillebighopefunctions.netlify.app',
     'Access-Control-Allow-Headers': 'Content-Type, svix-id, svix-signature, svix-timestamp',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
@@ -101,7 +101,7 @@ async function handleMemberCreated(data) {
     const { email, customFields = {} } = data;
 
     try {
-        const response = await fetch('https://littlebighope.com/.netlify/functions/send-email', {
+        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ async function handleMemberUpdated(data) {
         console.log('Purchase detected:', metadata.lastPurchase);
 
         try {
-            const response = await fetch('https://littlebighope.com/.netlify/functions/send-email', {
+            const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
