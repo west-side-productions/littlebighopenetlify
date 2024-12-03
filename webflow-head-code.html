@@ -1,39 +1,82 @@
 <script>
-// Function to detect language from URL, locale nav, or browser
+// Store the detected language globally so it remains consistent
+let detectedLanguage = null;
+
+// Function to detect language from URL first, then browser
 function detectLanguage() {
+    // If we already detected the language, use that
+    if (detectedLanguage) {
+        return detectedLanguage;
+    }
+
     // First try from URL path (e.g., /en, /de, /fr, /it)
     const pathLang = window.location.pathname.split('/')[1];
     if (['en', 'de', 'fr', 'it'].includes(pathLang)) {
-        return pathLang;
+        detectedLanguage = pathLang;
+        console.log('Language detected from URL:', detectedLanguage);
+        return detectedLanguage;
     }
 
-    // Then try from locale nav (check for w--current)
-    const currentLocale = document.querySelector('.w-locales-item .w--current');
-    if (currentLocale) {
-        const hrefLang = currentLocale.getAttribute('hreflang');
-        if (hrefLang) {
-            return hrefLang;
-        }
-    }
-
-    // Finally fallback to browser language
+    // Then try browser language
     const browserLang = navigator.language.split('-')[0];
-    return ['en', 'de', 'fr', 'it'].includes(browserLang) ? browserLang : 'en';
+    detectedLanguage = ['en', 'de', 'fr', 'it'].includes(browserLang) ? browserLang : 'en';
+    console.log('Language detected from browser:', detectedLanguage);
+    return detectedLanguage;
 }
 
 // Initialize Memberstack functionality
 function initializeMemberstack() {
     const language = detectLanguage();
-    console.log('Detected language:', language);
+    console.log('Using language for registration:', language);
 
-    // Set language before member creation
+    // Add hidden language input to signup forms
     const signupForms = document.querySelectorAll('form[data-memberstack-form]');
     signupForms.forEach(form => {
-        form.addEventListener('submit', (e) => {
-            // Don't prevent default, just add our fields
-            const formData = new FormData(form);
-            formData.append('customFields[language]', language);
-            console.log('Form submission with language:', language);
+        // Add form submission handler
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Get form data
+            const email = form.querySelector('[data-ms-member="email"]').value;
+            const password = form.querySelector('[data-ms-member="password"]').value;
+            const firstName = form.querySelector('[name="first-name"]')?.value || 'User';
+
+            try {
+                // Create member with detected language
+                const result = await window.$memberstackDom.createMember({
+                    email,
+                    password,
+                    customFields: {
+                        'first-name': firstName,
+                        language: language // Use the detected language
+                    },
+                    sendEmailVerification: false
+                });
+                
+                console.log('Member created with language:', language);
+
+                // Send our custom verification email
+                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: email,
+                        templateName: 'email_verification',
+                        language: language,
+                        variables: {
+                            firstName: firstName,
+                            verificationLink: result.verificationUrl || `https://littlebighope.com/verify-email?token=${result.verificationToken}`
+                        }
+                    })
+                });
+                
+                // Redirect to success page
+                if (result?.redirectUrl) {
+                    window.location.href = result.redirectUrl;
+                }
+            } catch (error) {
+                console.error('Failed to create member:', error);
+            }
         });
     });
 
@@ -50,82 +93,43 @@ function initializeMemberstack() {
             });
     }
 
-    // Update member's language if they're logged in
-    window.$memberstackDom.getCurrentMember()
-        .then(member => {
-            if (member) {
-                return window.$memberstackDom.updateMember({
-                    customFields: {
-                        language: language
-                    }
-                });
-            }
-        })
-        .catch(error => {
-            if (error.message !== 'Unauthorized') {
-                console.error('Error updating member language:', error);
-            }
-        });
-
     // Set up event handlers
     const setupHooks = () => {
         // Password reset request
         window.$memberstackDom.addHook('passwordReset:requested', ({ member, token }) => {
-            // Get the current member to ensure we have the latest language setting
-            window.$memberstackDom.getCurrentMember().then(currentMember => {
-                const userLanguage = currentMember?.customFields?.language || language;
-                fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        to: member.auth.email,
-                        templateName: 'password_reset',
-                        language: userLanguage,
-                        variables: {
-                            firstName: member.customFields['first-name'] || 'User',
-                            resetLink: `https://littlebighope.com/reset-password?token=${token}`
-                        }
-                    })
-                }).catch(error => console.error('Failed to send password reset email:', error));
-            });
-        });
-
-        // Email verification request
-        window.$memberstackDom.addHook('emailVerification:requested', ({ member, token }) => {
-            // Use the detected language for verification email
+            // Use the member's stored language preference
+            const userLanguage = member?.customFields?.language || language;
             fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     to: member.auth.email,
-                    templateName: 'email_verification',
-                    language: language, // Use the detected language
+                    templateName: 'password_reset',
+                    language: userLanguage,
                     variables: {
                         firstName: member.customFields['first-name'] || 'User',
-                        verificationLink: `https://littlebighope.com/verify-email?token=${token}`
+                        resetLink: `https://littlebighope.com/reset-password?token=${token}`
                     }
                 })
-            }).catch(error => console.error('Failed to send verification email:', error));
+            }).catch(error => console.error('Failed to send password reset email:', error));
         });
 
         // Email verification success
         window.$memberstackDom.addHook('emailVerification:success', ({ member }) => {
-            // Get the current member to ensure we have the latest language setting
-            window.$memberstackDom.getCurrentMember().then(currentMember => {
-                const userLanguage = currentMember?.customFields?.language || language;
-                fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        to: member.auth.email,
-                        templateName: 'email_verified',
-                        language: userLanguage,
-                        variables: {
-                            firstName: member.customFields['first-name'] || 'User'
-                        }
-                    })
-                }).catch(error => console.error('Failed to send verification success email:', error));
-            });
+            // Use the member's stored language preference
+            const userLanguage = member?.customFields?.language || language;
+            fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: member.auth.email,
+                    templateName: 'email_verified',
+                    language: userLanguage,
+                    variables: {
+                        firstName: member.customFields['first-name'] || 'User'
+                    }
+                })
+            }).catch(error => console.error('Failed to send verification success email:', error));
         });
     };
 
@@ -147,21 +151,9 @@ function initializeMemberstack() {
         link.addEventListener('click', () => {
             const newLang = link.getAttribute('hreflang');
             if (newLang) {
-                window.$memberstackDom.getCurrentMember()
-                    .then(member => {
-                        if (member) {
-                            return window.$memberstackDom.updateMember({
-                                customFields: {
-                                    language: newLang
-                                }
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        if (error.message !== 'Unauthorized') {
-                            console.error('Error updating member language:', error);
-                        }
-                    });
+                // Update the detected language
+                detectedLanguage = newLang;
+                console.log('Language updated to:', detectedLanguage);
             }
         });
     });

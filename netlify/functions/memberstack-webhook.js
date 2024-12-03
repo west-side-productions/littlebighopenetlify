@@ -126,6 +126,7 @@ async function handleMemberCreated(data) {
                     customFields['preferred_language'] || 
                     'en';
 
+    console.log('Detected language:', language);
     console.log('Using firstName:', firstName);
     console.log('Using language:', language);
 
@@ -161,6 +162,10 @@ async function handleMemberVerified(data) {
                     customFields['Language'] || 
                     customFields['preferred_language'] || 
                     'en';
+
+    console.log('Detected language:', language);
+    console.log('Using firstName:', firstName);
+    console.log('Using language:', language);
 
     try {
         // Wait a moment to ensure language setting is updated
@@ -220,6 +225,10 @@ async function handlePlanCanceled(data) {
 }
 
 async function sendEmail({ to, templateName, language, variables }) {
+    console.log(`Sending ${templateName} email to ${to}`);
+    console.log('Email language:', language);
+    console.log('Email variables:', variables);
+
     try {
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
             method: 'POST',
