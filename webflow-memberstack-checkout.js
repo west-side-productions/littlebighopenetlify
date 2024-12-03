@@ -186,8 +186,8 @@ async function handleCheckout(event) {
         const checkoutData = {
             priceId: CONFIG.stripePriceId,
             quantity: parseInt(document.getElementById('book-quantity')?.value || '1'),
-            successUrl: `${window.location.origin}/success`,
-            cancelUrl: `${window.location.origin}/cancel`,
+            successUrl: `${window.location.origin}/vielen-dank-email`,
+            cancelUrl: `${window.location.origin}/produkte`,
             customerEmail: customerEmail,
             metadata: {
                 memberstackUserId: member.data.id || '',
