@@ -1,6 +1,5 @@
 const sgMail = require('@sendgrid/mail');
 const fetch = require('node-fetch');
-const { getEmailTemplate } = require('./email-templates');
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
