@@ -5,7 +5,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // CORS headers
 const headers = {
-    'Access-Control-Allow-Origin': 'https://lillebighopefunctions.netlify.app',
+    'Access-Control-Allow-Origin': '*', // Allow all origins since this is a webhook
     'Access-Control-Allow-Headers': 'Content-Type, svix-id, svix-signature, svix-timestamp',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
@@ -59,18 +59,18 @@ exports.handler = async (event) => {
         });
 
         // Process the webhook data
-        const { type, data } = payload;
-        console.log('Processing webhook type:', type);
+        const { event: webhookEvent, payload: webhookPayload } = payload;
+        console.log('Processing webhook type:', webhookEvent);
 
-        switch (type) {
-            case 'memberstack:member:created':
-                await handleMemberCreated(data);
+        switch (webhookEvent) {
+            case 'member.created':
+                await handleMemberCreated(webhookPayload);
                 break;
-            case 'memberstack:member:updated':
-                await handleMemberUpdated(data);
+            case 'member.updated':
+                await handleMemberUpdated(webhookPayload);
                 break;
             default:
-                console.log('Unhandled webhook type:', type);
+                console.log('Unhandled webhook type:', webhookEvent);
         }
 
         return {
@@ -78,7 +78,7 @@ exports.handler = async (event) => {
             headers,
             body: JSON.stringify({ 
                 received: true,
-                type: type,
+                type: webhookEvent,
                 timestamp: new Date().toISOString()
             })
         };
@@ -98,7 +98,7 @@ exports.handler = async (event) => {
 
 async function handleMemberCreated(data) {
     console.log('Handling member created:', data);
-    const { email, customFields = {} } = data;
+    const { auth: { email }, customFields = {} } = data;
 
     try {
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
@@ -111,7 +111,7 @@ async function handleMemberCreated(data) {
                 templateName: 'welcome',
                 language: customFields.language || 'de',
                 variables: {
-                    firstName: customFields.firstName || 'User'
+                    firstName: customFields['first-name'] || 'User'
                 }
             })
         });
@@ -131,10 +131,10 @@ async function handleMemberCreated(data) {
 
 async function handleMemberUpdated(data) {
     console.log('Handling member updated:', data);
-    const { email, customFields = {}, metadata = {} } = data;
+    const { auth: { email }, customFields = {}, metaData = {} } = data;
     
-    if (metadata.lastPurchase) {
-        console.log('Purchase detected:', metadata.lastPurchase);
+    if (metaData.lastPurchase) {
+        console.log('Purchase detected:', metaData.lastPurchase);
 
         try {
             const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
@@ -147,8 +147,8 @@ async function handleMemberUpdated(data) {
                     templateName: 'purchase_confirmation',
                     language: customFields.language || 'de',
                     variables: {
-                        firstName: customFields.firstName || 'User',
-                        purchaseId: metadata.lastPurchase.id
+                        firstName: customFields['first-name'] || 'User',
+                        purchaseId: metaData.lastPurchase.id
                     }
                 })
             });
