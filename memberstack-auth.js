@@ -25,12 +25,6 @@ const initializeMemberstack = async () => {
                                 'en';
         }
 
-        // Disable Memberstack's built-in emails
-        window.memberstack.confirmEmailAddress = false;
-        window.memberstack.resetPassword = false;
-        window.memberstack.passwordlessLogin = false;
-        window.memberstack.welcomeEmail = false;
-
         return window.memberstack;
     } catch (error) {
         console.error('Error initializing Memberstack:', error);
@@ -41,6 +35,7 @@ const initializeMemberstack = async () => {
 // Send custom email using our multi-language system
 const sendCustomEmail = async (to, templateName, variables) => {
     try {
+        console.log('Sending email:', { templateName, language: currentUserLanguage });
         const response = await fetch('/.netlify/functions/send-email', {
             method: 'POST',
             headers: {
@@ -55,7 +50,8 @@ const sendCustomEmail = async (to, templateName, variables) => {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to send email');
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to send email');
         }
 
         return await response.json();
@@ -67,49 +63,84 @@ const sendCustomEmail = async (to, templateName, variables) => {
 
 // Handle Memberstack events
 const setupMemberstackHandlers = (memberstack) => {
+    // Member signup/creation
+    document.addEventListener('memberstack:member:created', async (event) => {
+        const { email, firstName } = event.detail.member;
+        console.log('Member created:', email);
+        try {
+            await sendCustomEmail(email, 'welcome', {
+                firstName: firstName || 'User'
+            });
+        } catch (error) {
+            console.error('Failed to send welcome email:', error);
+        }
+    });
+
     // Email verification
-    memberstack.addEventListener("emailVerification:process", async (event) => {
-        const { email, token, firstName } = event.data;
-        await sendCustomEmail(email, 'verification', {
-            firstName: firstName || 'User',
-            verificationLink: `${window.location.origin}/verify?token=${token}`
-        });
+    document.addEventListener('memberstack:member:verification:needed', async (event) => {
+        const { email, firstName, verificationToken } = event.detail;
+        console.log('Verification needed:', email);
+        try {
+            await sendCustomEmail(email, 'verification', {
+                firstName: firstName || 'User',
+                verificationLink: `${window.location.origin}/verify?token=${verificationToken}`
+            });
+        } catch (error) {
+            console.error('Failed to send verification email:', error);
+        }
     });
 
     // Password reset
-    memberstack.addEventListener("password:reset", async (event) => {
-        const { email, token, firstName } = event.data;
-        await sendCustomEmail(email, 'passwordReset', {
-            firstName: firstName || 'User',
-            resetLink: `${window.location.origin}/reset-password?token=${token}`
-        });
-    });
-
-    // Welcome email
-    memberstack.addEventListener("member:create", async (event) => {
-        const { email, firstName } = event.data;
-        await sendCustomEmail(email, 'welcome', {
-            firstName: firstName || 'User'
-        });
+    document.addEventListener('memberstack:member:password:reset', async (event) => {
+        const { email, firstName, resetToken } = event.detail;
+        console.log('Password reset requested:', email);
+        try {
+            await sendCustomEmail(email, 'passwordReset', {
+                firstName: firstName || 'User',
+                resetLink: `${window.location.origin}/reset-password?token=${resetToken}`
+            });
+        } catch (error) {
+            console.error('Failed to send password reset email:', error);
+        }
     });
 
     // Abandoned cart (custom implementation)
-    const checkForAbandonedCart = async (member) => {
-        const cart = await getCartItems(); // Implement this based on your cart system
-        if (cart && cart.length > 0) {
-            await sendCustomEmail(member.email, 'abandonedCart', {
-                firstName: member.firstName || 'User',
-                cartLink: `${window.location.origin}/cart`
-            });
+    let cartCheckInterval;
+    const checkForAbandonedCart = async () => {
+        const member = await memberstack.getCurrentMember();
+        if (member) {
+            const cart = localStorage.getItem('cart');
+            if (cart && JSON.parse(cart).length > 0) {
+                try {
+                    await sendCustomEmail(member.email, 'abandonedCart', {
+                        firstName: member.firstName || 'User',
+                        cartLink: `${window.location.origin}/cart`
+                    });
+                } catch (error) {
+                    console.error('Failed to send abandoned cart email:', error);
+                }
+            }
         }
     };
+
+    // Check for abandoned cart after 24 hours
+    document.addEventListener('memberstack:member:signedIn', () => {
+        if (cartCheckInterval) clearInterval(cartCheckInterval);
+        cartCheckInterval = setInterval(checkForAbandonedCart, 24 * 60 * 60 * 1000);
+    });
+
+    document.addEventListener('memberstack:member:signedOut', () => {
+        if (cartCheckInterval) clearInterval(cartCheckInterval);
+    });
 };
 
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        console.log('Initializing Memberstack...');
         const memberstack = await initializeMemberstack();
         setupMemberstackHandlers(memberstack);
+        console.log('Memberstack handlers set up successfully');
     } catch (error) {
         console.error('Error setting up Memberstack handlers:', error);
     }
