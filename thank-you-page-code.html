@@ -1,0 +1,57 @@
+<!-- Add this to the Thank You page custom code (Before </body> tag) -->
+<script>
+// Process member data and send welcome email
+async function processPurchaseCompletion() {
+    console.log('Processing purchase completion');
+    
+    try {
+        const member = await window.memberstack.getCurrentMember();
+        
+        if (member) {
+            console.log('Member found on thank you page:', {
+                email: member.email,
+                id: member.id
+            });
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const purchaseData = {
+                fromCheckout: urlParams.get('fromCheckout'),
+                msPriceId: urlParams.get('msPriceId'),
+                stripePriceId: urlParams.get('stripePriceId')
+            };
+            
+            console.log('Purchase data:', purchaseData);
+
+            // Use the existing sendCustomEmail function from head code
+            await sendCustomEmail(member.email, 'welcome', {
+                firstName: member.firstName || 'User',
+                purchaseId: purchaseData.msPriceId || ''
+            });
+        } else {
+            console.log('No member data available on thank you page');
+        }
+    } catch (error) {
+        console.error('Error processing purchase completion:', error);
+    }
+}
+
+// Initialize when DOM is loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('Thank you page loaded, waiting for Memberstack...');
+        // Wait for Memberstack initialization
+        if (window.memberstackInitialized) {
+            processPurchaseCompletion();
+        } else {
+            document.addEventListener('memberstack:ready', processPurchaseCompletion);
+        }
+    });
+} else {
+    // DOM already loaded
+    if (window.memberstackInitialized) {
+        processPurchaseCompletion();
+    } else {
+        document.addEventListener('memberstack:ready', processPurchaseCompletion);
+    }
+}
+</script>
