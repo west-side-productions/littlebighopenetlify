@@ -59,35 +59,40 @@ exports.handler = async (event, context) => {
     }
 
     // Get template for specified language, fallback to default language
-    const langTemplates = templates[language] || templates[defaultLanguage];
+    const langTemplates = templates[language];
     if (!langTemplates) {
-      console.error('No templates found for language:', language);
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ 
-          message: 'No templates available',
-          details: `Templates not found for language: ${language}`
-        })
-      };
+      console.error(`No templates found for language: ${language}, falling back to ${defaultLanguage}`);
+      if (!templates[defaultLanguage]) {
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ 
+            message: 'Template configuration error',
+            details: `Neither templates for '${language}' nor fallback language '${defaultLanguage}' found`
+          })
+        };
+      }
     }
 
-    console.log('Available templates for language:', Object.keys(langTemplates));
+    const templatesForLanguage = langTemplates || templates[defaultLanguage];
+    console.log('Using templates for language:', langTemplates ? language : `${defaultLanguage} (fallback)`);
+    console.log('Available templates:', Object.keys(templatesForLanguage));
     
-    const template = langTemplates[templateName];
+    const template = templatesForLanguage[templateName];
     if (!template) {
-      console.error('Template not found:', templateName);
+      console.error(`Template '${templateName}' not found in ${langTemplates ? language : defaultLanguage} templates`);
       return {
         statusCode: 404,
         body: JSON.stringify({ 
           message: 'Template not found',
-          details: `Template '${templateName}' not found in language: ${language}`
+          details: `Template '${templateName}' not found in ${langTemplates ? language : defaultLanguage} templates`
         })
       };
     }
 
-    console.log('Found template:', {
+    console.log('Using template:', {
       name: templateName,
-      language,
+      requestedLanguage: language,
+      actualLanguage: langTemplates ? language : `${defaultLanguage} (fallback)`,
       hasSubject: !!template.subject,
       hasHtmlFunction: typeof template.html === 'function'
     });
