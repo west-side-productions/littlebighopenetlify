@@ -40,7 +40,8 @@ exports.handler = async (event, context) => {
     console.log('Processing email request:', {
       templateName,
       language,
-      hasVariables: Object.keys(variables).length > 0
+      hasVariables: Object.keys(variables).length > 0,
+      variables: { ...variables, email: undefined }  // Log variables without email
     });
 
     // Validate required fields
@@ -58,41 +59,44 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Get template for specified language, fallback to default language
-    const langTemplates = templates[language];
-    if (!langTemplates) {
-      console.error(`No templates found for language: ${language}, falling back to ${defaultLanguage}`);
-      if (!templates[defaultLanguage]) {
-        return {
-          statusCode: 500,
-          body: JSON.stringify({ 
-            message: 'Template configuration error',
-            details: `Neither templates for '${language}' nor fallback language '${defaultLanguage}' found`
-          })
-        };
-      }
+    // Validate language
+    const validLanguages = Object.keys(templates);
+    if (!validLanguages.includes(language)) {
+      console.warn(`Invalid language ${language}, falling back to ${defaultLanguage}`);
+      language = defaultLanguage;
     }
 
-    const templatesForLanguage = langTemplates || templates[defaultLanguage];
-    console.log('Using templates for language:', langTemplates ? language : `${defaultLanguage} (fallback)`);
-    console.log('Available templates:', Object.keys(templatesForLanguage));
+    // Get template for specified language
+    const langTemplates = templates[language];
+    if (!langTemplates) {
+      console.error(`No templates found for language: ${language}`);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          message: 'Template configuration error',
+          details: `Templates not found for language: ${language}`
+        })
+      };
+    }
+
+    console.log('Using templates for language:', language);
+    console.log('Available templates:', Object.keys(langTemplates));
     
-    const template = templatesForLanguage[templateName];
+    const template = langTemplates[templateName];
     if (!template) {
-      console.error(`Template '${templateName}' not found in ${langTemplates ? language : defaultLanguage} templates`);
+      console.error(`Template '${templateName}' not found in ${language} templates`);
       return {
         statusCode: 404,
         body: JSON.stringify({ 
           message: 'Template not found',
-          details: `Template '${templateName}' not found in ${langTemplates ? language : defaultLanguage} templates`
+          details: `Template '${templateName}' not found in ${language} templates`
         })
       };
     }
 
     console.log('Using template:', {
       name: templateName,
-      requestedLanguage: language,
-      actualLanguage: langTemplates ? language : `${defaultLanguage} (fallback)`,
+      language,
       hasSubject: !!template.subject,
       hasHtmlFunction: typeof template.html === 'function'
     });
@@ -136,9 +140,9 @@ exports.handler = async (event, context) => {
     }
 
     // Send email
-    console.log('Sending email to:', to);
+    console.log('Sending email in language:', language);
     await sgMail.send(msg);
-    console.log('Email sent successfully to:', to);
+    console.log('Email sent successfully');
 
     return {
       statusCode: 200,

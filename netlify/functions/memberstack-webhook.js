@@ -121,22 +121,32 @@ async function handleMemberCreated(data) {
                      customFields['First Name'] || 
                      'User';
     
-    const language = customFields.language || 
-                    customFields['Language'] || 
-                    customFields['preferred_language'] || 
-                    'en';
+    // Check all possible language field names and validate the language
+    let language = customFields.language || 
+                  customFields['Language'] || 
+                  customFields['preferred_language'] ||
+                  'en';
+
+    // Validate language is supported
+    const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
+    if (!SUPPORTED_LANGUAGES.includes(language)) {
+        console.warn(`Unsupported language ${language}, falling back to en`);
+        language = 'en';
+    }
 
     console.log('Detected language:', language);
     console.log('Using firstName:', firstName);
     console.log('Using language:', language);
 
     try {
+        // Send welcome email in the correct language
         await sendEmail({
             to: email,
             templateName: 'welcome',
-            language,
+            language: language,  // Explicitly use the validated language
             variables: {
-                firstName
+                firstName,
+                language  // Pass language to email template
             }
         });
         
