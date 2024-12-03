@@ -26,6 +26,17 @@ function initializeMemberstack() {
     const language = detectLanguage();
     console.log('Detected language:', language);
 
+    // Set language before member creation
+    const signupForms = document.querySelectorAll('form[data-memberstack-form]');
+    signupForms.forEach(form => {
+        form.addEventListener('submit', (e) => {
+            // Don't prevent default, just add our fields
+            const formData = new FormData(form);
+            formData.append('customFields[language]', language);
+            console.log('Form submission with language:', language);
+        });
+    });
+
     // Handle verification from URL
     const urlParams = new URLSearchParams(window.location.search);
     const verifyToken = urlParams.get('token');
@@ -81,23 +92,20 @@ function initializeMemberstack() {
 
         // Email verification request
         window.$memberstackDom.addHook('emailVerification:requested', ({ member, token }) => {
-            // Get the current member to ensure we have the latest language setting
-            window.$memberstackDom.getCurrentMember().then(currentMember => {
-                const userLanguage = currentMember?.customFields?.language || language;
-                fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        to: member.auth.email,
-                        templateName: 'email_verification',
-                        language: userLanguage,
-                        variables: {
-                            firstName: member.customFields['first-name'] || 'User',
-                            verificationLink: `https://littlebighope.com/verify-email?token=${token}`
-                        }
-                    })
-                }).catch(error => console.error('Failed to send verification email:', error));
-            });
+            // Use the detected language for verification email
+            fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: member.auth.email,
+                    templateName: 'email_verification',
+                    language: language, // Use the detected language
+                    variables: {
+                        firstName: member.customFields['first-name'] || 'User',
+                        verificationLink: `https://littlebighope.com/verify-email?token=${token}`
+                    }
+                })
+            }).catch(error => console.error('Failed to send verification email:', error));
         });
 
         // Email verification success

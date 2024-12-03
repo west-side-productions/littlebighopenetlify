@@ -1,5 +1,6 @@
 const sgMail = require('@sendgrid/mail');
 const fetch = require('node-fetch');
+const { getEmailTemplate } = require('./email-templates');
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
@@ -130,28 +131,15 @@ async function handleMemberCreated(data) {
     console.log('Using language:', language);
 
     try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                to: email,
-                templateName: 'welcome',
-                language,
-                variables: {
-                    firstName
-                }
-            })
+        const template = getEmailTemplate('welcome', language);
+        await sgMail.send({
+            to: email,
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: template.subject,
+            html: template.html.replace('{{firstName}}', firstName)
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Email API responded with status: ${response.status}, body: ${errorText}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Welcome email sent:', responseData);
+        
+        console.log('Welcome email sent successfully');
         
     } catch (error) {
         console.error('Failed to send welcome email:', error);
@@ -175,28 +163,20 @@ async function handleMemberVerified(data) {
                     'en';
 
     try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                to: email,
-                templateName: 'email_verified',
-                language,
-                variables: {
-                    firstName
-                }
-            })
+        // Wait a moment to ensure language setting is updated
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Get latest member data to ensure we have current language setting
+        const template = getEmailTemplate('email_verified', language);
+        
+        await sgMail.send({
+            to: email,
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: template.subject,
+            html: template.html.replace('{{firstName}}', firstName)
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Email API responded with status: ${response.status}, body: ${errorText}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Verification success email sent:', responseData);
+        
+        console.log('Verification success email sent');
         
     } catch (error) {
         console.error('Failed to send verification success email:', error);
