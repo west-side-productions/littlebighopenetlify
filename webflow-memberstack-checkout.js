@@ -16,7 +16,8 @@ const EU_COUNTRIES = [
 // Configuration object
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
-    stripePublicKey: 'pk_test_51QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
+    stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
+    stripePriceId: 'price_1QRN3aJRMXFic4sWBBilYzAc', // Add your actual test price ID here
     debug: true,
     // For local development, use localhost. For production, use relative URL
     baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
@@ -124,8 +125,8 @@ function getBaseUrl() {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:8888';
     } else {
-        // For production and preview deployments
-        return window.location.origin;
+        // For production, use the dedicated functions domain
+        return 'https://lillebighopefunctions.netlify.app';
     }
 }
 
@@ -142,8 +143,8 @@ async function handleCheckout(event) {
         
         // Prepare checkout data
         const checkoutData = {
-            priceId: 'price_1QRN3aJRMXFic4sWlZEHQFjx9AYHWGHPNhVVNXOFGFPqkJTDPrqUVFXVkherSlXbPYJBJtqZgQoYJqKFpPXQGGxX00uv5HFkbJ',
-            quantity: 1,
+            priceId: CONFIG.stripePriceId,
+            quantity: parseInt(document.getElementById('book-quantity')?.value || '1'),
             successUrl: `${window.location.origin}/success`,
             cancelUrl: `${window.location.origin}/cancel`,
             customerEmail: member?.data?.email || 'office@west-side-productions.at',
@@ -164,33 +165,39 @@ async function handleCheckout(event) {
         const response = await fetch(endpointUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Content-Type': 'application/json'
             },
-            mode: 'cors',
-            credentials: 'same-origin',
             body: JSON.stringify(checkoutData)
         });
 
         if (!response.ok) {
-            const errorData = await response.text().catch(() => 'No error details available');
-            console.error('Error response:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorData,
-                url: endpointUrl
-            });
-            throw new Error(`Failed to create checkout session: ${response.status} - ${errorData}`);
+            const errorData = await response.json();
+            throw new Error(`Checkout failed: ${errorData.message || response.statusText}`);
         }
 
         const session = await response.json();
         console.log('Checkout session created:', session);
         
-        // Redirect to Stripe Checkout
-        if (session.url) {
-            window.location.href = session.url;
-        } else {
-            throw new Error('No checkout URL in the response');
+        try {
+            // Initialize Stripe with the correct test key
+            const stripe = Stripe(CONFIG.stripePublicKey);
+            
+            if (!session.sessionId) {
+                throw new Error('No session ID returned from server');
+            }
+            
+            // Redirect to checkout
+            const { error } = await stripe.redirectToCheckout({
+                sessionId: session.sessionId
+            });
+            
+            if (error) {
+                console.error('Stripe redirect error:', error);
+                throw error;
+            }
+        } catch (error) {
+            console.error('Stripe initialization/redirect error:', error);
+            throw error;
         }
 
     } catch (error) {

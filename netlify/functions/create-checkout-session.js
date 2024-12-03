@@ -45,20 +45,82 @@ exports.handler = async (event, context) => {
             throw new Error('Missing required field: priceId');
         }
 
-        const { priceId, successUrl, cancelUrl } = data;
-
-        // Create Stripe checkout session
+        // Create Stripe checkout session with enhanced configuration
         const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
             payment_method_types: ['card'],
+            mode: 'payment',
+            locale: 'de',
+            allow_promotion_codes: true,
+            billing_address_collection: 'required',
+            shipping_address_collection: {
+                allowed_countries: ['AT', 'DE'],
+            },
+            shipping_options: [
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 500,
+                            currency: 'eur',
+                        },
+                        display_name: 'Austria Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        },
+                    },
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 1000,
+                            currency: 'eur',
+                        },
+                        display_name: 'Germany Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                    },
+                },
+            ],
             line_items: [{
-                price: priceId,
-                quantity: data.quantity || 1
+                price: data.priceId,
+                quantity: data.quantity || 1,
+                adjustable_quantity: {
+                    enabled: true,
+                    minimum: 1,
+                    maximum: 10,
+                },
             }],
-            success_url: successUrl || `${process.env.URL}/success`,
-            cancel_url: cancelUrl || `${process.env.URL}/cancel`,
+            success_url: data.successUrl || process.env.SUCCESS_URL || `${process.env.URL}/success`,
+            cancel_url: data.cancelUrl || process.env.CANCEL_URL || `${process.env.URL}/cancel`,
             customer_email: data.customerEmail,
-            metadata: data.metadata || {}
+            metadata: {
+                ...data.metadata,
+                source: 'webflow_checkout'
+            },
+            custom_text: {
+                shipping_address: {
+                    message: 'Please note: We currently only ship to Austria and Germany.',
+                },
+                submit: {
+                    message: 'We will process your order within 24 hours.',
+                },
+            },
         });
 
         console.log('Created checkout session:', session.id);
