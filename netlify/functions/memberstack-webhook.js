@@ -69,17 +69,14 @@ exports.handler = async (event) => {
             case 'member.updated':
                 await handleMemberUpdated(webhookPayload);
                 break;
-            case 'auth.reset_password_requested':
-                await handlePasswordResetRequested(webhookPayload);
+            case 'member.plan.added':
+                await handlePlanAdded(webhookPayload);
                 break;
-            case 'auth.email_verification_requested':
-                await handleEmailVerificationRequested(webhookPayload);
+            case 'member.plan.updated':
+                await handlePlanUpdated(webhookPayload);
                 break;
-            case 'auth.password_changed':
-                await handlePasswordChanged(webhookPayload);
-                break;
-            case 'auth.email_verified':
-                await handleEmailVerified(webhookPayload);
+            case 'member.plan.canceled':
+                await handlePlanCanceled(webhookPayload);
                 break;
             default:
                 console.log('Unhandled webhook type:', webhookEvent);
@@ -143,11 +140,16 @@ async function handleMemberCreated(data) {
 
 async function handleMemberUpdated(data) {
     console.log('Handling member updated:', data);
-    const { auth: { email }, customFields = {}, metaData = {} } = data;
-    
-    if (metaData.lastPurchase) {
-        console.log('Purchase detected:', metaData.lastPurchase);
+    // Only handle specific update cases if needed
+}
 
+async function handlePlanAdded(data) {
+    console.log('Handling plan added:', data);
+    const { auth: { email }, customFields = {}, planConnections = [] } = data;
+    
+    if (planConnections.length > 0) {
+        const latestPlan = planConnections[planConnections.length - 1];
+        
         try {
             const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                 method: 'POST',
@@ -160,7 +162,7 @@ async function handleMemberUpdated(data) {
                     language: customFields.language || 'de',
                     variables: {
                         firstName: customFields['first-name'] || 'User',
-                        purchaseId: metaData.lastPurchase.id
+                        purchaseId: latestPlan.id
                     }
                 })
             });
@@ -179,136 +181,12 @@ async function handleMemberUpdated(data) {
     }
 }
 
-async function handlePasswordResetRequested(data) {
-    console.log('Handling password reset request:', data);
-    const { auth: { email }, customFields = {}, resetPasswordToken } = data;
-
-    try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                to: email,
-                templateName: 'password_reset',
-                language: customFields.language || 'de',
-                variables: {
-                    firstName: customFields['first-name'] || 'User',
-                    resetLink: `https://littlebighope.com/reset-password?token=${resetPasswordToken}`
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Email API responded with status: ${response.status}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Password reset email sent:', responseData);
-        
-    } catch (error) {
-        console.error('Failed to send password reset email:', error);
-        throw error;
-    }
+async function handlePlanUpdated(data) {
+    console.log('Handling plan updated:', data);
+    // Handle plan updates if needed
 }
 
-async function handleEmailVerificationRequested(data) {
-    console.log('Handling email verification request:', data);
-    const { auth: { email }, customFields = {}, emailVerificationToken } = data;
-
-    try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                to: email,
-                templateName: 'email_verification',
-                language: customFields.language || 'de',
-                variables: {
-                    firstName: customFields['first-name'] || 'User',
-                    verificationLink: `https://littlebighope.com/verify-email?token=${emailVerificationToken}`
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Email API responded with status: ${response.status}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Email verification sent:', responseData);
-        
-    } catch (error) {
-        console.error('Failed to send email verification:', error);
-        throw error;
-    }
-}
-
-async function handlePasswordChanged(data) {
-    console.log('Handling password changed:', data);
-    const { auth: { email }, customFields = {} } = data;
-
-    try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                to: email,
-                templateName: 'password_changed',
-                language: customFields.language || 'de',
-                variables: {
-                    firstName: customFields['first-name'] || 'User'
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Email API responded with status: ${response.status}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Password changed notification sent:', responseData);
-        
-    } catch (error) {
-        console.error('Failed to send password changed notification:', error);
-        throw error;
-    }
-}
-
-async function handleEmailVerified(data) {
-    console.log('Handling email verified:', data);
-    const { auth: { email }, customFields = {} } = data;
-
-    try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                to: email,
-                templateName: 'email_verified',
-                language: customFields.language || 'de',
-                variables: {
-                    firstName: customFields['first-name'] || 'User'
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Email API responded with status: ${response.status}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Email verified notification sent:', responseData);
-        
-    } catch (error) {
-        console.error('Failed to send email verified notification:', error);
-        throw error;
-    }
+async function handlePlanCanceled(data) {
+    console.log('Handling plan canceled:', data);
+    // Handle plan cancellations if needed
 }

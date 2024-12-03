@@ -1,0 +1,91 @@
+<script>
+// Handle email verification and password reset
+window.addEventListener('load', function() {
+    if (typeof window.$memberstackDom !== 'undefined') {
+        // Listen for password reset requests
+        $memberstackDom.addEventListener('auth:passwordReset.requested', async function(event) {
+            const { member, token } = event.data;
+            try {
+                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: member.auth.email,
+                        templateName: 'password_reset',
+                        language: member.customFields.language || 'de',
+                        variables: {
+                            firstName: member.customFields['first-name'] || 'User',
+                            resetLink: `https://littlebighope.com/reset-password?token=${token}`
+                        }
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to send password reset email:', error);
+            }
+        });
+
+        // Listen for email verification requests
+        $memberstackDom.addEventListener('auth:emailVerification.requested', async function(event) {
+            const { member, token } = event.data;
+            try {
+                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: member.auth.email,
+                        templateName: 'email_verification',
+                        language: member.customFields.language || 'de',
+                        variables: {
+                            firstName: member.customFields['first-name'] || 'User',
+                            verificationLink: `https://littlebighope.com/verify-email?token=${token}`
+                        }
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to send verification email:', error);
+            }
+        });
+
+        // Listen for successful email verification
+        $memberstackDom.addEventListener('auth:emailVerification.succeeded', async function(event) {
+            const { member } = event.data;
+            try {
+                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: member.auth.email,
+                        templateName: 'email_verified',
+                        language: member.customFields.language || 'de',
+                        variables: {
+                            firstName: member.customFields['first-name'] || 'User'
+                        }
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to send verification success email:', error);
+            }
+        });
+
+        // Listen for successful password changes
+        $memberstackDom.addEventListener('auth:passwordReset.succeeded', async function(event) {
+            const { member } = event.data;
+            try {
+                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: member.auth.email,
+                        templateName: 'password_changed',
+                        language: member.customFields.language || 'de',
+                        variables: {
+                            firstName: member.customFields['first-name'] || 'User'
+                        }
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to send password change confirmation:', error);
+            }
+        });
+    }
+});</script>
