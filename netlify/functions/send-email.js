@@ -83,17 +83,17 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Replace variables in template
-    const body = replaceTemplateVariables(template.body, variables);
-    const subject = replaceTemplateVariables(template.subject, variables);
+    // Get HTML content from template function
+    const htmlContent = template.html(variables);
+    const subject = template.subject;
 
     // Prepare email
     const msg = {
       to,
       from: process.env.SENDGRID_FROM_EMAIL,
       subject,
-      text: body,
-      html: body.replace(/\n/g, '<br>')
+      text: htmlContent.replace(/<[^>]*>/g, ''), // Strip HTML tags for text version
+      html: htmlContent
     };
 
     // Validate SendGrid configuration
