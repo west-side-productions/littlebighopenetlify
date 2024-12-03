@@ -71,49 +71,61 @@ function loadScript(src) {
 
 // Initialize dependencies
 async function initializeDependencies() {
-    console.log('Initializing shopping system...');
-
-    // Initialize Memberstack
-    const memberstackDOM = window.$memberstackDom;
-    console.log('Initializing Memberstack...');
-
-    // Initialize Stripe
-    let stripe;
-    try {
-        if (window.Stripe) {
-            console.log('Stripe.js already loaded');
-            stripe = Stripe('pk_live_51OPYr9JRMXFic4sWvXxVEWJqhTUkz6OyX0fCxGPFGAZBGQXrDjqO7OyQbqwA1QQsgfjBPGBGtxUJBjvLjBtSADVm00wXF4WBVT');
-            console.log('Stripe initialized successfully');
-        } else {
-            console.error('Stripe.js not found');
+    log('Initializing shopping system...');
+    
+    // Wait for Memberstack to be ready
+    if (!window.$memberstackDom) {
+        log('Waiting for Memberstack to initialize...');
+        await new Promise(resolve => {
+            const checkMemberstack = setInterval(() => {
+                if (window.$memberstackDom) {
+                    clearInterval(checkMemberstack);
+                    resolve();
+                }
+            }, 100);
+        });
+    }
+    
+    log('Memberstack initialized');
+    
+    // Load Stripe.js if not already loaded
+    if (!window.Stripe) {
+        await loadScript('https://js.stripe.com/v3/');
+        if (!window.Stripe) {
+            throw new Error('Failed to load Stripe.js');
         }
+    }
+    
+    // Initialize Stripe
+    try {
+        const stripe = Stripe(CONFIG.stripePublicKey);
+        log('Stripe initialized with test key');
+        return { stripe };
     } catch (error) {
         console.error('Error initializing Stripe:', error);
+        throw error;
     }
-
-    return { stripe, memberstackDOM };
 }
 
 // Initialize checkout button
 async function initializeCheckoutButton() {
     console.log('Setting up checkout button...');
-    const button = document.querySelector('.checkout-button');
     
-    if (!button) {
-        console.error('No checkout button found');
+    // Find all checkout buttons
+    const checkoutButtons = document.querySelectorAll('[data-checkout-button]');
+    if (checkoutButtons.length === 0) {
+        console.error('No checkout buttons found on page');
         return;
     }
-
-    const memberstackDOM = window.$memberstackDom;
-    if (!memberstackDOM) {
-        console.error('Memberstack not initialized');
-        return;
-    }
-
-    button.addEventListener('click', async (event) => {
-        await handleCheckout(event);
+    
+    // Set up click handler for each button
+    checkoutButtons.forEach(button => {
+        button.addEventListener('click', async (event) => {
+            console.log('Checkout button clicked');
+            await handleCheckout(event);
+        });
     });
-
+    
     console.log('Checkout button initialized');
 }
 
@@ -131,15 +143,44 @@ function getBaseUrl() {
 }
 
 async function handleCheckout(event) {
-    event.preventDefault();
-    const button = event.target;
-    button.disabled = true;
-    button.textContent = 'Processing...';
+    if (event) {
+        event.preventDefault();
+    }
+    const button = event?.target;
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Processing...';
+    }
     
     try {
         // Get current member using Memberstack DOM API
         const member = await window.$memberstackDom.getCurrentMember();
-        console.log('Current member:', member);
+        
+        // Debug log to see member structure
+        console.log('Member object:', JSON.stringify(member, null, 2));
+        
+        // If user is not logged in, redirect to registration
+        if (!member || !member.data) {
+            console.log('User not logged in, redirecting to registration');
+            // Store return URL in localStorage
+            localStorage.setItem('checkoutReturnUrl', window.location.href);
+            // Redirect to registration page
+            window.location.href = '/registrieren';
+            return;
+        }
+        
+        // Extract email from member data
+        const customerEmail = member.data.auth?.email;
+        
+        if (!customerEmail) {
+            console.log('No email found in member object');
+            throw new Error('User email is required for checkout');
+        }
+        
+        // Get customer name from custom fields
+        const firstName = member.data.customFields?.['first-name'] || '';
+        const lastName = member.data.customFields?.['last-name'] || '';
+        const customerName = `${firstName} ${lastName}`.trim();
         
         // Prepare checkout data
         const checkoutData = {
@@ -147,11 +188,25 @@ async function handleCheckout(event) {
             quantity: parseInt(document.getElementById('book-quantity')?.value || '1'),
             successUrl: `${window.location.origin}/success`,
             cancelUrl: `${window.location.origin}/cancel`,
-            customerEmail: member?.data?.email || 'office@west-side-productions.at',
+            customerEmail: customerEmail,
             metadata: {
-                memberstackUserId: member?.id
-            }
+                memberstackUserId: member.data.id || '',
+                source: 'webflow_checkout'
+            },
+            shipping: {
+                name: customerName,
+                address: {
+                    country: document.querySelector('[name="shipping-country"]')?.value || 'AT'
+                }
+            },
+            locale: 'de',
+            allow_promotion_codes: true
         };
+
+        // Validate required fields
+        if (!checkoutData.customerEmail) {
+            throw new Error('User email is required for checkout');
+        }
 
         console.log('Starting checkout process:', checkoutData);
         
@@ -202,8 +257,10 @@ async function handleCheckout(event) {
 
     } catch (error) {
         console.error('Checkout error:', error);
-        button.disabled = false;
-        button.textContent = 'Buy Now';
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Buy Now';
+        }
         alert('Sorry, there was a problem starting the checkout process. Please try again.');
     }
 }
@@ -227,16 +284,93 @@ function updatePriceDisplay() {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initializeDependencies();
-        await initializeCheckoutButton();
         
-        // Set up quantity change handler
-        const quantitySelect = document.getElementById('book-quantity');
-        if (quantitySelect) {
-            quantitySelect.addEventListener('change', updatePriceDisplay);
+        // Different behavior based on current page
+        const currentPath = window.location.pathname;
+        
+        if (currentPath === '/membershome') {
+            console.log('On membershome page, checking for pending checkout');
+            // Check if we need to redirect back to product page
+            const returnUrl = localStorage.getItem('checkoutReturnUrl');
+            const member = await window.$memberstackDom.getCurrentMember();
+            
+            if (returnUrl && member?.data?.auth?.email) {
+                console.log('Found return URL and member is logged in');
+                localStorage.removeItem('checkoutReturnUrl');
+                
+                // Extract the base URL without any parameters
+                const baseUrl = returnUrl.split('?')[0];
+                
+                // Create checkout session directly from membershome
+                const checkoutData = {
+                    priceId: CONFIG.stripePriceId,
+                    quantity: 1,
+                    successUrl: `${window.location.origin}/success`,
+                    cancelUrl: `${window.location.origin}/cancel`,
+                    customerEmail: member.data.auth.email,
+                    metadata: {
+                        memberstackUserId: member.data.id || '',
+                        source: 'webflow_checkout'
+                    },
+                    shipping: {
+                        name: `${member.data.customFields?.['first-name'] || ''} ${member.data.customFields?.['last-name'] || ''}`.trim(),
+                        address: {
+                            country: 'AT'
+                        }
+                    },
+                    locale: 'de',
+                    allow_promotion_codes: true
+                };
+                
+                try {
+                    console.log('Creating checkout session from membershome');
+                    // Get the base URL for the API endpoint
+                    const baseUrl = getBaseUrl();
+                    const endpointUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
+                    
+                    const response = await fetch(endpointUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(checkoutData)
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`Checkout failed: ${errorData.message || response.statusText}`);
+                    }
+                    
+                    const session = await response.json();
+                    console.log('Checkout session created:', session);
+                    
+                    // Initialize Stripe and redirect
+                    const stripe = Stripe(CONFIG.stripePublicKey);
+                    const { error } = await stripe.redirectToCheckout({
+                        sessionId: session.sessionId
+                    });
+                    
+                    if (error) {
+                        console.error('Stripe redirect error:', error);
+                        throw error;
+                    }
+                } catch (error) {
+                    console.error('Error starting checkout:', error);
+                    // If there's an error, redirect back to product page
+                    window.location.href = baseUrl;
+                }
+            }
+        } else if (currentPath.includes('products-test')) {
+            console.log('On product page, initializing checkout');
+            await initializeCheckoutButton();
+            
+            // Set up quantity change handler
+            const quantitySelect = document.getElementById('book-quantity');
+            if (quantitySelect) {
+                quantitySelect.addEventListener('change', updatePriceDisplay);
+                updatePriceDisplay();
+            }
         }
-        
-        // Initial price update
-        updatePriceDisplay();
     } catch (error) {
         console.error('Initialization error:', error);
     }
