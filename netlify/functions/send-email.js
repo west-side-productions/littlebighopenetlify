@@ -44,106 +44,75 @@ exports.handler = async (event, context) => {
       variables = {} 
     } = JSON.parse(event.body);
 
-    // Log incoming request (without sensitive data)
     console.log('Email request details:', {
       templateName,
       language,
       hasVariables: Object.keys(variables).length > 0,
-      variableKeys: Object.keys(variables),
-      toEmailDomain: to ? to.split('@')[1] : undefined
+      variableKeys: Object.keys(variables)
     });
 
     // Validate required fields
     if (!to || !templateName) {
-      console.error('Missing required fields:', { to: !!to, templateName: !!templateName });
+      console.error('Missing required fields');
       return {
         statusCode: 400,
-        body: JSON.stringify({ 
-          message: 'Missing required fields',
-          details: {
-            to: !to ? 'Email address is required' : null,
-            templateName: !templateName ? 'Template name is required' : null
-          }
-        })
+        body: JSON.stringify({ message: 'Missing required fields' })
       };
     }
 
-    // Check if template exists for language
-    console.log('Checking template availability...');
-    const templateSet = templates[language] || templates[defaultLanguage];
-    if (!templateSet) {
-      console.error('Template set not found for language:', language);
+    // Get the correct language template
+    const languageTemplates = templates[language] || templates[defaultLanguage];
+    if (!languageTemplates) {
+      console.error('No templates found for language:', language);
       return {
         statusCode: 400,
-        body: JSON.stringify({ 
-          message: `Template set not found for language: ${language}`,
-          details: `Templates not found for language: ${language}`
-        })
+        body: JSON.stringify({ message: 'Invalid language' })
       };
     }
 
-    const template = templateSet[templateName];
+    // Get the specific email template
+    const template = languageTemplates[templateName];
     if (!template) {
-      console.error('Template not found:', { language, templateName });
+      console.error('Template not found:', templateName);
       return {
         statusCode: 400,
-        body: JSON.stringify({ 
-          message: `Template not found: ${templateName}`,
-          details: `Template '${templateName}' not found in ${language} templates`
-        })
+        body: JSON.stringify({ message: 'Template not found' })
       };
     }
 
-    console.log('Processing template with variables...');
-    const { subject, html, text } = template;
-    const processedEmail = {
+    console.log('Template found:', {
+      language,
+      templateName,
+      hasSubject: !!template.subject,
+      hasHtmlFunction: typeof template.html === 'function'
+    });
+
+    // Generate the email HTML using the template function
+    const html = template.html(variables);
+    console.log('Generated HTML length:', html.length);
+
+    // Prepare the email
+    const msg = {
       to,
       from: process.env.SENDGRID_FROM_EMAIL,
-      subject: replaceTemplateVariables(subject, variables),
-      html: replaceTemplateVariables(html, variables),
-      text: replaceTemplateVariables(text, variables)
+      subject: template.subject,
+      html
     };
 
-    console.log('Sending email via SendGrid...');
-    await sgMail.send(processedEmail);
-    console.log('Email sent successfully!');
+    console.log('Sending email...');
+    await sgMail.send(msg);
+    console.log('Email sent successfully');
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        message: 'Email sent successfully',
-        details: {
-          to,
-          templateName,
-          language
-        }
-      })
+      body: JSON.stringify({ message: 'Email sent successfully' })
     };
+
   } catch (error) {
-    console.error('Error processing email request:', error);
-    console.error('Error details:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-
-    // Handle SendGrid specific errors
-    if (error.response && error.response.body) {
-      const { message, code } = error.response.body;
-      return {
-        statusCode: error.code || 500,
-        body: JSON.stringify({ 
-          message: 'Error sending email',
-          details: message,
-          code: code
-        })
-      };
-    }
-
-    // Return appropriate error response
+    console.error('Error sending email:', error);
     return {
-      statusCode: error.code === 'ENOENT' ? 404 : 500,
-      body: JSON.stringify({
+      statusCode: 500,
+      body: JSON.stringify({ 
         message: 'Error sending email',
         error: error.message
       })

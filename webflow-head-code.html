@@ -1,44 +1,61 @@
 <script>
-// Language configuration
-const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
-const DEFAULT_LANGUAGE = 'en';
-const DEBUG = true;
+// Immediate startup check
+console.log('%c[Debug Check] Script loaded and running', 'background: #ff5722; color: white; padding: 2px 5px; border-radius: 3px;');
 
-function debugLog(...args) {
-    if (DEBUG) {
-        console.log('%c[Language Debug]', 'background: #ffeb3b; color: black; padding: 2px 5px; border-radius: 3px;', ...args);
+// Debug configuration - MUST be at top level
+window.LBH_DEBUG = {
+    enabled: true,
+    log: function(...args) {
+        if (this.enabled) {
+            console.log('%c[LBH Debug]', 'background: #ffeb3b; color: black; padding: 2px 5px; border-radius: 3px;', ...args);
+        }
+    },
+    error: function(...args) {
+        if (this.enabled) {
+            console.error('%c[LBH Error]', 'background: #f44336; color: white; padding: 2px 5px; border-radius: 3px;', ...args);
+        }
     }
-}
+};
+
+// Configuration
+const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
+const DEFAULT_LANGUAGE = 'de';
+const LANGUAGE_PATHS = {
+    'en': ['signup', 'login', 'products', 'pricing'],
+    'fr': ['inscription', 'connexion', 'produits', 'tarifs'],
+    'it': ['registrazione', 'accesso', 'prodotti', 'prezzi']
+};
 
 // Detect language from URL path or browser settings
 function detectLanguage() {
-    debugLog('Starting language detection...');
+    window.LBH_DEBUG.log('Starting language detection...');
     
     // Try to get language from URL path
     const pathSegments = window.location.pathname.split('/').filter(Boolean);
-    const pathLanguage = pathSegments[0]?.toLowerCase();
-    debugLog('URL path:', window.location.pathname);
-    debugLog('Path segments:', pathSegments);
-    debugLog('Potential path language:', pathLanguage);
+    const firstSegment = pathSegments[0]?.toLowerCase();
     
-    if (SUPPORTED_LANGUAGES.includes(pathLanguage)) {
-        debugLog('✓ Using URL path language:', pathLanguage);
-        return pathLanguage;
-    }
-
-    // Try to get language from browser settings
-    const browserLanguage = navigator.language || navigator.userLanguage;
-    const shortBrowserLang = browserLanguage.split('-')[0].toLowerCase();
-    debugLog('Browser language (full):', browserLanguage);
-    debugLog('Browser language (short):', shortBrowserLang);
+    window.LBH_DEBUG.log('URL analysis:', {
+        fullPath: window.location.pathname,
+        segments: pathSegments,
+        firstSegment
+    });
     
-    if (SUPPORTED_LANGUAGES.includes(shortBrowserLang)) {
-        debugLog('✓ Using browser language:', shortBrowserLang);
-        return shortBrowserLang;
+    // First check if it's an explicit language path
+    if (SUPPORTED_LANGUAGES.includes(firstSegment)) {
+        window.LBH_DEBUG.log('✓ Explicit language found in URL:', firstSegment);
+        return firstSegment;
     }
-
-    // Fallback to default language
-    debugLog('✓ Using default language:', DEFAULT_LANGUAGE);
+    
+    // If no language prefix, check if it's a non-German path
+    for (const [lang, paths] of Object.entries(LANGUAGE_PATHS)) {
+        if (paths.includes(firstSegment)) {
+            window.LBH_DEBUG.log('✓ Language found from path mapping:', lang);
+            return lang;
+        }
+    }
+    
+    // If no language prefix and no specific language path, it's German
+    window.LBH_DEBUG.log('✓ No language prefix or specific path, using German as primary language');
     return DEFAULT_LANGUAGE;
 }
 
@@ -56,13 +73,13 @@ function waitForMemberstack() {
     });
 }
 
+// Initialize Memberstack
 async function initializeMemberstack() {
     try {
-        // Wait for Memberstack to be available
+        window.LBH_DEBUG.log('Waiting for Memberstack to be available...');
         const MemberStack = await waitForMemberstack();
-        console.log('Memberstack found, initializing...');
+        window.LBH_DEBUG.log('Memberstack found, initializing...');
 
-        // Initialize Memberstack
         window.$memberstackDom = MemberStack.initialize({
             publicKey: 'pk_sb_0062e297a05a98d62226'
         });
@@ -71,148 +88,173 @@ async function initializeMemberstack() {
             throw new Error('Memberstack initialization failed');
         }
 
-        // Wait for Memberstack to be ready
-        await window.$memberstackDom.getCurrentMember();
-        console.log('Memberstack initialized successfully');
-        
-        // Get the signup form
-        const form = document.querySelector('[data-ms-form="signup"]');
-        if (!form) {
-            console.warn('Signup form not found - this might be expected if not on signup page');
-            return;
-        }
+        window.LBH_DEBUG.log('Memberstack initialized successfully');
+        return window.$memberstackDom;
+    } catch (error) {
+        window.LBH_DEBUG.error('Error initializing Memberstack:', error);
+        throw error;
+    }
+}
 
-        // Ensure form has proper attributes
-        form.setAttribute('method', 'post');
-        form.setAttribute('data-ms-form', 'signup');
+// Main initialization function
+async function initialize() {
+    try {
+        window.LBH_DEBUG.log('Starting initialization...');
         
-        // Set autocomplete attributes
-        const emailInput = form.querySelector('[data-ms-member="email"]');
-        const passwordInput = form.querySelector('[data-ms-member="password"]');
+        // Initialize Memberstack first
+        await initializeMemberstack();
         
-        if (emailInput) {
-            emailInput.setAttribute('autocomplete', 'username');
-        }
-        if (passwordInput) {
-            passwordInput.setAttribute('autocomplete', 'new-password');
-        }
-
-        // Add form submission handler
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            debugLog('=== Form Submission Started ===');
+        // Then proceed with form initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            window.LBH_DEBUG.log('DOM loaded, initializing...');
             
-            try {
-                // Get current language at submission time
-                debugLog('Detecting language at form submission...');
-                const detectedLanguage = detectLanguage();
-                debugLog('Language detection result:', detectedLanguage);
+            // Initialize language detection
+            const currentLanguage = detectLanguage();
+            window.LBH_DEBUG.log('Initial language detection result:', currentLanguage);
 
-                // Get form data
-                const email = emailInput?.value;
-                const password = passwordInput?.value;
-                const firstName = form.querySelector('[name="first-name"]')?.value?.trim() || 'User';
-                
-                if (!email || !password) {
-                    throw new Error('Email and password are required');
+            // Log all forms on the page for debugging
+            const allForms = document.querySelectorAll('form');
+            window.LBH_DEBUG.log('Forms found on page:', {
+                count: allForms.length,
+                forms: Array.from(allForms).map(f => ({
+                    id: f.id,
+                    className: f.className,
+                    attributes: Array.from(f.attributes).map(attr => `${attr.name}="${attr.value}"`).join(', ')
+                }))
+            });
+
+            // Try multiple selectors for the signup form
+            const formSelectors = [
+                '[data-ms-form="signup"]',
+                '#wf-form-signup',
+                'form[data-name="Email Form"]',
+                'form.signup-form',
+                'form[data-ms-form]'
+            ];
+
+            let form = null;
+            for (const selector of formSelectors) {
+                const foundForm = document.querySelector(selector);
+                if (foundForm) {
+                    form = foundForm;
+                    window.LBH_DEBUG.log('Found signup form using selector:', selector);
+                    break;
                 }
-
-                // Prepare custom fields with explicit language settings
-                const customFields = {
-                    'first-name': firstName,
-                    'language': detectedLanguage,
-                    'Language': detectedLanguage,
-                    'preferred_language': detectedLanguage
-                };
-
-                debugLog('Preparing member data:', { 
-                    email, 
-                    firstName, 
-                    language: detectedLanguage,
-                    customFields 
-                });
-
-                // Create member with Memberstack 2.0
-                debugLog('Calling Memberstack signup...');
-                const { data: newMember, error } = await window.$memberstackDom.signup({
-                    email,
-                    password,
-                    redirectUrl: window.location.origin + '/email-verification',
-                    customFields
-                });
-
-                if (error) {
-                    console.error('Signup error:', error);
-                    throw new Error(error.message);
-                }
-
-                debugLog('Member created successfully:', newMember);
-                debugLog('Member custom fields:', newMember.customFields);
-
-                // Send verification email with correct language
-                const emailData = {
-                    to: email,
-                    templateName: 'email_verification',
-                    language: detectedLanguage,
-                    variables: {
-                        firstName,
-                        language: detectedLanguage,
-                        verificationLink: `${window.location.origin}/verify-email?token=${newMember.loginRedirectUrl.split('token=')[1]}`
-                    }
-                };
-
-                debugLog('Sending verification email with data:', emailData);
-
-                const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(emailData)
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Failed to send verification email: ${errorText}`);
-                }
-
-                const result = await response.json();
-                debugLog('Verification email sent:', result);
-
-                // Redirect to verification page
-                debugLog('Redirecting to verification page...');
-                window.location.href = `/${detectedLanguage}/email-verification`;
-
-            } catch (error) {
-                console.error('Error during signup:', error);
-                debugLog('❌ Error during signup:', error);
-                alert(error.message);
             }
-        });
 
-        // Handle password reset using Memberstack's built-in hooks
-        if (window.$memberstackDom.passwordResetRequested) {
-            window.$memberstackDom.passwordResetRequested.subscribe(async ({ member, token }) => {
+            if (!form) {
+                window.LBH_DEBUG.error('No signup form found. Tried selectors:', formSelectors);
+                return;
+            }
+
+            // Log all input fields in the form
+            window.LBH_DEBUG.log('Form input fields:', Array.from(form.querySelectorAll('input')).map(input => ({
+                name: input.name,
+                type: input.type,
+                id: input.id,
+                attributes: Array.from(input.attributes).map(attr => `${attr.name}="${attr.value}"`).join(', ')
+            })));
+
+            // Try multiple selectors for email and password
+            const emailInput = form.querySelector('[data-ms-member="email"], [name="Email"], input[type="email"]');
+            const passwordInput = form.querySelector('[data-ms-member="password"], [name="Passwort"], input[type="password"]');
+
+            // Log what we found
+            window.LBH_DEBUG.log('Form elements found:', {
+                form: {
+                    id: form.id,
+                    className: form.className,
+                    attributes: Array.from(form.attributes).map(attr => `${attr.name}="${attr.value}"`).join(', ')
+                },
+                emailInput: emailInput ? {
+                    name: emailInput.name,
+                    type: emailInput.type,
+                    attributes: Array.from(emailInput.attributes).map(attr => `${attr.name}="${attr.value}"`).join(', ')
+                } : null,
+                passwordInput: passwordInput ? {
+                    name: passwordInput.name,
+                    type: passwordInput.type,
+                    attributes: Array.from(passwordInput.attributes).map(attr => `${attr.name}="${attr.value}"`).join(', ')
+                } : null
+            });
+
+            if (!emailInput || !passwordInput) {
+                window.LBH_DEBUG.error('Required form elements not found:', {
+                    emailFound: !!emailInput,
+                    passwordFound: !!passwordInput,
+                    formHTML: form.outerHTML
+                });
+                return;
+            }
+
+            window.LBH_DEBUG.log('Form elements found and initialized successfully');
+
+            // Add form submission handler
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                window.LBH_DEBUG.log('=== Form Submission Started ===');
+                
                 try {
-                    // Get user's language preference or fallback to current language
-                    const userLanguage = member.customFields?.language || detectLanguage();
-                    if (!SUPPORTED_LANGUAGES.includes(userLanguage)) {
-                        console.warn(`Unsupported language ${userLanguage}, falling back to ${DEFAULT_LANGUAGE}`);
-                        userLanguage = DEFAULT_LANGUAGE;
-                    }
-                    
-                    console.log('Sending password reset email for language:', userLanguage);
+                    // Get current language at submission time
+                    const detectedLanguage = detectLanguage();
+                    window.LBH_DEBUG.log('Language detected for signup:', detectedLanguage);
 
+                    // Get form data
+                    const email = emailInput?.value;
+                    const password = passwordInput?.value;
+                    const firstName = form.querySelector('[name="first-name"]')?.value?.trim() || 'User';
+                    const lastName = form.querySelector('[name="last-name"]')?.value?.trim() || '';
+                    
+                    window.LBH_DEBUG.log('Form data collected:', {
+                        hasEmail: !!email,
+                        hasPassword: !!password,
+                        firstName,
+                        lastName,
+                        language: detectedLanguage
+                    });
+
+                    // Prepare custom fields with explicit language settings
+                    const customFields = {
+                        'first-name': firstName,
+                        'last-name': lastName,
+                        'language': detectedLanguage,
+                        'Language': detectedLanguage,
+                        'preferred_language': detectedLanguage
+                    };
+
+                    window.LBH_DEBUG.log('Preparing Memberstack signup with fields:', customFields);
+
+                    // Create member with Memberstack 2.0
+                    const { data: newMember, error } = await window.$memberstackDom.signup({
+                        email,
+                        password,
+                        redirectUrl: window.location.origin + `/${detectedLanguage}/email-verification`,
+                        customFields
+                    });
+
+                    if (error) {
+                        window.LBH_DEBUG.error('Memberstack signup error:', error);
+                        throw error;
+                    }
+
+                    window.LBH_DEBUG.log('Memberstack signup successful:', {
+                        memberId: newMember.id,
+                        customFields: newMember.customFields
+                    });
+
+                    // Send verification email
                     const emailData = {
-                        to: member.auth.email,
-                        templateName: 'password_reset',
-                        language: userLanguage,
+                        to: email,
+                        templateName: 'email_verification',
+                        language: detectedLanguage,
                         variables: {
-                            firstName: member.customFields['first-name'] || 'User',
-                            language: userLanguage,
-                            resetLink: `${window.location.origin}/${userLanguage}/reset-password?token=${token}`
+                            firstName,
+                            language: detectedLanguage,
+                            verificationLink: `${window.location.origin}/${detectedLanguage}/verify-email?token=${newMember.loginRedirectUrl.split('token=')[1]}`
                         }
                     };
 
-                    console.log('Sending password reset email with data:', emailData);
+                    window.LBH_DEBUG.log('Sending verification email:', emailData);
 
                     const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                         method: 'POST',
@@ -222,22 +264,37 @@ async function initializeMemberstack() {
 
                     if (!response.ok) {
                         const errorText = await response.text();
-                        throw new Error(`Email API error: ${response.status} - ${errorText}`);
+                        window.LBH_DEBUG.error('Email API error:', {
+                            status: response.status,
+                            text: errorText
+                        });
+                        throw new Error(`Failed to send verification email: ${errorText}`);
                     }
 
                     const result = await response.json();
-                    console.log('Password reset email sent:', result);
+                    window.LBH_DEBUG.log('Verification email sent successfully:', result);
+
+                    // Redirect to verification page
+                    window.LBH_DEBUG.log(`Redirecting to /${detectedLanguage}/email-verification`);
+                    window.location.href = `/${detectedLanguage}/email-verification`;
+
                 } catch (error) {
-                    console.error('Error sending password reset email:', error);
+                    window.LBH_DEBUG.error('Signup process failed:', {
+                        message: error.message,
+                        stack: error.stack
+                    });
+                    alert(error.message);
                 }
             });
-        }
-
+        });
     } catch (error) {
-        console.error('Error initializing Memberstack:', error);
+        window.LBH_DEBUG.error('Initialization failed:', error);
     }
 }
 
-// Initialize when the page loads
-window.addEventListener('load', initializeMemberstack);
+// Start initialization when the page loads
+window.addEventListener('load', initialize);
+
+// Log that script has finished loading
+window.LBH_DEBUG.log('Script initialization complete');
 </script>
