@@ -3,15 +3,33 @@ const fetch = require('node-fetch');
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+// CORS headers
+const headers = {
+    'Access-Control-Allow-Origin': 'https://littlebighope.com',
+    'Access-Control-Allow-Headers': 'Content-Type, svix-id, svix-signature, svix-timestamp',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+};
+
 exports.handler = async (event) => {
-    console.log('Webhook received with headers:', event.headers);
-    
+    // Handle preflight requests
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers,
+            body: ''
+        };
+    }
+
     if (event.httpMethod !== 'POST') {
         return { 
             statusCode: 405, 
+            headers,
             body: JSON.stringify({ error: 'Method not allowed' })
         };
     }
+
+    console.log('Webhook received with headers:', event.headers);
 
     try {
         // Log the raw payload
@@ -24,6 +42,15 @@ exports.handler = async (event) => {
         const svixId = event.headers['svix-id'];
         const svixTimestamp = event.headers['svix-timestamp'];
         const svixSignature = event.headers['svix-signature'];
+
+        if (!svixId || !svixTimestamp || !svixSignature) {
+            console.error('Missing Svix headers');
+            return {
+                statusCode: 401,
+                headers,
+                body: JSON.stringify({ error: 'Missing webhook signature headers' })
+            };
+        }
 
         console.log('Svix headers:', {
             id: svixId,
@@ -48,21 +75,22 @@ exports.handler = async (event) => {
 
         return {
             statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ received: true })
+            headers,
+            body: JSON.stringify({ 
+                received: true,
+                type: type,
+                timestamp: new Date().toISOString()
+            })
         };
     } catch (error) {
         console.error('Webhook processing error:', error);
         return {
             statusCode: 400,
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers,
             body: JSON.stringify({ 
                 error: 'Webhook processing failed',
-                message: error.message
+                message: error.message,
+                timestamp: new Date().toISOString()
             })
         };
     }
