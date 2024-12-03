@@ -1,5 +1,5 @@
 <!-- Add this in your HTML head section -->
-<script src="https://auth.memberstack.com/js"></script>
+<script src="https://auth.memberstack.com/js" data-memberstack-id="YOUR_MEMBERSTACK_APP_ID"></script>
 <script src="/memberstack-auth.js"></script>
 
 <!-- Add this where you want to handle language selection -->
@@ -14,14 +14,22 @@
 // Handle language change
 async function handleLanguageChange(event) {
     const language = event.target.value;
-    const memberstack = await window.$memberstackDom.init({
-        appId: "YOUR_MEMBERSTACK_APP_ID" // Replace with your Memberstack App ID
+    
+    // Wait for Memberstack to be ready
+    await new Promise((resolve) => {
+        if (window.memberstack) {
+            resolve();
+        } else {
+            document.addEventListener('memberstack:ready', () => {
+                resolve();
+            });
+        }
     });
     
-    const member = await memberstack.getCurrentMember();
+    const member = await window.memberstack.getCurrentMember();
     if (member) {
         // Update member's language preference
-        await memberstack.updateMember({
+        await window.memberstack.updateMember({
             customFields: {
                 language: language
             }
@@ -34,11 +42,18 @@ async function handleLanguageChange(event) {
 
 // Set initial language based on user's preference or browser
 document.addEventListener('DOMContentLoaded', async () => {
-    const memberstack = await window.$memberstackDom.init({
-        appId: "YOUR_MEMBERSTACK_APP_ID" // Replace with your Memberstack App ID
+    // Wait for Memberstack to be ready
+    await new Promise((resolve) => {
+        if (window.memberstack) {
+            resolve();
+        } else {
+            document.addEventListener('memberstack:ready', () => {
+                resolve();
+            });
+        }
     });
     
-    const member = await memberstack.getCurrentMember();
+    const member = await window.memberstack.getCurrentMember();
     if (member && member.customFields?.language) {
         document.getElementById('languageSelect').value = member.customFields.language;
     } else {

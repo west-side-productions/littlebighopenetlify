@@ -4,12 +4,20 @@ let currentUserLanguage = 'en'; // Default language
 // Initialize Memberstack
 const initializeMemberstack = async () => {
     try {
-        const memberstack = await window.$memberstackDom.init({
-            appId: "YOUR_MEMBERSTACK_APP_ID" // Replace with your Memberstack App ID
+        // Wait for Memberstack to be ready
+        await new Promise((resolve) => {
+            if (window.memberstack) {
+                resolve();
+            } else {
+                document.addEventListener('memberstack:ready', () => {
+                    resolve();
+                });
+            }
         });
+
+        // Initialize with new Memberstack 2.0 syntax
+        const member = await window.memberstack.getCurrentMember();
         
-        // Get current member if logged in
-        const member = await memberstack.getCurrentMember();
         if (member) {
             // Set language based on user's profile or browser
             currentUserLanguage = member.customFields?.language || 
@@ -18,12 +26,12 @@ const initializeMemberstack = async () => {
         }
 
         // Disable Memberstack's built-in emails
-        memberstack.confirmEmailAddress = false;
-        memberstack.resetPassword = false;
-        memberstack.passwordlessLogin = false;
-        memberstack.welcomeEmail = false;
+        window.memberstack.confirmEmailAddress = false;
+        window.memberstack.resetPassword = false;
+        window.memberstack.passwordlessLogin = false;
+        window.memberstack.welcomeEmail = false;
 
-        return memberstack;
+        return window.memberstack;
     } catch (error) {
         console.error('Error initializing Memberstack:', error);
         throw error;
