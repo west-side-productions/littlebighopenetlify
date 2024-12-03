@@ -131,12 +131,13 @@ async function handleMemberCreated(data) {
     console.log('Using language:', language);
 
     try {
-        const template = getEmailTemplate('welcome', language);
-        await sgMail.send({
+        await sendEmail({
             to: email,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: template.subject,
-            html: template.html.replace('{{firstName}}', firstName)
+            templateName: 'welcome',
+            language,
+            variables: {
+                firstName
+            }
         });
         
         console.log('Welcome email sent successfully');
@@ -167,13 +168,13 @@ async function handleMemberVerified(data) {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Get latest member data to ensure we have current language setting
-        const template = getEmailTemplate('email_verified', language);
-        
-        await sgMail.send({
+        await sendEmail({
             to: email,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: template.subject,
-            html: template.html.replace('{{firstName}}', firstName)
+            templateName: 'email_verified',
+            language,
+            variables: {
+                firstName
+            }
         });
         
         console.log('Verification success email sent');
@@ -192,28 +193,17 @@ async function handlePlanAdded(data) {
         const latestPlan = planConnections[planConnections.length - 1];
         
         try {
-            const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    to: email,
-                    templateName: 'purchase_confirmation',
-                    language: customFields.language || 'de',
-                    variables: {
-                        firstName: customFields['first-name'] || 'User',
-                        purchaseId: latestPlan.id
-                    }
-                })
+            await sendEmail({
+                to: email,
+                templateName: 'purchase_confirmation',
+                language: customFields.language || 'de',
+                variables: {
+                    firstName: customFields['first-name'] || 'User',
+                    purchaseId: latestPlan.id
+                }
             });
-
-            if (!response.ok) {
-                throw new Error(`Email API responded with status: ${response.status}`);
-            }
-
-            const responseData = await response.json();
-            console.log('Purchase confirmation email sent:', responseData);
+            
+            console.log('Purchase confirmation email sent');
             
         } catch (error) {
             console.error('Failed to send purchase confirmation:', error);
@@ -228,4 +218,33 @@ async function handlePlanUpdated(data) {
 
 async function handlePlanCanceled(data) {
     console.log('Handling plan canceled:', data);
+}
+
+async function sendEmail({ to, templateName, language, variables }) {
+    try {
+        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                to,
+                templateName,
+                language,
+                variables
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Email API responded with status: ${response.status}, body: ${errorText}`);
+        }
+
+        const responseData = await response.json();
+        console.log(`${templateName} email sent:`, responseData);
+        return responseData;
+    } catch (error) {
+        console.error(`Failed to send ${templateName} email:`, error);
+        throw error;
+    }
 }
