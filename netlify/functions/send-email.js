@@ -71,6 +71,8 @@ exports.handler = async (event, context) => {
       };
     }
 
+    console.log('Available templates for language:', Object.keys(langTemplates));
+    
     const template = langTemplates[templateName];
     if (!template) {
       console.error('Template not found:', templateName);
@@ -83,8 +85,17 @@ exports.handler = async (event, context) => {
       };
     }
 
+    console.log('Found template:', {
+      name: templateName,
+      language,
+      hasSubject: !!template.subject,
+      hasHtmlFunction: typeof template.html === 'function'
+    });
+
     // Get HTML content from template function
     const htmlContent = template.html(variables);
+    console.log('Generated HTML preview:', htmlContent.substring(0, 200) + '...');
+
     const subject = template.subject;
 
     // Prepare email
