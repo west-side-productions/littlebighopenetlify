@@ -1,91 +1,181 @@
 <script>
-// Handle email verification and password reset
-window.addEventListener('load', function() {
-    if (typeof window.$memberstackDom !== 'undefined') {
-        // Listen for password reset requests
-        $memberstackDom.addEventListener('auth:passwordReset.requested', async function(event) {
-            const { member, token } = event.data;
-            try {
-                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+// Function to detect language from URL, locale nav, or browser
+function detectLanguage() {
+    // First try from URL path (e.g., /en, /de, /fr, /it)
+    const pathLang = window.location.pathname.split('/')[1];
+    if (['en', 'de', 'fr', 'it'].includes(pathLang)) {
+        return pathLang;
+    }
+
+    // Then try from locale nav (check for w--current)
+    const currentLocale = document.querySelector('.w-locales-item .w--current');
+    if (currentLocale) {
+        const hrefLang = currentLocale.getAttribute('hreflang');
+        if (hrefLang) {
+            return hrefLang;
+        }
+    }
+
+    // Finally fallback to browser language
+    const browserLang = navigator.language.split('-')[0];
+    return ['en', 'de', 'fr', 'it'].includes(browserLang) ? browserLang : 'en';
+}
+
+// Initialize Memberstack functionality
+function initializeMemberstack() {
+    const language = detectLanguage();
+    console.log('Detected language:', language);
+
+    // Handle verification from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const verifyToken = urlParams.get('token');
+    if (verifyToken && window.location.pathname.includes('verify-email')) {
+        window.$memberstackDom.verifyEmail({ token: verifyToken })
+            .then(() => {
+                window.location.href = '/verification-success';
+            })
+            .catch(error => {
+                console.error('Email verification failed:', error);
+            });
+    }
+
+    // Update member's language if they're logged in
+    window.$memberstackDom.getCurrentMember()
+        .then(member => {
+            if (member) {
+                return window.$memberstackDom.updateMember({
+                    customFields: {
+                        language: language
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            if (error.message !== 'Unauthorized') {
+                console.error('Error updating member language:', error);
+            }
+        });
+
+    // Set up event handlers
+    const setupHooks = () => {
+        // Password reset request
+        window.$memberstackDom.addHook('passwordReset:requested', ({ member, token }) => {
+            // Get the current member to ensure we have the latest language setting
+            window.$memberstackDom.getCurrentMember().then(currentMember => {
+                const userLanguage = currentMember?.customFields?.language || language;
+                fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         to: member.auth.email,
                         templateName: 'password_reset',
-                        language: member.customFields.language || 'de',
+                        language: userLanguage,
                         variables: {
                             firstName: member.customFields['first-name'] || 'User',
                             resetLink: `https://littlebighope.com/reset-password?token=${token}`
                         }
                     })
-                });
-            } catch (error) {
-                console.error('Failed to send password reset email:', error);
-            }
+                }).catch(error => console.error('Failed to send password reset email:', error));
+            });
         });
 
-        // Listen for email verification requests
-        $memberstackDom.addEventListener('auth:emailVerification.requested', async function(event) {
-            const { member, token } = event.data;
-            try {
-                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+        // Email verification request
+        window.$memberstackDom.addHook('emailVerification:requested', ({ member, token }) => {
+            // Get the current member to ensure we have the latest language setting
+            window.$memberstackDom.getCurrentMember().then(currentMember => {
+                const userLanguage = currentMember?.customFields?.language || language;
+                fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         to: member.auth.email,
                         templateName: 'email_verification',
-                        language: member.customFields.language || 'de',
+                        language: userLanguage,
                         variables: {
                             firstName: member.customFields['first-name'] || 'User',
                             verificationLink: `https://littlebighope.com/verify-email?token=${token}`
                         }
                     })
-                });
-            } catch (error) {
-                console.error('Failed to send verification email:', error);
-            }
+                }).catch(error => console.error('Failed to send verification email:', error));
+            });
         });
 
-        // Listen for successful email verification
-        $memberstackDom.addEventListener('auth:emailVerification.succeeded', async function(event) {
-            const { member } = event.data;
-            try {
-                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+        // Email verification success
+        window.$memberstackDom.addHook('emailVerification:success', ({ member }) => {
+            // Get the current member to ensure we have the latest language setting
+            window.$memberstackDom.getCurrentMember().then(currentMember => {
+                const userLanguage = currentMember?.customFields?.language || language;
+                fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         to: member.auth.email,
                         templateName: 'email_verified',
-                        language: member.customFields.language || 'de',
+                        language: userLanguage,
                         variables: {
                             firstName: member.customFields['first-name'] || 'User'
                         }
                     })
-                });
-            } catch (error) {
-                console.error('Failed to send verification success email:', error);
-            }
+                }).catch(error => console.error('Failed to send verification success email:', error));
+            });
         });
+    };
 
-        // Listen for successful password changes
-        $memberstackDom.addEventListener('auth:passwordReset.succeeded', async function(event) {
-            const { member } = event.data;
-            try {
-                await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        to: member.auth.email,
-                        templateName: 'password_changed',
-                        language: member.customFields.language || 'de',
-                        variables: {
-                            firstName: member.customFields['first-name'] || 'User'
+    // Initialize hooks
+    if (window.$memberstackDom.addHook) {
+        setupHooks();
+    } else {
+        console.log('Waiting for Memberstack hooks to be available...');
+        const checkHooks = setInterval(() => {
+            if (window.$memberstackDom.addHook) {
+                clearInterval(checkHooks);
+                setupHooks();
+            }
+        }, 100);
+    }
+
+    // Listen for language changes in the locale nav
+    document.querySelectorAll('.w-locales-item a').forEach(link => {
+        link.addEventListener('click', () => {
+            const newLang = link.getAttribute('hreflang');
+            if (newLang) {
+                window.$memberstackDom.getCurrentMember()
+                    .then(member => {
+                        if (member) {
+                            return window.$memberstackDom.updateMember({
+                                customFields: {
+                                    language: newLang
+                                }
+                            });
                         }
                     })
-                });
-            } catch (error) {
-                console.error('Failed to send password change confirmation:', error);
+                    .catch(error => {
+                        if (error.message !== 'Unauthorized') {
+                            console.error('Error updating member language:', error);
+                        }
+                    });
             }
         });
-    }
-});</script>
+    });
+}
+
+// Wait for Memberstack to be ready
+function waitForMemberstack(callback, maxAttempts = 50) {
+    let attempts = 0;
+    const interval = setInterval(() => {
+        attempts++;
+        if (window.$memberstackDom) {
+            clearInterval(interval);
+            callback();
+        } else if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            console.error('Memberstack failed to initialize');
+        }
+    }, 100);
+}
+
+// Initialize when the page loads
+window.addEventListener('load', () => {
+    waitForMemberstack(initializeMemberstack);
+});
+</script>

@@ -5,14 +5,16 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // CORS headers
 const headers = {
-    'Access-Control-Allow-Origin': '*', // Allow all origins since this is a webhook
+    'Access-Control-Allow-Origin': '*', 
     'Access-Control-Allow-Headers': 'Content-Type, svix-id, svix-signature, svix-timestamp',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
 };
 
+// Delay function
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 exports.handler = async (event) => {
-    // Handle preflight requests
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 200,
@@ -32,13 +34,10 @@ exports.handler = async (event) => {
     console.log('Webhook received with headers:', event.headers);
 
     try {
-        // Log the raw payload
         console.log('Raw webhook payload:', event.body);
-        
         const payload = JSON.parse(event.body);
         console.log('Parsed webhook payload:', payload);
 
-        // Check for Svix headers
         const svixId = event.headers['svix-id'];
         const svixTimestamp = event.headers['svix-timestamp'];
         const svixSignature = event.headers['svix-signature'];
@@ -58,16 +57,21 @@ exports.handler = async (event) => {
             signature: svixSignature
         });
 
-        // Process the webhook data
         const { event: webhookEvent, payload: webhookPayload } = payload;
         console.log('Processing webhook type:', webhookEvent);
 
         switch (webhookEvent) {
             case 'member.created':
+                // Wait a bit to allow for any immediate updates
+                await delay(2000);
                 await handleMemberCreated(webhookPayload);
                 break;
             case 'member.updated':
-                await handleMemberUpdated(webhookPayload);
+                if (webhookPayload.verified && !webhookPayload.reason?.includes('customFields.updated')) {
+                    // Wait a bit to allow for any immediate updates
+                    await delay(2000);
+                    await handleMemberVerified(webhookPayload);
+                }
                 break;
             case 'member.plan.added':
                 await handlePlanAdded(webhookPayload);
@@ -99,7 +103,7 @@ exports.handler = async (event) => {
             body: JSON.stringify({ 
                 error: 'Webhook processing failed',
                 message: error.message,
-                timestamp: new Date().toISOString()
+                details: error.stack
             })
         };
     }
@@ -109,17 +113,14 @@ async function handleMemberCreated(data) {
     console.log('Handling member created with full data:', JSON.stringify(data, null, 2));
     const { auth: { email }, customFields = {} } = data;
     
-    // Log the exact structure of customFields
     console.log('Custom fields received:', JSON.stringify(customFields, null, 2));
 
-    // Try different possible field names for first name
     const firstName = customFields['first-name'] || 
                      customFields['firstName'] || 
                      customFields['firstname'] || 
                      customFields['First Name'] || 
                      'User';
     
-    // Get language with English fallback
     const language = customFields.language || 
                     customFields['Language'] || 
                     customFields['preferred_language'] || 
@@ -158,13 +159,53 @@ async function handleMemberCreated(data) {
     }
 }
 
-async function handleMemberUpdated(data) {
-    console.log('Handling member updated:', data);
-    // Only handle specific update cases if needed
+async function handleMemberVerified(data) {
+    console.log('Handling member verified:', JSON.stringify(data, null, 2));
+    const { auth: { email }, customFields = {} } = data;
+    
+    const firstName = customFields['first-name'] || 
+                     customFields['firstName'] || 
+                     customFields['firstname'] || 
+                     customFields['First Name'] || 
+                     'User';
+    
+    const language = customFields.language || 
+                    customFields['Language'] || 
+                    customFields['preferred_language'] || 
+                    'en';
+
+    try {
+        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                to: email,
+                templateName: 'email_verified',
+                language,
+                variables: {
+                    firstName
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Email API responded with status: ${response.status}, body: ${errorText}`);
+        }
+
+        const responseData = await response.json();
+        console.log('Verification success email sent:', responseData);
+        
+    } catch (error) {
+        console.error('Failed to send verification success email:', error);
+        throw error;
+    }
 }
 
 async function handlePlanAdded(data) {
-    console.log('Handling plan added:', data);
+    console.log('Handling plan added:', JSON.stringify(data, null, 2));
     const { auth: { email }, customFields = {}, planConnections = [] } = data;
     
     if (planConnections.length > 0) {
@@ -203,10 +244,8 @@ async function handlePlanAdded(data) {
 
 async function handlePlanUpdated(data) {
     console.log('Handling plan updated:', data);
-    // Handle plan updates if needed
 }
 
 async function handlePlanCanceled(data) {
     console.log('Handling plan canceled:', data);
-    // Handle plan cancellations if needed
 }
