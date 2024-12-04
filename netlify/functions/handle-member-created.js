@@ -1,4 +1,3 @@
-const { Webhook } = require('svix');
 const fetch = require('node-fetch');
 const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
@@ -16,14 +15,6 @@ exports.handler = async (event, context) => {
     // Parse the webhook payload
     const payload = JSON.parse(event.body);
     console.log('Parsed webhook payload:', payload);
-
-    // Verify webhook headers if needed
-    const svixHeaders = {
-      'svix-id': event.headers['svix-id'],
-      'svix-timestamp': event.headers['svix-timestamp'],
-      'svix-signature': event.headers['svix-signature']
-    };
-    console.log('Svix headers:', svixHeaders);
 
     // Extract member data
     const { auth, customFields, id } = payload.payload;
