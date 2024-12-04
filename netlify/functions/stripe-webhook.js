@@ -31,10 +31,10 @@ exports.handler = async (event) => {
                 
                 try {
                     // Get member ID and plan ID from metadata
-                    const { memberstackUserId, memberstackPlanId, totalWeight, productWeight, packagingWeight } = session.metadata;
+                    const { memberstackUserId, planId: memberstackPlanId, totalWeight, productWeight, packagingWeight } = session.metadata;
                     
                     if (!memberstackUserId || !memberstackPlanId) {
-                        throw new Error('Missing required metadata: memberstackUserId or memberstackPlanId');
+                        throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
 
                     // Log the weight information

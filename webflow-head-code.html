@@ -1,0 +1,90 @@
+
+
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MD9FWSRJ');</script>
+<!-- End Google Tag Manager -->
+
+<!-- MemberStack Initialization -->
+<script>
+window.memberstackOptions = {
+    debug: true,  // Enable debug logging
+    loadTimeout: 15000,  // 15 second timeout
+    customDomains: true,  // Enable custom domain support
+    onReady: function() {
+        console.log('Memberstack initialized successfully');
+        window.dispatchEvent(new Event('memberstack:initialized'));
+    },
+    onError: function(error) {
+        console.error('Memberstack initialization error:', error);
+        window.dispatchEvent(new CustomEvent('memberstack:error', { detail: error }));
+    }
+};
+</script>
+<script 
+    data-memberstack-app="app_cm24j3get009s0spw6wz49psh" 
+    src="https://static.memberstack.com/scripts/v1/memberstack.js" 
+    type="text/javascript"
+    async
+    defer
+    onerror="console.error('Failed to load Memberstack script'); window.dispatchEvent(new Event('memberstack:load-error'));"
+></script>
+<script>
+(async function init() {
+    console.log("Initializing Memberstack verification system...");
+    try {
+        // Wait for Memberstack to be ready
+        await new Promise((resolve, reject) => {
+            if (window.memberstack) {
+                resolve();
+                return;
+            }
+            
+            window.addEventListener("memberstack:initialized", resolve);
+            setTimeout(() => reject(new Error("Memberstack timeout")), 15000);
+        });
+
+        // Set a flag indicating Memberstack is available
+        window.$lbh = window.$lbh || {};
+        window.$lbh.memberStackAvailable = true;
+        console.log("Memberstack initialized successfully");
+
+        // Handle verification if on verify page
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token");
+        
+        if (token && location.pathname.includes("verify")) {
+            console.log("Starting verification process...");
+            try {
+                await window.memberstack.verifyEmail(token);
+                console.log("Verification successful");
+                
+                const lang = window.$lbh.language();
+                window.location.href = lang === "de" ? "/verification-success" : `/${lang}/verification-success`;
+            } catch (error) {
+                console.error("Verification error:", error);
+                const lang = window.$lbh.language();
+                const errorPath = lang === "de" ? "/verification-error" : `/${lang}/verification-error`;
+                window.location.href = `${errorPath}?message=${encodeURIComponent(error?.message || "Verification failed")}`;
+            }
+        }
+
+        // Handle language redirect for root path
+        if (location.pathname === "/") {
+            const lang = window.$lbh.language();
+            if (lang !== "de") {
+                const target = `${location.origin}/${lang}/`;
+                console.log("Language redirect to:", target);
+                window.location.href = target;
+            }
+        }
+    } catch (error) {
+        console.error("Failed to initialize Memberstack:", error);
+        window.$lbh.memberStackAvailable = false;
+        console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
+    }
+})();
+</script>

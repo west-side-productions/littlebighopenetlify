@@ -191,7 +191,9 @@ async function handleCheckout(event) {
             customerEmail: customerEmail,
             metadata: {
                 memberstackUserId: member.data.id || '',
-                source: 'webflow_checkout'
+                source: 'webflow_checkout',
+                planId: 'prc_online-kochkurs-8b540kc2',
+                planName: 'Online Kochkurs'
             },
             shipping: {
                 name: customerName,
@@ -310,7 +312,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     customerEmail: member.data.auth.email,
                     metadata: {
                         memberstackUserId: member.data.id || '',
-                        source: 'webflow_checkout'
+                        source: 'webflow_checkout',
+                        planId: 'prc_online-kochkurs-8b540kc2',
+                        planName: 'Online Kochkurs'
                     },
                     shipping: {
                         name: `${member.data.customFields?.['first-name'] || ''} ${member.data.customFields?.['last-name'] || ''}`.trim(),
