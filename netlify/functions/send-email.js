@@ -87,9 +87,26 @@ exports.handler = async (event, context) => {
     // Prepare the email
     const msg = {
       to,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: {
+        email: process.env.SENDGRID_FROM_EMAIL || 'lbh@littlebighope.com',
+        name: 'Little Big Hope'
+      },
+      replyTo: 'lbh@littlebighope.com',
       subject: template.subject,
-      html
+      html,
+      mailSettings: {
+        sandboxMode: {
+          enable: false
+        }
+      },
+      trackingSettings: {
+        clickTracking: {
+          enable: true
+        },
+        openTracking: {
+          enable: true
+        }
+      }
     };
 
     console.log('Sending email...');

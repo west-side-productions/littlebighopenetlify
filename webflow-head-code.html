@@ -23,7 +23,13 @@
         
         if (matchingOption) {
             langSelect.value = browserLang;
+            currentUserLanguage = browserLang;
         }
+
+        // Add change listener to update currentUserLanguage
+        langSelect.addEventListener('change', (event) => {
+            currentUserLanguage = event.target.value;
+        });
     }
 
     // Send custom email using our multi-language system
@@ -124,9 +130,12 @@
                 try {
                     const email = form.querySelector('input[type="email"]').value;
                     const password = form.querySelector('input[type="password"]').value;
-                    const language = form.querySelector('select[data-ms-field="language"]').value;
+                    const language = form.querySelector('select[data-ms-field="language"]').value || DEFAULT_LANGUAGE;
                     const firstName = form.querySelector('input[data-ms-field="first-name"]')?.value || '';
                     const lastName = form.querySelector('input[data-ms-field="last-name"]')?.value || '';
+
+                    // Update currentUserLanguage to match form selection
+                    currentUserLanguage = language;
 
                     // Use Memberstack 2.0 signup with proper configuration
                     const signupResult = await window.memberstack.signup({
@@ -137,8 +146,8 @@
                             'first-name': firstName,
                             'last-name': lastName
                         },
-                        redirectTo: '/membershome',  
-                        verifyEmail: false  
+                        redirectTo: '/membershome',
+                        verifyEmail: false
                     });
 
                     // Get verification URL from Memberstack
@@ -151,7 +160,7 @@
                         body: JSON.stringify({
                             to: email,
                             templateName: 'verification',
-                            language: language || DEFAULT_LANGUAGE,  
+                            language: language,  
                             variables: {
                                 firstName: firstName || 'User',
                                 verificationUrl: verificationUrl
