@@ -1,5 +1,6 @@
 const { Webhook } = require('svix');
 const fetch = require('node-fetch');
+const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
 exports.handler = async (event, context) => {
   console.log('Raw webhook payload:', event.body);

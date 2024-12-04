@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
 exports.handler = async (event, context) => {
   if (event.httpMethod !== 'GET') {
@@ -27,11 +28,11 @@ exports.handler = async (event, context) => {
     }
 
     // Update member verification status in Memberstack
-    const updateResponse = await fetch(`https://api.memberstack.io/v1/members/${memberId}`, {
+    const updateResponse = await fetch(`${MEMBERSTACK_API_URL}/members/${memberId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MEMBERSTACK_API_KEY}`
+        'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
       },
       body: JSON.stringify({
         verified: true
@@ -43,9 +44,9 @@ exports.handler = async (event, context) => {
     }
 
     // Get member details to send confirmation email
-    const memberResponse = await fetch(`https://api.memberstack.io/v1/members/${memberId}`, {
+    const memberResponse = await fetch(`${MEMBERSTACK_API_URL}/members/${memberId}`, {
       headers: {
-        'Authorization': `Bearer ${process.env.MEMBERSTACK_API_KEY}`
+        'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
       }
     });
 
