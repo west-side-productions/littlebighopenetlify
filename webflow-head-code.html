@@ -1,289 +1,117 @@
 <script>
-// Immediate startup check
-console.log('%c[Debug Check] Script loaded and running', 'background: #ff5722; color: white; padding: 2px 5px; border-radius: 3px;');
+    // Configuration
+    const SUPPORTED_LANGUAGES = ['de', 'en', 'fr', 'it'];
+    const DEFAULT_LANGUAGE = 'de';
+    let currentUserLanguage = 'en'; // Default language
 
-// Debug configuration - MUST be at top level
-window.LBH_DEBUG = {
-    enabled: true,
-    log: function(...args) {
-        if (this.enabled) {
-            console.log('%c[LBH Debug]', 'background: #ffeb3b; color: black; padding: 2px 5px; border-radius: 3px;', ...args);
+    // Get user's browser language
+    function detectLanguage() {
+        const browserLang = (navigator.language || navigator.userLanguage).split('-')[0].toLowerCase();
+        return SUPPORTED_LANGUAGES.includes(browserLang) ? browserLang : DEFAULT_LANGUAGE;
+    }
+
+    // Store detected language in select field
+    function setupLanguageField() {
+        const langSelect = document.querySelector('select[data-ms-field="language"]');
+        if (!langSelect) return;
+
+        const browserLang = detectLanguage();
+        
+        // Check if the detected language is available in the select options
+        const options = Array.from(langSelect.options);
+        const matchingOption = options.find(option => option.value === browserLang);
+        
+        if (matchingOption) {
+            langSelect.value = browserLang;
         }
-    },
-    error: function(...args) {
-        if (this.enabled) {
-            console.error('%c[LBH Error]', 'background: #f44336; color: white; padding: 2px 5px; border-radius: 3px;', ...args);
-        }
     }
-};
 
-// Configuration
-const SUPPORTED_LANGUAGES = ['de', 'en', 'fr', 'it'];
-const DEFAULT_LANGUAGE = 'de';
-
-// Get user's browser language
-function detectLanguage() {
-    // Get browser language (returns e.g. 'en-US', 'de-DE', 'it', 'fr')
-    const browserLang = (navigator.language || navigator.userLanguage).split('-')[0].toLowerCase();
-    
-    // If browser language is supported, use it
-    if (SUPPORTED_LANGUAGES.includes(browserLang)) {
-        return browserLang;
-    }
-    
-    // Default to German
-    return DEFAULT_LANGUAGE;
-}
-
-// Store detected language in hidden form field
-function setupLanguageField() {
-    const userLang = detectLanguage();
-    const langField = document.querySelector('input[data-ms-lang]');
-    if (langField) {
-        langField.value = userLang;
-    }
-}
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', setupLanguageField);
-
-// Wait for Memberstack to be available
-function waitForMemberstack(maxAttempts = 50) {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const check = () => {
-            attempts++;
-            console.log(`🔄 Checking for Memberstack (attempt ${attempts}/${maxAttempts})...`);
-            
-            // Log what we find to help debug
-            console.log('Available Memberstack objects:', {
-                MemberStack: !!window.MemberStack,
-                memberstack: !!window.memberstack,
-                $memberstackDom: !!window.$memberstackDom,
-                ms: !!window.ms
+    // Send custom email using our multi-language system
+    async function sendCustomEmail(to, templateName, variables) {
+        try {
+            console.log('Sending email:', { templateName, language: currentUserLanguage });
+            const response = await fetch('/.netlify/functions/send-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    to,
+                    templateName,
+                    language: currentUserLanguage,
+                    variables
+                })
             });
-            
-            // Check for any of the possible Memberstack objects
-            if (window.MemberStack || window.memberstack || window.$memberstackDom || window.ms) {
-                const found = window.MemberStack || window.memberstack || window.$memberstackDom || window.ms;
-                console.log('✅ Found Memberstack object:', found);
-                resolve(found);
-            } else if (attempts >= maxAttempts) {
-                reject(new Error('Memberstack not found after maximum attempts'));
-            } else {
-                setTimeout(check, 100);
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to send email');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error sending email:', error);
+            throw error;
+        }
+    }
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', setupLanguageField);
+
+    // Wait for Memberstack
+    function waitForMemberstack(maxAttempts = 50) {
+        if (maxAttempts <= 0) return;
+        
+        if (window.memberstack) {
+            setupMemberstack();
+        } else {
+            setTimeout(() => waitForMemberstack(maxAttempts - 1), 100);
+        }
+    }
+
+    // Setup Memberstack
+    function setupMemberstack() {
+        // Initialize Memberstack 2.0
+        window.memberstack.initialize({
+            publicKey: 'pk_sb_0062e297a05a98d62226'
+        });
+
+        // Update language when member signs in
+        document.addEventListener('memberstack:member:signedIn', async () => {
+            const member = await window.memberstack.getCurrentMember();
+            if (member) {
+                currentUserLanguage = member.customFields?.language || 'en';
+            }
+        });
+
+        // Handle abandoned cart
+        let cartCheckInterval;
+        const checkForAbandonedCart = async () => {
+            const member = await window.memberstack.getCurrentMember();
+            if (member) {
+                const cart = localStorage.getItem('cart');
+                if (cart && JSON.parse(cart).length > 0) {
+                    try {
+                        await sendCustomEmail(member.email, 'abandonedCart', {
+                            firstName: member.firstName || 'User',
+                            cartLink: `${window.location.origin}/cart`,
+                            language: member.customFields?.language || currentUserLanguage
+                        });
+                    } catch (error) {
+                        console.error('Failed to send abandoned cart email:', error);
+                    }
+                }
             }
         };
-        check();
-    });
-}
 
-// Wait for DOM to be fully loaded
-function waitForDOM() {
-    return new Promise(resolve => {
-        if (document.readyState === 'complete') {
-            console.log('✅ DOM already loaded');
-            resolve();
-        } else {
-            console.log('⏳ Waiting for DOM to load...');
-            window.addEventListener('load', () => {
-                console.log('✅ DOM now loaded');
-                resolve();
-            });
-        }
-    });
-}
+        // Check for abandoned cart after 24 hours
+        document.addEventListener('memberstack:member:signedIn', () => {
+            if (cartCheckInterval) clearInterval(cartCheckInterval);
+            cartCheckInterval = setInterval(checkForAbandonedCart, 24 * 60 * 60 * 1000);
+        });
 
-// Initialize Memberstack
-async function initializeMemberstack() {
-    try {
-        console.log('🔄 Starting Memberstack initialization...');
-        console.log('Current URL:', window.location.href);
-        
-        const language = detectLanguage();
-        console.log('🌍 Detected language for Memberstack:', language);
-        
-        // Wait for both Memberstack and DOM to be ready
-        const [memberstack] = await Promise.all([waitForMemberstack(), waitForDOM()]);
-        
-        console.log('🎉 Both Memberstack and DOM are ready!');
-        
-        // Initialize Memberstack with our configuration
-        if (typeof memberstack.initialize === 'function') {
-            window.$memberstackDom = memberstack.initialize({
-                publicKey: 'pk_sb_0062e297a05a98d62226'
-            });
-        } else {
-            // If initialize isn't available, the object might already be initialized
-            window.$memberstackDom = memberstack;
-        }
-        
-        if (!window.$memberstackDom) {
-            throw new Error('Memberstack initialization failed');
-        }
-
-        // Function to set up forms
-        const setupForms = async () => {
-            console.log('🔍 Starting form setup...');
-            
-            // Log window object keys to help debug
-            console.log('🔑 Available window objects:', 
-                Object.keys(window)
-                    .filter(key => key.toLowerCase().includes('form') || 
-                             key.toLowerCase().includes('memberstack'))
-            );
-            
-            // Try multiple selectors in order of preference
-            const selectors = [
-                '#wf-form-signup',
-                'form[data-ms-form="signup"]',
-                'form[data-name="Email Form"]',
-                'form[data-name="Signup Form"]',
-                'form.signup-form',
-                'form[data-name="wf-form-signup"]',
-                // Add more generic fallbacks
-                'form[data-form-type="signup"]',
-                'form.w-form'
-            ];
-            
-            // Log all forms on the page first
-            const allForms = document.querySelectorAll('form');
-            console.log(`📝 Found ${allForms.length} total forms on page`);
-            
-            allForms.forEach((form, index) => {
-                // Log basic form info
-                console.log(`\n📋 Form #${index + 1} Details:`, JSON.stringify({
-                    id: form.id,
-                    name: form.getAttribute('data-name'),
-                    class: form.className,
-                    msForm: form.getAttribute('data-ms-form'),
-                    action: form.action,
-                    method: form.method
-                }, null, 2));
-                
-                // Log all attributes
-                const formAttrs = Array.from(form.attributes)
-                    .map(attr => `${attr.name}="${attr.value}"`)
-                    .join('\n');
-                console.log(`Form #${index + 1} Attributes:\n${formAttrs}`);
-                
-                // Log all input fields with detailed info
-                const inputs = form.querySelectorAll('input, select, textarea, button');
-                console.log(`\n🔍 Form #${index + 1} Fields:`);
-                inputs.forEach((input, fieldIndex) => {
-                    const fieldInfo = {
-                        tagName: input.tagName.toLowerCase(),
-                        type: input.type,
-                        name: input.name,
-                        id: input.id,
-                        class: input.className,
-                        placeholder: input.placeholder,
-                        required: input.required,
-                        value: input.type === 'password' ? '[REDACTED]' : input.value,
-                        defaultValue: input.type === 'password' ? '[REDACTED]' : input.defaultValue,
-                        attributes: Array.from(input.attributes)
-                            .filter(attr => !['type', 'name', 'id', 'class', 'placeholder', 'required', 'value'].includes(attr.name))
-                            .map(attr => `${attr.name}="${attr.value}"`)
-                            .join(', ')
-                    };
-                    console.log(`Field #${fieldIndex + 1}:`, JSON.stringify(fieldInfo, null, 2));
-                });
-                
-                // Log form structure with more details
-                console.log(`\n🌳 Form #${index + 1} Structure:`);
-                const logElement = (element, depth = 0) => {
-                    const indent = '  '.repeat(depth);
-                    const elementInfo = {
-                        tag: element.tagName.toLowerCase(),
-                        id: element.id,
-                        class: element.className,
-                        type: element.type,
-                        name: element.name,
-                        attributes: Array.from(element.attributes)
-                            .filter(attr => !['id', 'class', 'type', 'name'].includes(attr.name))
-                            .map(attr => `${attr.name}="${attr.value}"`)
-                            .join(', ')
-                    };
-                    console.log(indent + '└─', JSON.stringify(elementInfo));
-                    Array.from(element.children).forEach(child => logElement(child, depth + 1));
-                };
-                logElement(form);
-            });
-            
-            // Try each selector
-            let signupForm = null;
-            let usedSelector = null;
-            
-            for (const selector of selectors) {
-                console.log(`🔍 Trying selector: "${selector}"`);
-                const form = document.querySelector(selector);
-                if (form) {
-                    console.log(`✅ Found form with selector: "${selector}"`, JSON.stringify({
-                        id: form.id,
-                        name: form.getAttribute('data-name'),
-                        class: form.className,
-                        msForm: form.getAttribute('data-ms-form'),
-                        action: form.action,
-                        method: form.method
-                    }, null, 2));
-                    signupForm = form;
-                    usedSelector = selector;
-                    break;
-                } else {
-                    console.log(`❌ No form found with selector: "${selector}"`);
-                }
-            }
-            
-            if (!signupForm) {
-                console.error('❌ No signup form found with any of these selectors:', selectors);
-                return;
-            }
-            
-            console.log('🔧 Setting up form found with selector:', usedSelector);
-            
-            // Clone and set up the form
-            const newForm = signupForm.cloneNode(true);
-            signupForm.parentNode.replaceChild(newForm, signupForm);
-            signupForm = newForm;
-
-            // Fix form attributes
-            signupForm.setAttribute('method', 'post');
-            signupForm.setAttribute('data-ms-form', 'true');
-            signupForm.removeAttribute('action'); // Let Memberstack handle the action
-
-            // Get the language selector and update it
-            const languageSelect = signupForm.querySelector('#field');
-            if (languageSelect) {
-                // Fix the name and data attributes
-                languageSelect.setAttribute('name', 'language');
-                languageSelect.setAttribute('data-ms-member', 'language');
-                languageSelect.removeAttribute('data-ms-field'); // Remove duplicate attribute
-                
-                // Clear existing options
-                while (languageSelect.firstChild) {
-                    languageSelect.removeChild(languageSelect.firstChild);
-                }
-                
-                // Add normalized options
-                const languages = [
-                    { value: 'de', text: 'Deutsch' },
-                    { value: 'en', text: 'English' },
-                    { value: 'fr', text: 'Français' },
-                    { value: 'es', text: 'Español' }
-                ];
-                
-                languages.forEach(lang => {
-                    const option = document.createElement('option');
-                    option.value = lang.value;
-                    option.textContent = lang.text;
-                    if (lang.value === (detectLanguage() || 'de')) {
-                        option.selected = true;
-                    }
-                    languageSelect.appendChild(option);
-                });
-            }
-
-            // Add form submit handler
+        const signupForm = document.querySelector('form[data-ms-form]');
+        if (signupForm) {
             signupForm.addEventListener('submit', async function(event) {
                 event.preventDefault();
                 const form = event.target;
@@ -291,21 +119,26 @@ async function initializeMemberstack() {
                 submitButton.disabled = true;
 
                 try {
-                    // Get form data including language
                     const email = form.querySelector('input[type="email"]').value;
                     const password = form.querySelector('input[type="password"]').value;
-                    const language = form.querySelector('input[data-ms-lang]').value || detectLanguage();
+                    const language = form.querySelector('select[data-ms-field="language"]').value;
+                    const firstName = form.querySelector('input[data-ms-field="first-name"]')?.value || '';
+                    const lastName = form.querySelector('input[data-ms-field="last-name"]')?.value || '';
 
-                    // Sign up with Memberstack
-                    const signupResult = await window.$memberstackDom.signupWithEmail({
+                    // Use Memberstack 2.0 signup
+                    const signupResult = await window.memberstack.signup({
                         email,
                         password,
                         customFields: {
-                            language: language
-                        }
+                            language: language,
+                            'first-name': firstName,
+                            'last-name': lastName
+                        },
+                        redirectTo: false,
+                        sendVerificationEmail: false  // Disable default verification email
                     });
 
-                    // Send verification email with correct language
+                    // Send our custom verification email
                     await fetch('/.netlify/functions/send-email', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -314,6 +147,7 @@ async function initializeMemberstack() {
                             templateName: 'verification',
                             language: language,
                             variables: {
+                                firstName: firstName || 'User',
                                 verificationCode: signupResult.verificationCode
                             }
                         })
@@ -326,46 +160,9 @@ async function initializeMemberstack() {
                     submitButton.disabled = false;
                 }
             });
-            
-            console.log('✅ Form setup complete');
-        };
-        
-        // Set up forms immediately if DOM is already loaded
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            console.log(' DOM already loaded, setting up forms immediately');
-            await setupForms();
-        } else {
-            // Otherwise wait for DOMContentLoaded
-            console.log(' Waiting for DOM to load...');
-            document.addEventListener('DOMContentLoaded', setupForms);
         }
-        
-        console.log(' Memberstack initialization complete');
-        return window.$memberstackDom;
-    } catch (error) {
-        console.error(' Error initializing Memberstack:', error);
-        throw error;
     }
-}
 
-// Main initialization function
-async function initialize() {
-    window.LBH_DEBUG.log('Starting initialization...');
-    
-    try {
-        // Initialize Memberstack first
-        await initializeMemberstack();
-        
-        // Log successful initialization
-        window.LBH_DEBUG.log('Initialization complete');
-    } catch (error) {
-        window.LBH_DEBUG.error('Initialization failed:', error);
-    }
-}
-
-// Start initialization when the page loads
-window.addEventListener('load', initialize);
-
-// Log that script has finished loading
-window.LBH_DEBUG.log('Script initialization complete');
+    // Start initialization
+    waitForMemberstack();
 </script>

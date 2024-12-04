@@ -3,6 +3,10 @@ const fetch = require('node-fetch');
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+// Configuration
+const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
+const DEFAULT_LANGUAGE = 'de';
+
 // CORS headers
 const headers = {
     'Access-Control-Allow-Origin': '*', 
@@ -67,8 +71,8 @@ exports.handler = async (event) => {
                 await handleMemberCreated(webhookPayload);
                 break;
             case 'member.updated':
-                if (webhookPayload.verified && !webhookPayload.reason?.includes('customFields.updated')) {
-                    // Wait a bit to allow for any immediate updates
+                if (webhookPayload.verified && webhookPayload.reason?.includes('verified')) {
+                    // Only handle verification when it's a verification event
                     await delay(2000);
                     await handleMemberVerified(webhookPayload);
                 }
@@ -125,37 +129,20 @@ async function handleMemberCreated(data) {
     let language = customFields.language || 
                   customFields['Language'] || 
                   customFields['preferred_language'] ||
-                  'de';  // Default to German
+                  DEFAULT_LANGUAGE;
 
     // Validate language is supported
-    const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
     if (!SUPPORTED_LANGUAGES.includes(language)) {
-        console.warn(`Unsupported language ${language}, falling back to de`);
-        language = 'de';
+        console.warn(`Unsupported language ${language}, falling back to ${DEFAULT_LANGUAGE}`);
+        language = DEFAULT_LANGUAGE;
     }
 
     console.log('Detected language:', language);
     console.log('Using firstName:', firstName);
     console.log('Using language:', language);
 
-    try {
-        // Send welcome email in the correct language
-        await sendEmail({
-            to: email,
-            templateName: 'welcome',
-            language,  // Use the validated language
-            variables: {
-                firstName,
-                language
-            }
-        });
-        
-        console.log('Welcome email sent successfully');
-        
-    } catch (error) {
-        console.error('Failed to send welcome email:', error);
-        throw error;
-    }
+    // We no longer send welcome email here - it will be sent after verification
+    console.log('Member created successfully - welcome email will be sent after verification');
 }
 
 async function handleMemberVerified(data) {
@@ -168,10 +155,16 @@ async function handleMemberVerified(data) {
                      customFields['First Name'] || 
                      'User';
     
-    const language = customFields.language || 
-                    customFields['Language'] || 
-                    customFields['preferred_language'] || 
-                    'en';
+    let language = customFields.language || 
+                  customFields['Language'] || 
+                  customFields['preferred_language'] || 
+                  DEFAULT_LANGUAGE;
+
+    // Validate language is supported
+    if (!SUPPORTED_LANGUAGES.includes(language)) {
+        console.warn(`Unsupported language ${language}, falling back to ${DEFAULT_LANGUAGE}`);
+        language = DEFAULT_LANGUAGE;
+    }
 
     console.log('Detected language:', language);
     console.log('Using firstName:', firstName);
@@ -181,7 +174,20 @@ async function handleMemberVerified(data) {
         // Wait a moment to ensure language setting is updated
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Get latest member data to ensure we have current language setting
+        // Send welcome email first
+        await sendEmail({
+            to: email,
+            templateName: 'welcome',
+            language,
+            variables: {
+                firstName,
+                language
+            }
+        });
+        
+        console.log('Welcome email sent');
+
+        // Then send verification success email
         await sendEmail({
             to: email,
             templateName: 'email_verified',
@@ -194,7 +200,7 @@ async function handleMemberVerified(data) {
         console.log('Verification success email sent');
         
     } catch (error) {
-        console.error('Failed to send verification success email:', error);
+        console.error('Failed to send verification emails:', error);
         throw error;
     }
 }

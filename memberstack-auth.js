@@ -63,6 +63,14 @@ const sendCustomEmail = async (to, templateName, variables) => {
 
 // Handle Memberstack events
 const setupMemberstackHandlers = (memberstack) => {
+    // Update language when member signs in
+    document.addEventListener('memberstack:member:signedIn', async () => {
+        const member = await memberstack.getCurrentMember();
+        if (member) {
+            currentUserLanguage = member.customFields?.language || 'en';
+        }
+    });
+
     // Member signup/creation
     document.addEventListener('memberstack:member:created', async (event) => {
         const { email, firstName } = event.detail.member;
@@ -114,7 +122,8 @@ const setupMemberstackHandlers = (memberstack) => {
                 try {
                     await sendCustomEmail(member.email, 'abandonedCart', {
                         firstName: member.firstName || 'User',
-                        cartLink: `${window.location.origin}/cart`
+                        cartLink: `${window.location.origin}/cart`,
+                        language: member.customFields?.language || currentUserLanguage
                     });
                 } catch (error) {
                     console.error('Failed to send abandoned cart email:', error);
