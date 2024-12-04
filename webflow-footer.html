@@ -1,0 +1,149 @@
+<!-- LBH Core Functionality -->
+<script>
+"use strict";
+
+const $lbh = {
+    memberStackAvailable: !(typeof $memberstackDom === "undefined"),
+    language: () => {
+        const defaultLang = "de";
+        const langs = ["de", "en", "fr", "it"];
+        const lange = /^(\w+)/.exec(navigator.language);
+        if (!lange) return defaultLang;
+        const i = langs.indexOf(lange[1].toLowerCase());
+        return i >= 0 ? langs[i] : defaultLang;
+    },
+    loadJson: async function loadJson() {
+        if (!$lbh.memberStackAvailable) {
+            return JSON.parse(localStorage.getItem("json") ?? "{}");
+        }
+        let json = await $memberstackDom.getMemberJSON();
+        console.log("json", json);
+        return json?.data ?? {};
+    },
+    updateJson: async function updateJson(json) {
+        if (!$lbh.memberStackAvailable) {
+            localStorage.setItem("json", JSON.stringify(json));
+            return;
+        }
+        const up = { json: json };
+        console.log("json", up);
+        await $memberstackDom.updateMemberJSON(up);
+    },
+    tryfind: function tryfind(selector, parent) {
+        return (parent ?? document).querySelector(selector);
+    },
+    find: function find(selector, parent) {
+        const res = $lbh.tryfind(selector, parent);
+        if (!res) {
+            throw new Error(`Can't find element by selector '${selector}' in ${parent ?? document}`);
+        }
+        return res;
+    },
+    formatQuantity: function formatQuantity(q) {
+        if (!q) return "";
+        let nr = Math.floor(q);
+        let fract = q - nr;
+        switch (fract) {
+            case 0: fract = ""; break;
+            case 0.25: fract = "¼"; break;
+            case 0.5: fract = "½"; break;
+        }
+        return nr > 0 ? `${nr}${fract}` : fract;
+    }
+};
+
+if (!$lbh.memberStackAvailable) {
+    console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
+}
+
+// Language redirect
+if (location.pathname == "/") {
+    const lang = $lbh.language();
+    if (lang != "de") {
+        const target = `${location.origin}/${lang}/`;
+        console.log("lang-switch", target);
+        location.href = target;
+    }
+}
+</script>
+
+<!-- Email Verification Handler -->
+<script>
+console.log('Initializing LBH verification system...');
+
+async function handleVerification() {
+    if (window.location.pathname !== '/verify') return;
+    
+    console.log('Starting verification process');
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    
+    if (!token) {
+        console.error('No verification token found');
+        window.location.href = '/verification-error?message=Missing token';
+        return;
+    }
+
+    // Wait for Memberstack to be available
+    let retries = 0;
+    const maxRetries = 20;
+    
+    while (retries < maxRetries) {
+        if (typeof $memberstackDom !== "undefined") {
+            try {
+                console.log('Memberstack found, verifying email...');
+                
+                // Use the correct Memberstack 2.0 method
+                await $memberstackDom.validateVerificationToken({ token });
+                
+                // Get member data for the success email
+                const memberData = await $memberstackDom.getMemberJSON();
+                console.log('Member data:', memberData);
+                
+                // Send success email
+                try {
+                    await fetch('/.netlify/functions/send-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            to: memberData.email,
+                            templateName: 'email_verified',
+                            language: memberData?.data?.language || $lbh.language(),
+                            variables: {
+                                firstName: memberData?.data?.['first-name'] || 'User'
+                            }
+                        })
+                    });
+                } catch (emailError) {
+                    console.error('Error sending success email:', emailError);
+                }
+
+                // Redirect to success page with language
+                const lang = memberData?.data?.language || $lbh.language();
+                window.location.href = lang === 'de' ? '/verification-success' : `/${lang}/verification-success`;
+                return;
+                
+            } catch (error) {
+                console.error('Verification error:', error);
+                const lang = $lbh.language();
+                const errorPath = lang === 'de' ? '/verification-error' : `/${lang}/verification-error`;
+                window.location.href = `${errorPath}?message=${encodeURIComponent(error.message)}`;
+                return;
+            }
+        }
+        
+        console.log(`Waiting for Memberstack (attempt ${retries + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        retries++;
+    }
+    
+    console.error('Memberstack not available after maximum retries');
+    window.location.href = '/verification-error?message=System not available';
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, checking for verification...');
+    handleVerification();
+});
+</script>
