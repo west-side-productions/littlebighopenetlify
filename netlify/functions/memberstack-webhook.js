@@ -127,13 +127,11 @@ async function handleMemberCreated(data) {
                      customFields['First Name'] || 
                      'User';
     
-    // Check all possible language field names and validate the language
     let language = customFields.language || 
                   customFields['Language'] || 
                   customFields['preferred_language'] ||
                   DEFAULT_LANGUAGE;
 
-    // Validate language is supported
     if (!SUPPORTED_LANGUAGES.includes(language)) {
         console.warn(`Unsupported language ${language}, falling back to ${DEFAULT_LANGUAGE}`);
         language = DEFAULT_LANGUAGE;
@@ -142,9 +140,7 @@ async function handleMemberCreated(data) {
     console.log('Detected language:', language);
     console.log('Using firstName:', firstName);
     console.log('Using language:', language);
-
-    // We no longer send welcome email here - it will be sent after verification
-    console.log('Member created successfully - welcome email will be sent after verification');
+    console.log('Member created successfully - verification email will be sent through frontend');
 }
 
 async function handleMemberVerified(data) {

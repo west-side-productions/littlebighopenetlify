@@ -76,105 +76,114 @@
     }
 
     // Setup Memberstack
-    function setupMemberstack() {
-        // Initialize Memberstack 2.0 with configuration
-        window.memberstack.initialize({ 
-            publicKey: 'pk_sb_0062e297a05a98d62226',
-            appPlatformDomain: window.location.origin,
-            verificationRedirect: '/membershome',  
-            emailVerification: false  
-        });
-
-        // Update language when member signs in
-        document.addEventListener('memberstack:member:signedIn', async () => {
-            const member = await window.memberstack.getCurrentMember();
-            if (member) {
-                currentUserLanguage = member.customFields?.language || 'en';
-            }
-        });
-
-        // Handle abandoned cart
-        let cartCheckInterval;
-        const checkForAbandonedCart = async () => {
-            const member = await window.memberstack.getCurrentMember();
-            if (member) {
-                const cart = localStorage.getItem('cart');
-                if (cart && JSON.parse(cart).length > 0) {
-                    try {
-                        await sendCustomEmail(member.email, 'abandonedCart', {
-                            firstName: member.firstName || 'User',
-                            cartLink: `${window.location.origin}/cart`,
-                            language: member.customFields?.language || currentUserLanguage
-                        });
-                    } catch (error) {
-                        console.error('Failed to send abandoned cart email:', error);
-                    }
-                }
-            }
-        };
-
-        // Check for abandoned cart after 24 hours
-        document.addEventListener('memberstack:member:signedIn', () => {
-            if (cartCheckInterval) clearInterval(cartCheckInterval);
-            cartCheckInterval = setInterval(checkForAbandonedCart, 24 * 60 * 60 * 1000);
-        });
-
-        const signupForm = document.querySelector('form[data-ms-form]');
-        if (signupForm) {
-            signupForm.addEventListener('submit', async function(event) {
-                event.preventDefault();
-                const form = event.target;
-                const submitButton = form.querySelector('button[type="submit"]');
-                submitButton.disabled = true;
-
-                try {
-                    const email = form.querySelector('input[type="email"]').value;
-                    const password = form.querySelector('input[type="password"]').value;
-                    const language = form.querySelector('select[data-ms-field="language"]').value || DEFAULT_LANGUAGE;
-                    const firstName = form.querySelector('input[data-ms-field="first-name"]')?.value || '';
-                    const lastName = form.querySelector('input[data-ms-field="last-name"]')?.value || '';
-
-                    // Update currentUserLanguage to match form selection
-                    currentUserLanguage = language;
-
-                    // Use Memberstack 2.0 signup with proper configuration
-                    const signupResult = await window.memberstack.signup({
-                        email,
-                        password,
-                        customFields: {
-                            language: language,
-                            'first-name': firstName,
-                            'last-name': lastName
-                        },
-                        redirectTo: '/membershome',
-                        verifyEmail: false
-                    });
-
-                    // Get verification URL from Memberstack
-                    const verificationUrl = `${window.location.origin}/verify?token=${signupResult.verificationToken}`;
-
-                    // Send our custom verification email
-                    await fetch('/.netlify/functions/send-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            to: email,
-                            templateName: 'verification',
-                            language: language,  
-                            variables: {
-                                firstName: firstName || 'User',
-                                verificationUrl: verificationUrl
-                            }
-                        })
-                    });
-
-                    // Redirect to verification page
-                    window.location.href = '/email-verification';
-                } catch (error) {
-                    console.error('Signup error:', error);
-                    submitButton.disabled = false;
+    async function setupMemberstack() {
+        try {
+            console.log('Setting up Memberstack...');
+            
+            // Initialize Memberstack with configuration
+            window.memberstack = await MemberstackWebJs.init({
+                config: {
+                    publicKey: 'pk_sb_0062e297a05a98d62226',
+                    useCustomEmailVerification: true,
+                    emailVerification: true,
+                    verificationRedirect: '/membershome'
                 }
             });
+
+            // Update language when member signs in
+            document.addEventListener('memberstack:member:signedIn', async () => {
+                const member = await window.memberstack.getCurrentMember();
+                if (member) {
+                    currentUserLanguage = member.customFields?.language || 'en';
+                }
+            });
+
+            // Handle abandoned cart
+            let cartCheckInterval;
+            const checkForAbandonedCart = async () => {
+                const member = await window.memberstack.getCurrentMember();
+                if (member) {
+                    const cart = localStorage.getItem('cart');
+                    if (cart && JSON.parse(cart).length > 0) {
+                        try {
+                            await sendCustomEmail(member.email, 'abandonedCart', {
+                                firstName: member.firstName || 'User',
+                                cartLink: `${window.location.origin}/cart`,
+                                language: member.customFields?.language || currentUserLanguage
+                            });
+                        } catch (error) {
+                            console.error('Failed to send abandoned cart email:', error);
+                        }
+                    }
+                }
+            };
+
+            // Check for abandoned cart after 24 hours
+            document.addEventListener('memberstack:member:signedIn', () => {
+                if (cartCheckInterval) clearInterval(cartCheckInterval);
+                cartCheckInterval = setInterval(checkForAbandonedCart, 24 * 60 * 60 * 1000);
+            });
+
+            const signupForm = document.querySelector('form[data-ms-form]');
+            if (signupForm) {
+                signupForm.addEventListener('submit', async function(event) {
+                    event.preventDefault();
+                    const form = event.target;
+                    const submitButton = form.querySelector('button[type="submit"]');
+                    submitButton.disabled = true;
+
+                    try {
+                        const email = form.querySelector('input[type="email"]').value;
+                        const password = form.querySelector('input[type="password"]').value;
+                        const language = form.querySelector('select[data-ms-field="language"]').value || DEFAULT_LANGUAGE;
+                        const firstName = form.querySelector('input[data-ms-field="first-name"]')?.value || '';
+                        const lastName = form.querySelector('input[data-ms-field="last-name"]')?.value || '';
+
+                        // Update currentUserLanguage to match form selection
+                        currentUserLanguage = language;
+
+                        // Use Memberstack 2.0 signup with proper configuration
+                        const signupResult = await window.memberstack.signup({
+                            email,
+                            password,
+                            customFields: {
+                                language: language,
+                                'first-name': firstName,
+                                'last-name': lastName
+                            },
+                            redirectTo: '/membershome',
+                            verifyEmail: true
+                        });
+
+                        // Get verification URL from Memberstack
+                        const verificationUrl = `${window.location.origin}/verify?token=${signupResult.verificationToken}`;
+
+                        // Send our custom verification email
+                        await fetch('/.netlify/functions/send-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                to: email,
+                                templateName: 'verification',
+                                language: language,  
+                                variables: {
+                                    firstName: firstName || 'User',
+                                    verificationUrl: verificationUrl
+                                }
+                            })
+                        });
+
+                        // Redirect to verification page
+                        window.location.href = '/email-verification';
+                    } catch (error) {
+                        console.error('Signup error:', error);
+                        submitButton.disabled = false;
+                    }
+                });
+            }
+            console.log('Memberstack setup complete');
+        } catch (error) {
+            console.error('Error setting up Memberstack:', error);
         }
     }
 
