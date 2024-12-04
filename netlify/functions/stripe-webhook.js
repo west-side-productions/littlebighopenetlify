@@ -63,6 +63,31 @@ async function retryWithBackoff(operation, maxRetries = 3, initialDelay = 1000) 
     throw lastError;
 }
 
+// Add helper function to store failed requests
+async function storeFailedRequest(data) {
+    try {
+        await axios({
+            method: 'POST',
+            url: 'https://api.netlify.com/build_hooks/YOUR_BUILD_HOOK_ID',
+            data: {
+                clear_cache: true
+            }
+        });
+        
+        console.log('Stored failed request for retry:', {
+            memberId: data.memberId,
+            planId: data.planId,
+            sessionId: data.sessionId,
+            timestamp: new Date().toISOString()
+        });
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to store request:', error);
+        return false;
+    }
+}
+
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
         method: event.httpMethod,
@@ -263,8 +288,12 @@ exports.handler = async (event) => {
                         console.log('Attempting MemberStack V2 API:', {
                             url: v2Url,
                             memberId: memberStackData.memberId,
-                            planId: memberStackData.planId
+                            planId: memberStackData.planId,
+                            retryCount: 0
                         });
+
+                        let success = false;
+                        let error = null;
 
                         try {
                             const v2Response = await retryWithBackoff(async () => {
@@ -280,53 +309,72 @@ exports.handler = async (event) => {
                                         customFields: memberStackData.customFields
                                     }
                                 });
-                            });
-
-                            console.log('MemberStack V2 API response:', {
-                                status: v2Response.status,
-                                data: v2Response.data
-                            });
+                            }, 5, 2000); // Increase retries to 5 and initial delay to 2s
 
                             if (v2Response.status === 200 || v2Response.status === 201) {
                                 console.log('Successfully added plan using V2 API');
-                            } else {
-                                throw new Error('Unexpected response status');
+                                success = true;
                             }
                         } catch (v2Error) {
-                            console.log('V2 API failed, falling back to V1:', v2Error.message);
+                            error = v2Error;
+                            console.log('V2 API failed, trying V1:', v2Error.message);
                             
-                            // Fallback to V1 API with retry logic
-                            const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
-                            console.log('Attempting MemberStack V1 API:', {
-                                url: v1Url,
-                                memberId: memberStackData.memberId,
-                                planId: memberStackData.planId
-                            });
+                            try {
+                                const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
+                                const v1Response = await retryWithBackoff(async () => {
+                                    return await axios({
+                                        method: 'POST',
+                                        url: v1Url,
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                        },
+                                        data: {
+                                            planId: memberStackData.planId,
+                                            memberId: memberStackData.memberId,
+                                            status: 'ACTIVE'
+                                        }
+                                    });
+                                }, 5, 2000);
 
-                            const v1Response = await retryWithBackoff(async () => {
-                                return await axios({
-                                    method: 'POST',
-                                    url: v1Url,
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                    },
-                                    data: {
-                                        planId: memberStackData.planId,
-                                        memberId: memberStackData.memberId,
-                                        status: 'ACTIVE'
-                                    }
-                                });
-                            });
-
-                            console.log('MemberStack V1 API response:', {
-                                status: v1Response.status,
-                                data: v1Response.data
-                            });
-
-                            if (v1Response.status !== 200) {
-                                throw new Error(`V1 API failed: ${v1Response.status}`);
+                                if (v1Response.status === 200) {
+                                    console.log('Successfully added plan using V1 API');
+                                    success = true;
+                                }
+                            } catch (v1Error) {
+                                error = v1Error;
+                                console.error('Both V2 and V1 APIs failed');
                             }
+                        }
+
+                        if (!success) {
+                            // Store the failed request for later processing
+                            const stored = await storeFailedRequest({
+                                memberId: memberStackData.memberId,
+                                planId: memberStackData.planId,
+                                sessionId: session.id,
+                                customFields: memberStackData.customFields,
+                                timestamp: new Date().toISOString(),
+                                error: error?.message
+                            });
+
+                            console.log('MemberStack API failed but request stored for retry:', {
+                                stored,
+                                memberId: memberStackData.memberId,
+                                planId: memberStackData.planId,
+                                sessionId: session.id
+                            });
+
+                            // Return success to Stripe to prevent webhook retries
+                            return {
+                                statusCode: 200,
+                                headers,
+                                body: JSON.stringify({
+                                    received: true,
+                                    status: 'queued_for_retry',
+                                    error: error?.message
+                                })
+                            };
                         }
 
                         // Update member custom fields separately with retry logic
