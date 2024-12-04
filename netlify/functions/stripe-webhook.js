@@ -72,15 +72,20 @@ exports.handler = async (event) => {
                     console.log('Successfully added plan to member:', response.data);
 
                     // Process shipping information
-                    await axios({
+                    const shippingResponse = await axios({
                         method: 'POST',
                         url: '/.netlify/functions/process-shipping',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         data: {
-                            memberId: memberstackUserId,
                             countryCode: countryCode,
+                            memberId: memberstackUserId,
                             sessionId: session.id
                         }
                     });
+
+                    console.log('Shipping processed:', shippingResponse.data);
 
                     return {
                         statusCode: 200,
@@ -88,7 +93,8 @@ exports.handler = async (event) => {
                             received: true,
                             memberstackUserId,
                             memberstackPlanId,
-                            countryCode
+                            countryCode,
+                            shipping: shippingResponse.data
                         })
                     };
                 } catch (error) {
