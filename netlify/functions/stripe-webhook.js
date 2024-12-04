@@ -4,6 +4,14 @@ const axios = require('axios');
 // Memberstack API URL for Webflow integration
 const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
+// CORS headers
+const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, stripe-signature',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+};
+
 // Shipping rate calculation
 function calculateShippingRate(country) {
     if (!country?.trim()) {
@@ -38,24 +46,34 @@ exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
         method: event.httpMethod,
         path: event.path,
-        headers: Object.keys(event.headers) // Log header keys to verify stripe-signature
+        headers: Object.keys(event.headers)
     });
+
+    // Add comprehensive validation
+    if (!event.body) {
+        console.error('Missing request body');
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({
+                error: 'Invalid request',
+                details: 'Request body is required'
+            })
+        };
+    }
 
     // Handle preflight requests
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 204,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type, stripe-signature',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            }
+            headers
         };
     }
 
     if (event.httpMethod !== 'POST') {
         return { 
             statusCode: 405, 
+            headers,
             body: JSON.stringify({ error: 'Method Not Allowed' })
         };
     }
@@ -82,49 +100,38 @@ exports.handler = async (event) => {
                 id: stripeEvent.id
             });
         } catch (err) {
-            console.error('Webhook signature verification failed:', {
-                error: err.message,
-                sig: sig ? 'present' : 'missing',
-                secret: endpointSecret ? 'present' : 'missing'
-            });
+            console.error('Error constructing webhook event:', err);
             return {
                 statusCode: 400,
-                body: JSON.stringify({ 
-                    error: `Webhook Error: ${err.message}`,
-                    details: 'Signature verification failed'
-                })
+                headers,
+                body: JSON.stringify({ error: `Webhook Error: ${err.message}` })
             };
         }
 
         // Handle the event
         switch (stripeEvent.type) {
             case 'checkout.session.completed':
-                console.log('Processing checkout.session.completed event');// Add more detailed error handling
-                // Add more comprehensive validation
-                if (!event.body) {
-                    console.error('Missing request body');
+                console.log('Processing checkout.session.completed event');
+                const session = stripeEvent.data.object;
+                
+                // Validate shipping information
+                if (!session.shipping?.address?.country) {
+                    console.error('Missing shipping country');
                     return {
                         statusCode: 400,
                         headers,
                         body: JSON.stringify({
-                            error: 'Invalid request',
-                            details: 'Request body is required'
-                        })
-                    };
-                }// Add postal code validation before processing
-                if (!event.body.shipping?.postal_code?.trim()) {
-                    return {
-                        statusCode: 400,
-                        headers,
-                        body: JSON.stringify({
-                            error: 'Invalid postal code',
-                            details: 'Postal code is required'
+                            error: 'Invalid shipping',
+                            details: 'Shipping country is required'
                         })
                     };
                 }
-                const session = stripeEvent.data.object;
-                
+
                 try {
+                    // Calculate shipping rate for the country
+                    const shippingRate = calculateShippingRate(session.shipping.address.country);
+                    console.log('Calculated shipping rate:', shippingRate);
+
                     const { memberstackUserId, planId: memberstackPlanId, countryCode } = session.metadata;
                     
                     console.log('Extracted metadata:', {
@@ -206,6 +213,7 @@ exports.handler = async (event) => {
 
                     return {
                         statusCode: 200,
+                        headers,
                         body: JSON.stringify({ 
                             received: true,
                             memberstackUserId,
@@ -234,6 +242,7 @@ exports.handler = async (event) => {
                 console.log(`Unhandled event type: ${stripeEvent.type}`);
                 return {
                     statusCode: 200,
+                    headers,
                     body: JSON.stringify({ 
                         received: true, 
                         type: stripeEvent.type 
@@ -247,6 +256,7 @@ exports.handler = async (event) => {
         });
         return {
             statusCode: 500,
+            headers,
             body: JSON.stringify({ 
                 error: error.message,
                 details: error.stack
