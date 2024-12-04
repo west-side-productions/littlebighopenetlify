@@ -1,8 +1,9 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
-// Memberstack API URL for Webflow integration
-const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
+// Memberstack API URLs
+const MEMBERSTACK_API_V1 = 'https://api.memberstack.com/v1';
+const MEMBERSTACK_API_V2 = 'https://api.memberstack.com/v2';
 
 // CORS headers
 const headers = {
@@ -227,45 +228,78 @@ exports.handler = async (event) => {
                     console.log('Preparing MemberStack update:', memberStackData);
 
                     // Add plan to member using Memberstack API
-                    const memberstackUrl = `${MEMBERSTACK_API_URL}/members/add-plan`; 
-                    console.log('Calling Memberstack API:', {
-                        url: memberstackUrl,
-                        planId: memberStackData.planId,
-                        memberId: memberStackData.memberId,
-                        customFields: memberStackData.customFields
-                    });
-
                     try {
-                        // First, add the plan
-                        const planResponse = await axios({
-                            method: 'POST',
-                            url: memberstackUrl,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                            },
-                            data: {
-                                planId: memberStackData.planId,
-                                memberId: memberStackData.memberId,
-                                status: 'ACTIVE',
-                                customFields: memberStackData.customFields 
+                        // First try V2 API
+                        const v2Url = `${MEMBERSTACK_API_V2}/members/${memberStackData.memberId}/plans/${memberStackData.planId}`;
+                        console.log('Attempting MemberStack V2 API:', {
+                            url: v2Url,
+                            memberId: memberStackData.memberId,
+                            planId: memberStackData.planId
+                        });
+
+                        try {
+                            const v2Response = await axios({
+                                method: 'POST',
+                                url: v2Url,
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                },
+                                data: {
+                                    status: 'ACTIVE',
+                                    customFields: memberStackData.customFields
+                                }
+                            });
+
+                            console.log('MemberStack V2 API response:', {
+                                status: v2Response.status,
+                                data: v2Response.data
+                            });
+
+                            if (v2Response.status === 200 || v2Response.status === 201) {
+                                console.log('Successfully added plan using V2 API');
+                            } else {
+                                throw new Error('Unexpected response status');
                             }
-                        });
+                        } catch (v2Error) {
+                            console.log('V2 API failed, falling back to V1:', v2Error.message);
+                            
+                            // Fallback to V1 API
+                            const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
+                            console.log('Attempting MemberStack V1 API:', {
+                                url: v1Url,
+                                memberId: memberStackData.memberId,
+                                planId: memberStackData.planId
+                            });
 
-                        console.log('Memberstack plan addition response:', {
-                            status: planResponse.status,
-                            data: planResponse.data
-                        });
+                            const v1Response = await axios({
+                                method: 'POST',
+                                url: v1Url,
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                },
+                                data: {
+                                    planId: memberStackData.planId,
+                                    memberId: memberStackData.memberId,
+                                    status: 'ACTIVE'
+                                }
+                            });
 
-                        // Verify the plan was added
-                        if (planResponse.status !== 200) {
-                            throw new Error(`Failed to add plan: ${planResponse.status}`);
+                            console.log('MemberStack V1 API response:', {
+                                status: v1Response.status,
+                                data: v1Response.data
+                            });
+
+                            if (v1Response.status !== 200) {
+                                throw new Error(`V1 API failed: ${v1Response.status}`);
+                            }
                         }
 
-                        // Now update member's custom fields
-                        const updateUrl = `${MEMBERSTACK_API_URL}/members/${memberStackData.memberId}`;
+                        // Update member custom fields separately
+                        const updateUrl = `${MEMBERSTACK_API_V2}/members/${memberStackData.memberId}`;
                         const updateResponse = await axios({
-                            method: 'POST',
+                            method: 'PATCH',
                             url: updateUrl,
                             headers: {
                                 'Content-Type': 'application/json',
@@ -276,7 +310,7 @@ exports.handler = async (event) => {
                             }
                         });
 
-                        console.log('Memberstack custom fields update response:', {
+                        console.log('Member custom fields update response:', {
                             status: updateResponse.status,
                             data: updateResponse.data
                         });
