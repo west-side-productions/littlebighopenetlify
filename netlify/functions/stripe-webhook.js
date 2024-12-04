@@ -1,8 +1,8 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
-// Update Memberstack API URL to v2
-const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v2';
+// Use v1 API for Webflow integration
+const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
@@ -95,21 +95,37 @@ exports.handler = async (event) => {
                         memberId: memberstackUserId
                     });
 
-                    const response = await axios({
-                        method: 'POST',
-                        url: memberstackUrl,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                        },
-                        data: {
-                            planId: memberstackPlanId,
-                            status: 'ACTIVE',
-                            type: 'ONETIME'
-                        }
-                    });
+                    try {
+                        const response = await axios({
+                            method: 'POST',
+                            url: memberstackUrl,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                            },
+                            data: {
+                                planId: memberstackPlanId,
+                                status: 'ACTIVE',
+                                type: 'ONETIME'
+                            }
+                        });
 
-                    console.log('Memberstack API response:', response.data);
+                        console.log('Memberstack API response:', {
+                            status: response.status,
+                            data: response.data
+                        });
+
+                        if (!response.data || response.status !== 200) {
+                            throw new Error('Unexpected response from Memberstack API');
+                        }
+                    } catch (memberstackError) {
+                        console.error('Memberstack API error:', {
+                            message: memberstackError.message,
+                            response: memberstackError.response?.data,
+                            status: memberstackError.response?.status
+                        });
+                        throw memberstackError;
+                    }
 
                     // Process shipping information
                     console.log('Processing shipping...');
