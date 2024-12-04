@@ -155,6 +155,9 @@ async function handleCheckout(event) {
         // Get country code from shipping-country select or default to AT
         const countrySelect = document.querySelector('[name="shipping-country"]');
         const countryCode = countrySelect ? countrySelect.value : 'AT';
+        
+        console.log('Country code from select:', countryCode);
+        console.log('Country select element:', countrySelect);
 
         // Get metadata
         const metadata = {
@@ -166,7 +169,7 @@ async function handleCheckout(event) {
             packagingWeight: '100'
         };
 
-        console.log('Starting checkout with metadata:', metadata);
+        console.log('Checkout metadata:', metadata);
 
         // Create checkout session
         const response = await fetch(`${getBaseUrl()}${CONFIG.functionsUrl}/create-checkout-session`, {
@@ -179,7 +182,12 @@ async function handleCheckout(event) {
                 successUrl: `${window.location.origin}/vielen-dank-email`,
                 cancelUrl: `${window.location.origin}/produkte`,
                 metadata: metadata,
-                customerEmail: member.data.auth.email
+                customerEmail: member.data.auth.email,
+                shipping: {
+                    address: {
+                        country: countryCode
+                    }
+                }
             })
         });
 
@@ -190,6 +198,8 @@ async function handleCheckout(event) {
 
         const { sessionId } = await response.json();
         const stripe = window.Stripe(CONFIG.stripePublicKey);
+        
+        console.log('Redirecting to Stripe with sessionId:', sessionId);
         
         // Redirect to Stripe Checkout
         const { error } = await stripe.redirectToCheckout({ sessionId });

@@ -33,6 +33,9 @@ exports.handler = async (event) => {
                     // Get member ID and plan ID from metadata
                     const { memberstackUserId, planId: memberstackPlanId, countryCode } = session.metadata;
                     
+                    console.log('Session metadata:', session.metadata);
+                    console.log('Extracted data:', { memberstackUserId, memberstackPlanId, countryCode });
+                    
                     if (!memberstackUserId || !memberstackPlanId) {
                         throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
@@ -64,6 +67,8 @@ exports.handler = async (event) => {
                         }
                     });
 
+                    console.log('Memberstack plan addition response:', response.data);
+
                     // Verify the plan was added successfully
                     if (!response.data || response.status !== 200) {
                         throw new Error('Failed to add plan to member');
@@ -72,6 +77,12 @@ exports.handler = async (event) => {
                     console.log('Successfully added plan to member:', response.data);
 
                     // Process shipping information
+                    console.log('Calling process-shipping with:', {
+                        countryCode,
+                        memberId: memberstackUserId,
+                        sessionId: session.id
+                    });
+
                     const shippingResponse = await axios({
                         method: 'POST',
                         url: '/.netlify/functions/process-shipping',
