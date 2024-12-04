@@ -217,23 +217,27 @@ exports.handler = async (event) => {
                         customFields: {
                             shippingCountry: session.shipping.address.country,
                             shippingRate: shippingRate.price,
-                            totalWeight: session.metadata.totalWeight,
+                            totalWeight: Number(session.metadata.totalWeight),
+                            productWeight: Number(session.metadata.productWeight),
+                            packagingWeight: Number(session.metadata.packagingWeight),
                             checkoutSessionId: session.id
                         }
                     };
 
                     console.log('Preparing MemberStack update:', memberStackData);
 
-                    // Add plan to member using Memberstack API for Webflow
-                    const memberstackUrl = `${MEMBERSTACK_API_URL}/member/add-plan`;
+                    // Add plan to member using Memberstack API
+                    const memberstackUrl = `${MEMBERSTACK_API_URL}/members/add-plan`; 
                     console.log('Calling Memberstack API:', {
                         url: memberstackUrl,
                         planId: memberStackData.planId,
-                        memberId: memberStackData.memberId
+                        memberId: memberStackData.memberId,
+                        customFields: memberStackData.customFields
                     });
 
                     try {
-                        const response = await axios({
+                        // First, add the plan
+                        const planResponse = await axios({
                             method: 'POST',
                             url: memberstackUrl,
                             headers: {
@@ -243,18 +247,81 @@ exports.handler = async (event) => {
                             data: {
                                 planId: memberStackData.planId,
                                 memberId: memberStackData.memberId,
-                                status: 'ACTIVE'
+                                status: 'ACTIVE',
+                                customFields: memberStackData.customFields 
                             }
                         });
 
-                        console.log('Memberstack API response:', {
-                            status: response.status,
-                            data: response.data
+                        console.log('Memberstack plan addition response:', {
+                            status: planResponse.status,
+                            data: planResponse.data
                         });
 
-                        if (!response.data || response.status !== 200) {
-                            throw new Error('Unexpected response from Memberstack API');
+                        // Verify the plan was added
+                        if (planResponse.status !== 200) {
+                            throw new Error(`Failed to add plan: ${planResponse.status}`);
                         }
+
+                        // Now update member's custom fields
+                        const updateUrl = `${MEMBERSTACK_API_URL}/members/${memberStackData.memberId}`;
+                        const updateResponse = await axios({
+                            method: 'POST',
+                            url: updateUrl,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                            },
+                            data: {
+                                customFields: memberStackData.customFields
+                            }
+                        });
+
+                        console.log('Memberstack custom fields update response:', {
+                            status: updateResponse.status,
+                            data: updateResponse.data
+                        });
+
+                        // Process shipping information
+                        console.log('Processing shipping...');
+                        try {
+                            const shippingResponse = await axios({
+                                method: 'POST',
+                                url: '/.netlify/functions/process-shipping',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                data: JSON.stringify({
+                                    countryCode: session.shipping.address.country,
+                                    memberId: session.metadata.memberstackUserId,
+                                    sessionId: session.id,
+                                    totalWeight: session.metadata.totalWeight,
+                                    productWeight: session.metadata.productWeight,
+                                    packagingWeight: session.metadata.packagingWeight
+                                })
+                            });
+
+                            console.log('Shipping processed:', shippingResponse.data);
+                        } catch (shippingError) {
+                            console.error('Shipping process failed:', {
+                                error: shippingError.message,
+                                response: shippingError.response?.data
+                            });
+                            // Continue even if shipping fails
+                        }
+
+                        return {
+                            statusCode: 200,
+                            headers,
+                            body: JSON.stringify({ 
+                                received: true,
+                                memberstackUserId: session.metadata.memberstackUserId,
+                                memberstackPlanId: session.metadata.planId,
+                                countryCode: session.shipping.address.country,
+                                totalWeight: session.metadata.totalWeight,
+                                productWeight: session.metadata.productWeight,
+                                packagingWeight: session.metadata.packagingWeight
+                            })
+                        };
                     } catch (memberstackError) {
                         console.error('Memberstack API error:', {
                             message: memberstackError.message,
@@ -263,48 +330,6 @@ exports.handler = async (event) => {
                         });
                         throw memberstackError;
                     }
-
-                    // Process shipping information
-                    console.log('Processing shipping...');
-                    try {
-                        const shippingResponse = await axios({
-                            method: 'POST',
-                            url: '/.netlify/functions/process-shipping',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            data: JSON.stringify({
-                                countryCode: session.shipping.address.country,
-                                memberId: session.metadata.memberstackUserId,
-                                sessionId: session.id,
-                                totalWeight: session.metadata.totalWeight,
-                                productWeight: session.metadata.productWeight,
-                                packagingWeight: session.metadata.packagingWeight
-                            })
-                        });
-
-                        console.log('Shipping processed:', shippingResponse.data);
-                    } catch (shippingError) {
-                        console.error('Shipping process failed:', {
-                            error: shippingError.message,
-                            response: shippingError.response?.data
-                        });
-                        // Continue even if shipping fails
-                    }
-
-                    return {
-                        statusCode: 200,
-                        headers,
-                        body: JSON.stringify({ 
-                            received: true,
-                            memberstackUserId: session.metadata.memberstackUserId,
-                            memberstackPlanId: session.metadata.planId,
-                            countryCode: session.shipping.address.country,
-                            totalWeight: session.metadata.totalWeight,
-                            productWeight: session.metadata.productWeight,
-                            packagingWeight: session.metadata.packagingWeight
-                        })
-                    };
                 } catch (error) {
                     console.error('Error processing webhook:', {
                         message: error.message,
