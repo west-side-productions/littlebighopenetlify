@@ -1,7 +1,8 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
-const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
+// Update Memberstack API URL to v2
+const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v2';
 
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
@@ -37,6 +38,11 @@ exports.handler = async (event) => {
         
         const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
         console.log('Webhook secret present:', !!endpointSecret);
+        console.log('Environment variables present:', {
+            stripeKey: !!process.env.STRIPE_SECRET_KEY,
+            webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+            memberstackKey: !!process.env.MEMBERSTACK_SECRET_KEY
+        });
 
         let stripeEvent;
         try {
@@ -73,18 +79,25 @@ exports.handler = async (event) => {
                         memberstackUserId,
                         memberstackPlanId,
                         countryCode,
-                        sessionId: session.id
+                        sessionId: session.id,
+                        allMetadata: session.metadata
                     });
 
                     if (!memberstackUserId || !memberstackPlanId) {
                         throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
 
-                    // Add plan to member using Memberstack REST API
-                    console.log('Calling Memberstack API to add plan');
+                    // Add plan to member using Memberstack API
+                    const memberstackUrl = `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/add-plan`;
+                    console.log('Calling Memberstack API:', {
+                        url: memberstackUrl,
+                        planId: memberstackPlanId,
+                        memberId: memberstackUserId
+                    });
+
                     const response = await axios({
                         method: 'POST',
-                        url: `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/add-plan`,
+                        url: memberstackUrl,
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
