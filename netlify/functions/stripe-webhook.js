@@ -83,20 +83,25 @@ exports.handler = async (event) => {
                         sessionId: session.id
                     });
 
-                    const shippingResponse = await axios({
-                        method: 'POST',
-                        url: '/.netlify/functions/process-shipping',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        data: {
-                            countryCode: countryCode,
-                            memberId: memberstackUserId,
-                            sessionId: session.id
-                        }
-                    });
+                    try {
+                        const shippingResponse = await axios({
+                            method: 'POST',
+                            url: '/.netlify/functions/process-shipping',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            data: JSON.stringify({
+                                countryCode: countryCode,
+                                memberId: memberstackUserId,
+                                sessionId: session.id
+                            })
+                        });
 
-                    console.log('Shipping processed:', shippingResponse.data);
+                        console.log('Shipping processed successfully:', shippingResponse.data);
+                    } catch (shippingError) {
+                        console.error('Shipping process failed:', shippingError.response?.data || shippingError.message);
+                        // Continue execution even if shipping fails
+                    }
 
                     return {
                         statusCode: 200,
@@ -104,8 +109,7 @@ exports.handler = async (event) => {
                             received: true,
                             memberstackUserId,
                             memberstackPlanId,
-                            countryCode,
-                            shipping: shippingResponse.data
+                            countryCode
                         })
                     };
                 } catch (error) {

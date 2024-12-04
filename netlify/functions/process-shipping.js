@@ -70,10 +70,20 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { countryCode, memberId, sessionId } = JSON.parse(event.body);
-        console.log('Processing shipping for:', { countryCode, memberId, sessionId });
+        let requestData;
+        try {
+            console.log('Raw request body:', event.body);
+            requestData = JSON.parse(event.body);
+            console.log('Parsed request data:', requestData);
+        } catch (e) {
+            console.error('Failed to parse request body:', e);
+            throw new Error('Invalid request body');
+        }
 
+        const { countryCode, memberId, sessionId } = requestData;
+        
         if (!countryCode) {
+            console.error('Missing country code in request:', requestData);
             throw new Error('Country code is required');
         }
 
@@ -81,14 +91,17 @@ exports.handler = async (event, context) => {
         const shippingRate = calculateShippingRate(countryCode);
         console.log('Calculated shipping rate:', shippingRate);
 
+        const response = {
+            ...shippingRate,
+            memberId,
+            sessionId,
+            countryCode
+        };
+
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({
-                ...shippingRate,
-                memberId,
-                sessionId
-            })
+            body: JSON.stringify(response)
         };
 
     } catch (error) {
@@ -98,7 +111,8 @@ exports.handler = async (event, context) => {
             statusCode: 400,
             headers,
             body: JSON.stringify({
-                error: error.message
+                error: error.message,
+                stack: error.stack
             })
         };
     }
