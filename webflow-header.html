@@ -7,4 +7,15 @@
 <!-- End Google Tag Manager -->
 
 <!-- Memberstack -->
-<script data-memberstack-app="app_cm24j3get009s0spw6wz49psh" src="https://static.memberstack.com/scripts/v1/memberstack.js" type="text/javascript"></script>
+<script>
+window.memberstackOptions = {
+    debug: true,  // Enable debug logging
+    loadTimeout: 10000  // 10 second timeout
+};
+</script>
+<script 
+    data-memberstack-app="app_cm24j3get009s0spw6wz49psh" 
+    src="https://static.memberstack.com/scripts/v1/memberstack.js" 
+    type="text/javascript"
+    onerror="console.error('Failed to load Memberstack script')"
+></script>

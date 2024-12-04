@@ -3,7 +3,26 @@
 "use strict";
 
 const $lbh = {
-    memberStackAvailable: !(typeof $memberstackDom === "undefined"),
+    memberStackAvailable: false,
+    
+    waitForMemberstack: function(timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            if (window.memberstack) {
+                resolve(window.memberstack);
+                return;
+            }
+
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Memberstack initialization timeout'));
+            }, timeout);
+
+            document.addEventListener('memberstack:ready', () => {
+                clearTimeout(timeoutId);
+                resolve(window.memberstack);
+            });
+        });
+    },
+
     language: () => {
         const defaultLang = "de";
         const langs = ["de", "en", "fr", "it"];
@@ -20,20 +39,40 @@ const $lbh = {
     },
     loadJson: async function loadJson() {
         if (!$lbh.memberStackAvailable) {
+            console.warn("NO MEMBERSTACK AVAILABLE, using localStorage", {
+                memberstack: !!window.memberstack,
+                memberstackDom: !!window.$memberstackDom,
+                location: window.location.href
+            });
             return JSON.parse(localStorage.getItem("json") ?? "{}");
         }
-        let json = await $memberstackDom.getMemberJSON();
-        console.log("json", json);
-        return json?.data ?? {};
+        try {
+            const MS = await $lbh.waitForMemberstack();
+            const member = await MS.getMemberJSON();
+            console.log("Member data:", member);
+            return member?.data ?? {};
+        } catch (e) {
+            console.error('Error loading member data:', e);
+            return {};
+        }
     },
     updateJson: async function updateJson(json) {
         if (!$lbh.memberStackAvailable) {
+            console.warn("NO MEMBERSTACK AVAILABLE, using localStorage", {
+                memberstack: !!window.memberstack,
+                memberstackDom: !!window.$memberstackDom,
+                location: window.location.href
+            });
             localStorage.setItem("json", JSON.stringify(json));
             return;
         }
-        const up = { json: json };
-        console.log("json", up);
-        await $memberstackDom.updateMemberJSON(up);
+        try {
+            const MS = await $lbh.waitForMemberstack();
+            await MS.updateMemberJSON({ json: json });
+        } catch (e) {
+            console.error('Error updating member data:', e);
+            localStorage.setItem("json", JSON.stringify(json)); // Fallback to localStorage
+        }
     },
     tryfind: function tryfind(selector, parent) {
         return (parent ?? document).querySelector(selector);
@@ -58,9 +97,23 @@ const $lbh = {
     }
 };
 
-if (!$lbh.memberStackAvailable) {
-    console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
-}
+// Initialize Memberstack
+(async function initializeMemberstack() {
+    try {
+        console.log('Initializing Memberstack...');
+        await $lbh.waitForMemberstack();
+        $lbh.memberStackAvailable = true;
+        console.log('Memberstack initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize Memberstack:', error);
+        $lbh.memberStackAvailable = false;
+        console.warn("NO MEMBERSTACK AVAILABLE, using localStorage", {
+            memberstack: !!window.memberstack,
+            memberstackDom: !!window.$memberstackDom,
+            location: window.location.href
+        });
+    }
+})();
 
 // Language redirect
 if (location.pathname == "/") {
@@ -94,22 +147,21 @@ async function handleVerification() {
     try {
         console.log('Attempting verification with token');
         
-        // Wait for MemberStack to be available
-        let attempts = 0;
-        while (!window.MemberStack && attempts < 20) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-            console.log('Waiting for MemberStack, attempt:', attempts);
-        }
-
-        if (!window.MemberStack) {
+        // Wait for MemberStack to be initialized using our Promise
+        console.log('Waiting for MemberStack initialization...');
+        const MS = await $lbh.waitForMemberstack();
+        
+        if (!MS) {
+            console.error('MemberStack initialization failed');
             throw new Error('MemberStack not available');
         }
 
-        // Use standard MemberStack v1 verification
-        await window.MemberStack.onReady.then(async function(MS) {
-            await MS.verifyEmail(token);
-        });
+        console.log('MemberStack initialized successfully');
+
+        // Use v1 verification method
+        console.log('Verifying email with token:', token);
+        await MS.verifyEmail(token);
+        console.log('Verification successful');
 
         // Get language for redirect
         const lang = $lbh.language();
@@ -119,8 +171,7 @@ async function handleVerification() {
         console.error('Verification error:', error);
         const lang = $lbh.language();
         const errorPath = lang === 'de' ? '/verification-error' : `/${lang}/verification-error`;
-        const errorMessage = error?.message || 'Verification failed';
-        window.location.href = `${errorPath}?message=${encodeURIComponent(errorMessage)}`;
+        window.location.href = `${errorPath}?message=${encodeURIComponent(error?.message || 'Verification failed')}`;
     }
 }
 
