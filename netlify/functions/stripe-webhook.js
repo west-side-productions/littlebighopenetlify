@@ -72,7 +72,8 @@ exports.handler = async (event) => {
                     console.log('Extracted metadata:', {
                         memberstackUserId,
                         memberstackPlanId,
-                        countryCode
+                        countryCode,
+                        sessionId: session.id
                     });
 
                     if (!memberstackUserId || !memberstackPlanId) {
@@ -119,6 +120,7 @@ exports.handler = async (event) => {
                             error: shippingError.message,
                             response: shippingError.response?.data
                         });
+                        // Continue even if shipping fails
                     }
 
                     return {
@@ -136,14 +138,9 @@ exports.handler = async (event) => {
                         response: error.response?.data,
                         stack: error.stack
                     });
-                    return {
-                        statusCode: 500,
-                        body: JSON.stringify({ 
-                            error: error.message,
-                            details: error.response?.data || error.stack
-                        })
-                    };
+                    throw error; // Re-throw to be caught by outer try-catch
                 }
+                break;  
             
             case 'payment_intent.payment_failed':
                 const paymentIntent = stripeEvent.data.object;
