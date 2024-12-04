@@ -70,17 +70,25 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { country } = JSON.parse(event.body);
-        console.log('Processing shipping for country:', country);
+        const { countryCode, memberId, sessionId } = JSON.parse(event.body);
+        console.log('Processing shipping for:', { countryCode, memberId, sessionId });
+
+        if (!countryCode) {
+            throw new Error('Country code is required');
+        }
 
         // Calculate shipping rate
-        const shippingRate = calculateShippingRate(country);
+        const shippingRate = calculateShippingRate(countryCode);
         console.log('Calculated shipping rate:', shippingRate);
 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify(shippingRate)
+            body: JSON.stringify({
+                ...shippingRate,
+                memberId,
+                sessionId
+            })
         };
 
     } catch (error) {

@@ -152,10 +152,9 @@ async function handleCheckout(event) {
             throw new Error('No member found');
         }
 
-        // Get form data
-        const form = document.querySelector('form');
-        const formData = new FormData(form);
-        const countryCode = formData.get('country') || 'AT'; // Default to Austria if not specified
+        // Get country code from shipping-country select or default to AT
+        const countrySelect = document.querySelector('[name="shipping-country"]');
+        const countryCode = countrySelect ? countrySelect.value : 'AT';
 
         // Get metadata
         const metadata = {
@@ -166,6 +165,8 @@ async function handleCheckout(event) {
             productWeight: '900',
             packagingWeight: '100'
         };
+
+        console.log('Starting checkout with metadata:', metadata);
 
         // Create checkout session
         const response = await fetch(`${getBaseUrl()}${CONFIG.functionsUrl}/create-checkout-session`, {
@@ -183,11 +184,12 @@ async function handleCheckout(event) {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to create checkout session');
+            const errorData = await response.json();
+            throw new Error(`Failed to create checkout session: ${errorData.message || response.statusText}`);
         }
 
         const { sessionId } = await response.json();
-        const stripe = Stripe(CONFIG.stripePublicKey);
+        const stripe = window.Stripe(CONFIG.stripePublicKey);
         
         // Redirect to Stripe Checkout
         const { error } = await stripe.redirectToCheckout({ sessionId });
