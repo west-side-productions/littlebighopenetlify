@@ -9,6 +9,11 @@ exports.handler = async (event) => {
             return { statusCode: 405, body: 'Method Not Allowed' };
         }
 
+        console.log('Webhook received:', {
+            headers: event.headers,
+            body: event.body ? event.body.substring(0, 500) : null // Log first 500 chars to avoid huge logs
+        });
+
         const sig = event.headers['stripe-signature'];
         const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -16,6 +21,10 @@ exports.handler = async (event) => {
         
         try {
             stripeEvent = Stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
+            console.log('Stripe event constructed:', {
+                type: stripeEvent.type,
+                id: stripeEvent.id
+            });
         } catch (err) {
             console.error('Webhook signature verification failed:', err.message);
             return {
@@ -28,9 +37,12 @@ exports.handler = async (event) => {
         switch (stripeEvent.type) {
             case 'checkout.session.completed':
                 const session = stripeEvent.data.object;
+                console.log('Processing checkout.session.completed:', {
+                    sessionId: session.id,
+                    metadata: session.metadata
+                });
                 
                 try {
-                    // Get member ID and plan ID from metadata
                     const { memberstackUserId, planId: memberstackPlanId, countryCode } = session.metadata;
                     
                     console.log('Session metadata:', session.metadata);
@@ -40,19 +52,12 @@ exports.handler = async (event) => {
                         throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
 
-                    if (!countryCode) {
-                        throw new Error('Country code is required');
-                    }
-
-                    // Log the transaction details
-                    console.log('Processing order:', {
-                        memberstackUserId,
-                        memberstackPlanId,
-                        countryCode,
-                        sessionId: session.id
+                    // Add plan to member using Memberstack REST API
+                    console.log('Adding plan to Memberstack:', {
+                        memberId: memberstackUserId,
+                        planId: memberstackPlanId
                     });
 
-                    // Add plan to member using Memberstack REST API
                     const response = await axios({
                         method: 'POST',
                         url: `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/add-plan`,
@@ -69,20 +74,8 @@ exports.handler = async (event) => {
 
                     console.log('Memberstack plan addition response:', response.data);
 
-                    // Verify the plan was added successfully
-                    if (!response.data || response.status !== 200) {
-                        throw new Error('Failed to add plan to member');
-                    }
-
-                    console.log('Successfully added plan to member:', response.data);
-
                     // Process shipping information
-                    console.log('Calling process-shipping with:', {
-                        countryCode,
-                        memberId: memberstackUserId,
-                        sessionId: session.id
-                    });
-
+                    console.log('Processing shipping...');
                     try {
                         const shippingResponse = await axios({
                             method: 'POST',
@@ -97,10 +90,12 @@ exports.handler = async (event) => {
                             })
                         });
 
-                        console.log('Shipping processed successfully:', shippingResponse.data);
+                        console.log('Shipping processed:', shippingResponse.data);
                     } catch (shippingError) {
-                        console.error('Shipping process failed:', shippingError.response?.data || shippingError.message);
-                        // Continue execution even if shipping fails
+                        console.error('Shipping process failed:', {
+                            error: shippingError.message,
+                            response: shippingError.response?.data
+                        });
                     }
 
                     return {
@@ -113,15 +108,19 @@ exports.handler = async (event) => {
                         })
                     };
                 } catch (error) {
-                    console.error('Error processing webhook:', error.response ? error.response.data : error.message);
+                    console.error('Error processing webhook:', {
+                        message: error.message,
+                        response: error.response?.data,
+                        stack: error.stack
+                    });
                     return {
                         statusCode: 500,
                         body: JSON.stringify({ 
-                            error: error.response ? error.response.data : error.message 
+                            error: error.message,
+                            details: error.response?.data || error.stack
                         })
                     };
                 }
-
             case 'payment_intent.payment_failed':
                 const paymentIntent = stripeEvent.data.object;
                 console.error('Payment failed:', {
@@ -129,20 +128,18 @@ exports.handler = async (event) => {
                     error: paymentIntent.last_payment_error
                 });
                 break;
-
             default:
                 console.log(`Unhandled event type: ${stripeEvent.type}`);
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ received: true, type: stripeEvent.type })
+                };
         }
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ received: true })
-        };
     } catch (error) {
-        console.error('Webhook error:', error);
+        console.error('Webhook handler error:', error);
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: 'Webhook handler failed' })
+            body: JSON.stringify({ error: error.message })
         };
     }
 };
