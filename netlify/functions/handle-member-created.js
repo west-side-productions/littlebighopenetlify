@@ -24,8 +24,8 @@ exports.handler = async (event, context) => {
     // Generate verification token (you might want to use a more secure method)
     const verificationToken = Buffer.from(`${id}:${Date.now()}`).toString('base64');
     
-    // Construct verification link using SITE_URL (which points to functions domain)
-    const verificationLink = `${process.env.SITE_URL}/verify?token=${verificationToken}`;
+    // Construct verification link to main site
+    const verificationLink = `https://littlebighope.com/verify?token=${verificationToken}`;
 
     // Send verification email
     const emailResponse = await fetch(`${process.env.URL}/.netlify/functions/send-email`, {

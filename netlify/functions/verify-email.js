@@ -76,7 +76,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 302,
       headers: {
-        Location: `${process.env.SITE_URL}/verification-success`
+        Location: `https://littlebighope.com/verification-success`
       }
     };
   } catch (error) {
@@ -86,7 +86,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 302,
       headers: {
-        Location: `${process.env.SITE_URL}/verification-error?message=${encodeURIComponent(error.message)}`
+        Location: `https://littlebighope.com/verification-error?message=${encodeURIComponent(error.message)}`
       }
     };
   }
