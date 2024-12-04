@@ -31,40 +31,21 @@ exports.handler = async (event) => {
                 
                 try {
                     // Get member ID and plan ID from metadata
-                    const { memberstackUserId, planId: memberstackPlanId, totalWeight, productWeight, packagingWeight } = session.metadata;
+                    const { memberstackUserId, planId: memberstackPlanId, countryCode } = session.metadata;
                     
                     if (!memberstackUserId || !memberstackPlanId) {
                         throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
 
-                    // Log the weight information
-                    console.log('Order weight details:', {
-                        totalWeight,
-                        productWeight,
-                        packagingWeight,
-                        memberstackUserId,
-                        memberstackPlanId
-                    });
-
-                    // Update the payment intent with the metadata if it's not already there
-                    if (session.payment_intent) {
-                        const paymentIntent = await Stripe.paymentIntents.update(
-                            session.payment_intent,
-                            {
-                                metadata: {
-                                    ...session.metadata,
-                                    totalWeight,
-                                    productWeight,
-                                    packagingWeight
-                                }
-                            }
-                        );
-                        console.log('Updated payment intent metadata:', paymentIntent.metadata);
+                    if (!countryCode) {
+                        throw new Error('Country code is required');
                     }
 
-                    console.log('Adding plan to member:', {
+                    // Log the transaction details
+                    console.log('Processing order:', {
                         memberstackUserId,
                         memberstackPlanId,
+                        countryCode,
                         sessionId: session.id
                     });
 
@@ -83,14 +64,31 @@ exports.handler = async (event) => {
                         }
                     });
 
+                    // Verify the plan was added successfully
+                    if (!response.data || response.status !== 200) {
+                        throw new Error('Failed to add plan to member');
+                    }
+
                     console.log('Successfully added plan to member:', response.data);
+
+                    // Process shipping information
+                    await axios({
+                        method: 'POST',
+                        url: '/.netlify/functions/process-shipping',
+                        data: {
+                            memberId: memberstackUserId,
+                            countryCode: countryCode,
+                            sessionId: session.id
+                        }
+                    });
 
                     return {
                         statusCode: 200,
                         body: JSON.stringify({ 
                             received: true,
                             memberstackUserId,
-                            memberstackPlanId
+                            memberstackPlanId,
+                            countryCode
                         })
                     };
                 } catch (error) {

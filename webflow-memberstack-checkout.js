@@ -18,6 +18,7 @@ const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
     stripePriceId: 'price_1QRN3aJRMXFic4sWBBilYzAc', // Add your actual test price ID here
+    memberstackPlanId: 'prc_online-kochkurs-8b540kc2',
     debug: true,
     // For local development, use localhost. For production, use relative URL
     baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
@@ -143,127 +144,59 @@ function getBaseUrl() {
 }
 
 async function handleCheckout(event) {
-    if (event) {
-        event.preventDefault();
-    }
-    const button = event?.target;
-    if (button) {
-        button.disabled = true;
-        button.textContent = 'Processing...';
-    }
+    event.preventDefault();
     
     try {
-        // Get current member using Memberstack DOM API
         const member = await window.$memberstackDom.getCurrentMember();
-        
-        // Debug log to see member structure
-        console.log('Member object:', JSON.stringify(member, null, 2));
-        
-        // If user is not logged in, redirect to registration
-        if (!member || !member.data) {
-            console.log('User not logged in, redirecting to registration');
-            // Store return URL in localStorage
-            localStorage.setItem('checkoutReturnUrl', window.location.href);
-            // Redirect to registration page
-            window.location.href = '/registrieren';
-            return;
+        if (!member) {
+            throw new Error('No member found');
         }
-        
-        // Extract email from member data
-        const customerEmail = member.data.auth?.email;
-        
-        if (!customerEmail) {
-            console.log('No email found in member object');
-            throw new Error('User email is required for checkout');
-        }
-        
-        // Get customer name from custom fields
-        const firstName = member.data.customFields?.['first-name'] || '';
-        const lastName = member.data.customFields?.['last-name'] || '';
-        const customerName = `${firstName} ${lastName}`.trim();
-        
-        // Prepare checkout data
-        const checkoutData = {
-            priceId: CONFIG.stripePriceId,
-            quantity: parseInt(document.getElementById('book-quantity')?.value || '1'),
-            successUrl: `${window.location.origin}/vielen-dank-email`,
-            cancelUrl: `${window.location.origin}/produkte`,
-            customerEmail: customerEmail,
-            metadata: {
-                memberstackUserId: member.data.id || '',
-                source: 'webflow_checkout',
-                planId: 'prc_online-kochkurs-8b540kc2',
-                planName: 'Online Kochkurs'
-            },
-            shipping: {
-                name: customerName,
-                address: {
-                    country: document.querySelector('[name="shipping-country"]')?.value || 'AT'
-                }
-            },
-            locale: 'de',
-            allow_promotion_codes: true
+
+        // Get form data
+        const form = document.querySelector('form');
+        const formData = new FormData(form);
+        const countryCode = formData.get('country') || 'AT'; // Default to Austria if not specified
+
+        // Get metadata
+        const metadata = {
+            memberstackUserId: member.data.id,
+            planId: CONFIG.memberstackPlanId,
+            countryCode: countryCode,
+            totalWeight: '1000', // Example weight in grams
+            productWeight: '900',
+            packagingWeight: '100'
         };
 
-        // Validate required fields
-        if (!checkoutData.customerEmail) {
-            throw new Error('User email is required for checkout');
-        }
-
-        console.log('Starting checkout process:', checkoutData);
-        
-        // Get the base URL for the API endpoint
-        const baseUrl = getBaseUrl();
-        const endpointUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
-        
-        console.log('Calling checkout endpoint:', endpointUrl);
-
-        // Make the API call
-        const response = await fetch(endpointUrl, {
+        // Create checkout session
+        const response = await fetch(`${getBaseUrl()}${CONFIG.functionsUrl}/create-checkout-session`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify(checkoutData)
+            body: JSON.stringify({
+                priceId: CONFIG.stripePriceId,
+                successUrl: `${window.location.origin}/vielen-dank-email`,
+                cancelUrl: `${window.location.origin}/produkte`,
+                metadata: metadata,
+                customerEmail: member.data.auth.email
+            })
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Checkout failed: ${errorData.message || response.statusText}`);
+            throw new Error('Failed to create checkout session');
         }
 
-        const session = await response.json();
-        console.log('Checkout session created:', session);
+        const { sessionId } = await response.json();
+        const stripe = Stripe(CONFIG.stripePublicKey);
         
-        try {
-            // Initialize Stripe with the correct test key
-            const stripe = Stripe(CONFIG.stripePublicKey);
-            
-            if (!session.sessionId) {
-                throw new Error('No session ID returned from server');
-            }
-            
-            // Redirect to checkout
-            const { error } = await stripe.redirectToCheckout({
-                sessionId: session.sessionId
-            });
-            
-            if (error) {
-                console.error('Stripe redirect error:', error);
-                throw error;
-            }
-        } catch (error) {
-            console.error('Stripe initialization/redirect error:', error);
+        // Redirect to Stripe Checkout
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        if (error) {
             throw error;
         }
-
     } catch (error) {
         console.error('Checkout error:', error);
-        if (button) {
-            button.disabled = false;
-            button.textContent = 'Buy Now';
-        }
-        alert('Sorry, there was a problem starting the checkout process. Please try again.');
+        alert('An error occurred during checkout. Please try again.');
     }
 }
 
