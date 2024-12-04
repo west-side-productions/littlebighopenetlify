@@ -124,7 +124,14 @@ exports.handler = async (event) => {
                 });
 
                 // Validate required metadata
-                const requiredMetadata = ['memberstackUserId', 'planId', 'countryCode', 'totalWeight'];
+                const requiredMetadata = [
+                    'memberstackUserId', 
+                    'planId', 
+                    'countryCode', 
+                    'totalWeight',
+                    'productWeight',
+                    'packagingWeight'
+                ];
                 const missingMetadata = requiredMetadata.filter(field => !session.metadata?.[field]);
                 
                 if (missingMetadata.length > 0) {
@@ -135,6 +142,46 @@ exports.handler = async (event) => {
                         body: JSON.stringify({
                             error: 'Invalid metadata',
                             details: `Missing required fields: ${missingMetadata.join(', ')}`
+                        })
+                    };
+                }
+
+                // Validate weight values are numeric
+                const weightFields = ['totalWeight', 'productWeight', 'packagingWeight'];
+                const invalidWeights = weightFields.filter(field => 
+                    isNaN(Number(session.metadata[field]))
+                );
+
+                if (invalidWeights.length > 0) {
+                    console.error('Invalid weight values:', invalidWeights);
+                    return {
+                        statusCode: 400,
+                        headers,
+                        body: JSON.stringify({
+                            error: 'Invalid weight values',
+                            details: `Non-numeric weight fields: ${invalidWeights.join(', ')}`
+                        })
+                    };
+                }
+
+                // Validate total weight matches sum of product and packaging
+                const totalWeight = Number(session.metadata.totalWeight);
+                const productWeight = Number(session.metadata.productWeight);
+                const packagingWeight = Number(session.metadata.packagingWeight);
+
+                if (totalWeight !== (productWeight + packagingWeight)) {
+                    console.error('Weight mismatch:', {
+                        total: totalWeight,
+                        sum: productWeight + packagingWeight,
+                        product: productWeight,
+                        packaging: packagingWeight
+                    });
+                    return {
+                        statusCode: 400,
+                        headers,
+                        body: JSON.stringify({
+                            error: 'Weight mismatch',
+                            details: 'Total weight does not match sum of product and packaging weights'
                         })
                     };
                 }
