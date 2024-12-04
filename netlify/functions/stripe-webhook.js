@@ -4,6 +4,36 @@ const axios = require('axios');
 // Memberstack API URL for Webflow integration
 const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
 
+// Shipping rate calculation
+function calculateShippingRate(country) {
+    if (!country?.trim()) {
+        throw new Error('Country code is required and cannot be empty');
+    }
+    
+    const countryCode = country.toUpperCase();
+    console.log(`Calculating shipping for country: ${countryCode}`);
+    
+    // Define shipping rates
+    const SHIPPING_RATES = {
+        AT: { price: 500, label: "Austria Shipping" },
+        DE: { price: 1000, label: "Germany Shipping" },
+        EU: { price: 1000, label: "Europe Shipping" }
+    };
+
+    // EU country list
+    const EU_COUNTRIES = [
+        'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+        'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+        'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+    ];
+
+    if (countryCode === 'AT') return SHIPPING_RATES.AT;
+    if (countryCode === 'DE') return SHIPPING_RATES.DE;
+    if (EU_COUNTRIES.includes(countryCode)) return SHIPPING_RATES.EU;
+
+    throw new Error(`No shipping rate available for country: ${countryCode}`);
+}
+
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
         method: event.httpMethod,
@@ -70,16 +100,7 @@ exports.handler = async (event) => {
         switch (stripeEvent.type) {
             case 'checkout.session.completed':
                 console.log('Processing checkout.session.completed event');// Add more detailed error handling
-                function calculateShippingRate(country) {
-                    if (!country?.trim()) {
-                        throw new Error('Country code is required and cannot be empty');
-                    }
-                    
-                    const countryCode = country.toUpperCase();
-                    console.log(`Calculating shipping for country: ${countryCode}`);
-                    
-                    // Rest of the function...
-                }// Add more comprehensive validation
+                // Add more comprehensive validation
                 if (!event.body) {
                     console.error('Missing request body');
                     return {
