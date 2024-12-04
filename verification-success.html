@@ -5,30 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Verification Success - Little Big Hope</title>
     <script>
-        // Get user's language preference
-        const userLang = localStorage.getItem('preferredLanguage') || navigator.language.split('-')[0] || 'de';
+        // Simple language detection without Memberstack dependency
+        const userLang = navigator.language.split('-')[0] || 'de';
         
         // Define messages for each language
         const messages = {
             de: {
                 title: 'E-Mail-Adresse bestätigt!',
-                message: 'Ihre E-Mail-Adresse wurde erfolgreich bestätigt. Sie können diese Seite jetzt schließen.',
-                redirect: 'Sie werden in wenigen Sekunden zur Startseite weitergeleitet...'
+                message: 'Ihre E-Mail-Adresse wurde erfolgreich bestätigt.',
+                backToHome: 'Zurück zur Startseite'
             },
             en: {
                 title: 'Email Verified!',
-                message: 'Your email address has been successfully verified. You can close this page now.',
-                redirect: 'You will be redirected to the homepage in a few seconds...'
+                message: 'Your email address has been successfully verified.',
+                backToHome: 'Back to Homepage'
             },
             fr: {
                 title: 'Email Vérifié !',
-                message: 'Votre adresse e-mail a été vérifiée avec succès. Vous pouvez fermer cette page.',
-                redirect: 'Vous serez redirigé vers la page d\'accueil dans quelques secondes...'
+                message: 'Votre adresse e-mail a été vérifiée avec succès.',
+                backToHome: 'Retour à l\'accueil'
             },
             it: {
                 title: 'Email Verificata!',
-                message: 'Il tuo indirizzo email è stato verificato con successo. Puoi chiudere questa pagina.',
-                redirect: 'Sarai reindirizzato alla homepage tra pochi secondi...'
+                message: 'Il tuo indirizzo email è stato verificato con successo.',
+                backToHome: 'Torna alla Homepage'
             }
         };
 
@@ -40,12 +40,7 @@
             document.title = messages[lang].title;
             document.getElementById('title').textContent = messages[lang].title;
             document.getElementById('message').textContent = messages[lang].message;
-            document.getElementById('redirect').textContent = messages[lang].redirect;
-
-            // Redirect to homepage after 5 seconds
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 5000);
+            document.getElementById('back-to-home').textContent = messages[lang].backToHome;
         };
     </script>
     <style>
@@ -75,10 +70,14 @@
             color: #666;
             line-height: 1.5;
         }
-        .redirect {
-            margin-top: 2rem;
-            font-size: 0.9em;
-            color: #999;
+        .back-link {
+            display: inline-block;
+            margin-top: 1.5rem;
+            color: #2196F3;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -86,7 +85,7 @@
     <div class="container">
         <h1 id="title"></h1>
         <p id="message"></p>
-        <p id="redirect" class="redirect"></p>
+        <a href="/" class="back-link" id="back-to-home"></a>
     </div>
 </body>
 </html>

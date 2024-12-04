@@ -4,6 +4,39 @@
     const DEFAULT_LANGUAGE = 'de';
     let currentUserLanguage = DEFAULT_LANGUAGE; // Use the same default language
 
+    // Handle verification routes
+    async function handleVerificationRoutes() {
+        const path = window.location.pathname;
+        const params = new URLSearchParams(window.location.search);
+
+        if (path === '/verify') {
+            const token = params.get('token');
+            if (!token) {
+                window.location.href = '/verification-error?message=Missing verification token';
+                return;
+            }
+
+            try {
+                const response = await fetch(`https://lillebighopefunctions.netlify.app/.netlify/functions/verify-email?token=${token}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Verification failed');
+                }
+
+                // The verify-email function will handle the redirect
+            } catch (error) {
+                console.error('Verification error:', error);
+                window.location.href = `/verification-error?message=${encodeURIComponent(error.message)}`;
+            }
+        }
+    }
+
     // Get user's browser language
     function detectLanguage() {
         const browserLang = (navigator.language || navigator.userLanguage).split('-')[0].toLowerCase();
@@ -62,7 +95,10 @@
     }
 
     // Initialize when DOM is ready
-    document.addEventListener('DOMContentLoaded', setupLanguageField);
+    document.addEventListener('DOMContentLoaded', () => {
+        setupLanguageField();
+        handleVerificationRoutes();
+    });
 
     // Wait for Memberstack
     function waitForMemberstack(maxAttempts = 50) {

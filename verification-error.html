@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Verification Error - Little Big Hope</title>
     <script>
-        // Get user's language preference
-        const userLang = localStorage.getItem('preferredLanguage') || navigator.language.split('-')[0] || 'de';
+        // Simple language detection without Memberstack dependency
+        const userLang = navigator.language.split('-')[0] || 'de';
         
         // Define messages for each language
         const messages = {
@@ -15,28 +15,28 @@
                 message: 'Bei der Bestätigung Ihrer E-Mail-Adresse ist ein Fehler aufgetreten.',
                 details: 'Fehlerdetails:',
                 retry: 'Bitte versuchen Sie es später erneut oder kontaktieren Sie unseren Support.',
-                redirect: 'Sie werden in wenigen Sekunden zur Startseite weitergeleitet...'
+                backToHome: 'Zurück zur Startseite'
             },
             en: {
                 title: 'Email Verification Error',
                 message: 'There was an error verifying your email address.',
                 details: 'Error details:',
                 retry: 'Please try again later or contact our support team.',
-                redirect: 'You will be redirected to the homepage in a few seconds...'
+                backToHome: 'Back to Homepage'
             },
             fr: {
                 title: 'Erreur de Vérification Email',
                 message: 'Une erreur s\'est produite lors de la vérification de votre adresse e-mail.',
                 details: 'Détails de l\'erreur :',
                 retry: 'Veuillez réessayer plus tard ou contacter notre support.',
-                redirect: 'Vous serez redirigé vers la page d\'accueil dans quelques secondes...'
+                backToHome: 'Retour à l\'accueil'
             },
             it: {
                 title: 'Errore di Verifica Email',
                 message: 'Si è verificato un errore durante la verifica del tuo indirizzo email.',
                 details: 'Dettagli errore:',
                 retry: 'Riprova più tardi o contatta il nostro supporto.',
-                redirect: 'Sarai reindirizzato alla homepage tra pochi secondi...'
+                backToHome: 'Torna alla Homepage'
             }
         };
 
@@ -59,12 +59,7 @@
                 document.getElementById('details-container').style.display = 'none';
             }
             document.getElementById('retry').textContent = messages[lang].retry;
-            document.getElementById('redirect').textContent = messages[lang].redirect;
-
-            // Redirect to homepage after 10 seconds
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 10000);
+            document.getElementById('back-to-home').textContent = messages[lang].backToHome;
         };
     </script>
     <style>
@@ -102,10 +97,14 @@
             font-family: monospace;
             word-break: break-word;
         }
-        .redirect {
-            margin-top: 2rem;
-            font-size: 0.9em;
-            color: #999;
+        .back-link {
+            display: inline-block;
+            margin-top: 1.5rem;
+            color: #2196F3;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -118,7 +117,7 @@
             <div id="error" class="error-details"></div>
         </div>
         <p id="retry"></p>
-        <p id="redirect" class="redirect"></p>
+        <a href="/" class="back-link" id="back-to-home"></a>
     </div>
 </body>
 </html>
