@@ -1,14 +1,14 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
-// Memberstack 2.0 API URL
+// Memberstack 2.0 API URL for Webflow integration
 const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v2';
 
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
         method: event.httpMethod,
         path: event.path,
-        headers: event.headers
+        headers: Object.keys(event.headers) // Log header keys to verify stripe-signature
     });
 
     // Handle preflight requests
@@ -31,23 +31,23 @@ exports.handler = async (event) => {
     }
 
     try {
-        console.log('Webhook body (first 500 chars):', event.body ? event.body.substring(0, 500) : 'No body');
+        console.log('Raw webhook body:', event.body);
         
         const sig = event.headers['stripe-signature'];
-        console.log('Stripe signature present:', !!sig);
+        console.log('Stripe signature:', sig ? sig.substring(0, 20) + '...' : 'missing');
         
         const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-        console.log('Webhook secret present:', !!endpointSecret);
-        console.log('Environment variables present:', {
+        console.log('Environment check:', {
             stripeKey: !!process.env.STRIPE_SECRET_KEY,
             webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-            memberstackKey: !!process.env.MEMBERSTACK_SECRET_KEY
+            memberstackKey: !!process.env.MEMBERSTACK_SECRET_KEY,
+            webhookSecretPrefix: endpointSecret ? endpointSecret.substring(0, 8) : 'missing'
         });
 
         let stripeEvent;
         try {
             stripeEvent = Stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
-            console.log('Successfully constructed Stripe event:', {
+            console.log('Stripe event constructed:', {
                 type: stripeEvent.type,
                 id: stripeEvent.id
             });
@@ -87,8 +87,8 @@ exports.handler = async (event) => {
                         throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
 
-                    // Add plan to member using Memberstack 2.0 API
-                    const memberstackUrl = `${MEMBERSTACK_API_URL}/integrations/webflow/members/${memberstackUserId}/plans`;
+                    // Add plan to member using Memberstack API
+                    const memberstackUrl = `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/plans/${memberstackPlanId}`;
                     console.log('Calling Memberstack API:', {
                         url: memberstackUrl,
                         planId: memberstackPlanId,
@@ -104,8 +104,6 @@ exports.handler = async (event) => {
                                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                             },
                             data: {
-                                id: memberstackPlanId,
-                                planId: memberstackPlanId,
                                 status: 'active'
                             }
                         });
