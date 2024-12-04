@@ -2,7 +2,7 @@
     // Configuration
     const SUPPORTED_LANGUAGES = ['de', 'en', 'fr', 'it'];
     const DEFAULT_LANGUAGE = 'de';
-    let currentUserLanguage = 'en'; // Default language
+    let currentUserLanguage = DEFAULT_LANGUAGE; // Use the same default language
 
     // Get user's browser language
     function detectLanguage() {
@@ -151,7 +151,7 @@
                         body: JSON.stringify({
                             to: email,
                             templateName: 'verification',
-                            language: language,
+                            language: language || DEFAULT_LANGUAGE,  
                             variables: {
                                 firstName: firstName || 'User',
                                 verificationUrl: verificationUrl

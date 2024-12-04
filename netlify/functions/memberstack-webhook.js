@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Configuration
-const SUPPORTED_LANGUAGES = ['en', 'de', 'fr', 'it'];
+const SUPPORTED_LANGUAGES = ['de', 'en', 'fr', 'it'];
 const DEFAULT_LANGUAGE = 'de';
 
 // CORS headers
