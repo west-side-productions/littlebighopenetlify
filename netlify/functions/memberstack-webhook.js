@@ -251,8 +251,12 @@ async function sendEmail({ to, templateName, language, variables }) {
         // Import the send-email function directly
         const { handler: sendEmailHandler } = require('./send-email');
         
-        // Call the handler directly
+        // Create proper event object structure
         const result = await sendEmailHandler({
+            httpMethod: 'POST',
+            headers: {
+                'content-type': 'application/json'
+            },
             body: JSON.stringify({
                 to,
                 templateName,
@@ -260,6 +264,10 @@ async function sendEmail({ to, templateName, language, variables }) {
                 variables
             })
         });
+
+        if (result.statusCode !== 200) {
+            throw new Error(`Email API responded with status: ${result.statusCode}, body: ${result.body}`);
+        }
 
         console.log(`${templateName} email sent:`, result);
         return result;
