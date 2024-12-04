@@ -71,10 +71,12 @@ exports.handler = async (event) => {
                 await handleMemberCreated(webhookPayload);
                 break;
             case 'member.updated':
-                if (webhookPayload.verified && webhookPayload.reason?.includes('verified')) {
-                    // Only handle verification when it's a verification event
+                if (webhookPayload.verified === true) {
+                    console.log('Member verified, sending welcome emails');
                     await delay(2000);
                     await handleMemberVerified(webhookPayload);
+                } else {
+                    console.log('Member updated but not verified:', webhookPayload);
                 }
                 break;
             case 'member.plan.added':
@@ -246,11 +248,11 @@ async function sendEmail({ to, templateName, language, variables }) {
     console.log('Email variables:', variables);
 
     try {
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+        // Import the send-email function directly
+        const { handler: sendEmailHandler } = require('./send-email');
+        
+        // Call the handler directly
+        const result = await sendEmailHandler({
             body: JSON.stringify({
                 to,
                 templateName,
@@ -259,14 +261,8 @@ async function sendEmail({ to, templateName, language, variables }) {
             })
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Email API responded with status: ${response.status}, body: ${errorText}`);
-        }
-
-        const responseData = await response.json();
-        console.log(`${templateName} email sent:`, responseData);
-        return responseData;
+        console.log(`${templateName} email sent:`, result);
+        return result;
     } catch (error) {
         console.error(`Failed to send ${templateName} email:`, error);
         throw error;

@@ -71,9 +71,12 @@
 
     // Setup Memberstack
     function setupMemberstack() {
-        // Initialize Memberstack 2.0
-        window.memberstack.initialize({
-            publicKey: 'pk_sb_0062e297a05a98d62226'
+        // Initialize Memberstack 2.0 with configuration
+        window.memberstack.initialize({ 
+            publicKey: 'pk_sb_0062e297a05a98d62226',
+            appPlatformDomain: window.location.origin,
+            verificationRedirect: '/membershome',  
+            emailVerification: false  
         });
 
         // Update language when member signs in
@@ -125,7 +128,7 @@
                     const firstName = form.querySelector('input[data-ms-field="first-name"]')?.value || '';
                     const lastName = form.querySelector('input[data-ms-field="last-name"]')?.value || '';
 
-                    // Use Memberstack 2.0 signup
+                    // Use Memberstack 2.0 signup with proper configuration
                     const signupResult = await window.memberstack.signup({
                         email,
                         password,
@@ -134,9 +137,12 @@
                             'first-name': firstName,
                             'last-name': lastName
                         },
-                        redirectTo: false,
-                        sendVerificationEmail: false  // Disable default verification email
+                        redirectTo: '/membershome',  
+                        verifyEmail: false  
                     });
+
+                    // Get verification URL from Memberstack
+                    const verificationUrl = `${window.location.origin}/verify?token=${signupResult.verificationToken}`;
 
                     // Send our custom verification email
                     await fetch('/.netlify/functions/send-email', {
@@ -148,7 +154,7 @@
                             language: language,
                             variables: {
                                 firstName: firstName || 'User',
-                                verificationCode: signupResult.verificationCode
+                                verificationUrl: verificationUrl
                             }
                         })
                     });
