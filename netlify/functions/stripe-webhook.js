@@ -188,7 +188,13 @@ exports.handler = async (event) => {
                 }
 
                 // Validate shipping information
-                if (!session.shipping?.address?.country) {
+                let shippingCountry;
+                if (session.shipping?.address?.country) {
+                    shippingCountry = session.shipping.address.country;
+                } else if (session.metadata?.countryCode) {
+                    shippingCountry = session.metadata.countryCode;
+                    console.log('Using country code from metadata:', shippingCountry);
+                } else {
                     console.error('Missing shipping country');
                     return {
                         statusCode: 400,
@@ -202,13 +208,14 @@ exports.handler = async (event) => {
 
                 try {
                     // Calculate shipping rate for the country
-                    const shippingRate = calculateShippingRate(session.shipping.address.country);
+                    const shippingRate = calculateShippingRate(shippingCountry);
                     console.log('Shipping calculation:', {
-                        country: session.shipping.address.country,
+                        country: shippingCountry,
                         calculatedRate: shippingRate,
                         totalWeight: session.metadata.totalWeight,
                         productWeight: session.metadata.productWeight,
-                        packagingWeight: session.metadata.packagingWeight
+                        packagingWeight: session.metadata.packagingWeight,
+                        source: session.metadata.source
                     });
 
                     // Prepare data for MemberStack
@@ -216,12 +223,14 @@ exports.handler = async (event) => {
                         memberId: session.metadata.memberstackUserId,
                         planId: session.metadata.planId,
                         customFields: {
-                            shippingCountry: session.shipping.address.country,
+                            shippingCountry: shippingCountry,
                             shippingRate: shippingRate.price,
                             totalWeight: Number(session.metadata.totalWeight),
                             productWeight: Number(session.metadata.productWeight),
                             packagingWeight: Number(session.metadata.packagingWeight),
-                            checkoutSessionId: session.id
+                            checkoutSessionId: session.id,
+                            source: session.metadata.source,
+                            orderDate: new Date().toISOString()
                         }
                     };
 
@@ -325,7 +334,7 @@ exports.handler = async (event) => {
                                     'Content-Type': 'application/json'
                                 },
                                 data: JSON.stringify({
-                                    countryCode: session.shipping.address.country,
+                                    countryCode: shippingCountry,
                                     memberId: session.metadata.memberstackUserId,
                                     sessionId: session.id,
                                     totalWeight: session.metadata.totalWeight,
@@ -350,7 +359,7 @@ exports.handler = async (event) => {
                                 received: true,
                                 memberstackUserId: session.metadata.memberstackUserId,
                                 memberstackPlanId: session.metadata.planId,
-                                countryCode: session.shipping.address.country,
+                                countryCode: shippingCountry,
                                 totalWeight: session.metadata.totalWeight,
                                 productWeight: session.metadata.productWeight,
                                 packagingWeight: session.metadata.packagingWeight
