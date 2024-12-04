@@ -69,7 +69,38 @@ exports.handler = async (event) => {
         // Handle the event
         switch (stripeEvent.type) {
             case 'checkout.session.completed':
-                console.log('Processing checkout.session.completed event');
+                console.log('Processing checkout.session.completed event');// Add more detailed error handling
+                function calculateShippingRate(country) {
+                    if (!country?.trim()) {
+                        throw new Error('Country code is required and cannot be empty');
+                    }
+                    
+                    const countryCode = country.toUpperCase();
+                    console.log(`Calculating shipping for country: ${countryCode}`);
+                    
+                    // Rest of the function...
+                }// Add more comprehensive validation
+                if (!event.body) {
+                    console.error('Missing request body');
+                    return {
+                        statusCode: 400,
+                        headers,
+                        body: JSON.stringify({
+                            error: 'Invalid request',
+                            details: 'Request body is required'
+                        })
+                    };
+                }// Add postal code validation before processing
+                if (!event.body.shipping?.postal_code?.trim()) {
+                    return {
+                        statusCode: 400,
+                        headers,
+                        body: JSON.stringify({
+                            error: 'Invalid postal code',
+                            details: 'Postal code is required'
+                        })
+                    };
+                }
                 const session = stripeEvent.data.object;
                 
                 try {
