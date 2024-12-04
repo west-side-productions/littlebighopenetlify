@@ -25,7 +25,7 @@ exports.handler = async (event, context) => {
     const verificationToken = Buffer.from(`${id}:${Date.now()}`).toString('base64');
     
     // Construct verification link
-    const verificationLink = `${process.env.SITE_URL}/verify?token=${verificationToken}`;
+    const verificationLink = `${process.env.FUNCTIONS_URL}/verify?token=${verificationToken}`;
 
     // Send verification email
     const emailResponse = await fetch(`${process.env.URL}/.netlify/functions/send-email`, {
