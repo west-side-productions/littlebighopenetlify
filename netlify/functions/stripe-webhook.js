@@ -43,6 +43,26 @@ function calculateShippingRate(country) {
     throw new Error(`No shipping rate available for country: ${countryCode}`);
 }
 
+// Add retry helper function at the top level
+async function retryWithBackoff(operation, maxRetries = 3, initialDelay = 1000) {
+    let lastError;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            if (error.response?.status === 502) {
+                const delay = initialDelay * Math.pow(2, i);
+                console.log(`Attempt ${i + 1} failed, retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            throw error; // If it's not a 502 error, throw immediately
+        }
+    }
+    throw lastError;
+}
+
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
         method: event.httpMethod,
@@ -238,7 +258,7 @@ exports.handler = async (event) => {
 
                     // Add plan to member using Memberstack API
                     try {
-                        // First try V2 API
+                        // First try V2 API with retry logic
                         const v2Url = `${MEMBERSTACK_API_V2}/members/${memberStackData.memberId}/plans/${memberStackData.planId}`;
                         console.log('Attempting MemberStack V2 API:', {
                             url: v2Url,
@@ -247,17 +267,19 @@ exports.handler = async (event) => {
                         });
 
                         try {
-                            const v2Response = await axios({
-                                method: 'POST',
-                                url: v2Url,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                },
-                                data: {
-                                    status: 'ACTIVE',
-                                    customFields: memberStackData.customFields
-                                }
+                            const v2Response = await retryWithBackoff(async () => {
+                                return await axios({
+                                    method: 'POST',
+                                    url: v2Url,
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                    },
+                                    data: {
+                                        status: 'ACTIVE',
+                                        customFields: memberStackData.customFields
+                                    }
+                                });
                             });
 
                             console.log('MemberStack V2 API response:', {
@@ -273,7 +295,7 @@ exports.handler = async (event) => {
                         } catch (v2Error) {
                             console.log('V2 API failed, falling back to V1:', v2Error.message);
                             
-                            // Fallback to V1 API
+                            // Fallback to V1 API with retry logic
                             const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
                             console.log('Attempting MemberStack V1 API:', {
                                 url: v1Url,
@@ -281,18 +303,20 @@ exports.handler = async (event) => {
                                 planId: memberStackData.planId
                             });
 
-                            const v1Response = await axios({
-                                method: 'POST',
-                                url: v1Url,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                },
-                                data: {
-                                    planId: memberStackData.planId,
-                                    memberId: memberStackData.memberId,
-                                    status: 'ACTIVE'
-                                }
+                            const v1Response = await retryWithBackoff(async () => {
+                                return await axios({
+                                    method: 'POST',
+                                    url: v1Url,
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                    },
+                                    data: {
+                                        planId: memberStackData.planId,
+                                        memberId: memberStackData.memberId,
+                                        status: 'ACTIVE'
+                                    }
+                                });
                             });
 
                             console.log('MemberStack V1 API response:', {
@@ -305,18 +329,20 @@ exports.handler = async (event) => {
                             }
                         }
 
-                        // Update member custom fields separately
+                        // Update member custom fields separately with retry logic
                         const updateUrl = `${MEMBERSTACK_API_V2}/members/${memberStackData.memberId}`;
-                        const updateResponse = await axios({
-                            method: 'PATCH',
-                            url: updateUrl,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                            },
-                            data: {
-                                customFields: memberStackData.customFields
-                            }
+                        const updateResponse = await retryWithBackoff(async () => {
+                            return await axios({
+                                method: 'PATCH',
+                                url: updateUrl,
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                },
+                                data: {
+                                    customFields: memberStackData.customFields
+                                }
+                            });
                         });
 
                         console.log('Member custom fields update response:', {
