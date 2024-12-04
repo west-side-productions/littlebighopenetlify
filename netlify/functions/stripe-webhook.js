@@ -1,8 +1,8 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
-// Use v1 API for Webflow integration
-const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v1';
+// Memberstack 2.0 API URL
+const MEMBERSTACK_API_URL = 'https://api.memberstack.com/v2';
 
 exports.handler = async (event) => {
     console.log('Webhook endpoint hit:', {
@@ -87,8 +87,8 @@ exports.handler = async (event) => {
                         throw new Error('Missing required metadata: memberstackUserId or planId');
                     }
 
-                    // Add plan to member using Memberstack API
-                    const memberstackUrl = `${MEMBERSTACK_API_URL}/members/${memberstackUserId}/add-plan`;
+                    // Add plan to member using Memberstack 2.0 API
+                    const memberstackUrl = `${MEMBERSTACK_API_URL}/integrations/webflow/members/${memberstackUserId}/plans`;
                     console.log('Calling Memberstack API:', {
                         url: memberstackUrl,
                         planId: memberstackPlanId,
@@ -104,9 +104,9 @@ exports.handler = async (event) => {
                                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                             },
                             data: {
+                                id: memberstackPlanId,
                                 planId: memberstackPlanId,
-                                status: 'ACTIVE',
-                                type: 'ONETIME'
+                                status: 'active'
                             }
                         });
 
