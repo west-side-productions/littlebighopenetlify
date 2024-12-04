@@ -114,6 +114,31 @@ exports.handler = async (event) => {
                 console.log('Processing checkout.session.completed event');
                 const session = stripeEvent.data.object;
                 
+                // Log complete session data
+                console.log('Checkout session details:', {
+                    id: session.id,
+                    customer: session.customer,
+                    customerEmail: session.customer_email,
+                    shipping: session.shipping,
+                    metadata: session.metadata
+                });
+
+                // Validate required metadata
+                const requiredMetadata = ['memberstackUserId', 'planId', 'countryCode', 'totalWeight'];
+                const missingMetadata = requiredMetadata.filter(field => !session.metadata?.[field]);
+                
+                if (missingMetadata.length > 0) {
+                    console.error('Missing required metadata:', missingMetadata);
+                    return {
+                        statusCode: 400,
+                        headers,
+                        body: JSON.stringify({
+                            error: 'Invalid metadata',
+                            details: `Missing required fields: ${missingMetadata.join(', ')}`
+                        })
+                    };
+                }
+
                 // Validate shipping information
                 if (!session.shipping?.address?.country) {
                     console.error('Missing shipping country');
@@ -130,28 +155,34 @@ exports.handler = async (event) => {
                 try {
                     // Calculate shipping rate for the country
                     const shippingRate = calculateShippingRate(session.shipping.address.country);
-                    console.log('Calculated shipping rate:', shippingRate);
-
-                    const { memberstackUserId, planId: memberstackPlanId, countryCode } = session.metadata;
-                    
-                    console.log('Extracted metadata:', {
-                        memberstackUserId,
-                        memberstackPlanId,
-                        countryCode,
-                        sessionId: session.id,
-                        allMetadata: session.metadata
+                    console.log('Shipping calculation:', {
+                        country: session.shipping.address.country,
+                        calculatedRate: shippingRate,
+                        totalWeight: session.metadata.totalWeight,
+                        productWeight: session.metadata.productWeight,
+                        packagingWeight: session.metadata.packagingWeight
                     });
 
-                    if (!memberstackUserId || !memberstackPlanId) {
-                        throw new Error('Missing required metadata: memberstackUserId or planId');
-                    }
+                    // Prepare data for MemberStack
+                    const memberStackData = {
+                        memberId: session.metadata.memberstackUserId,
+                        planId: session.metadata.planId,
+                        customFields: {
+                            shippingCountry: session.shipping.address.country,
+                            shippingRate: shippingRate.price,
+                            totalWeight: session.metadata.totalWeight,
+                            checkoutSessionId: session.id
+                        }
+                    };
+
+                    console.log('Preparing MemberStack update:', memberStackData);
 
                     // Add plan to member using Memberstack API for Webflow
                     const memberstackUrl = `${MEMBERSTACK_API_URL}/member/add-plan`;
                     console.log('Calling Memberstack API:', {
                         url: memberstackUrl,
-                        planId: memberstackPlanId,
-                        memberId: memberstackUserId
+                        planId: memberStackData.planId,
+                        memberId: memberStackData.memberId
                     });
 
                     try {
@@ -163,8 +194,8 @@ exports.handler = async (event) => {
                                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                             },
                             data: {
-                                planId: memberstackPlanId,
-                                memberId: memberstackUserId,
+                                planId: memberStackData.planId,
+                                memberId: memberStackData.memberId,
                                 status: 'ACTIVE'
                             }
                         });
@@ -196,9 +227,12 @@ exports.handler = async (event) => {
                                 'Content-Type': 'application/json'
                             },
                             data: JSON.stringify({
-                                countryCode: countryCode,
-                                memberId: memberstackUserId,
-                                sessionId: session.id
+                                countryCode: session.shipping.address.country,
+                                memberId: session.metadata.memberstackUserId,
+                                sessionId: session.id,
+                                totalWeight: session.metadata.totalWeight,
+                                productWeight: session.metadata.productWeight,
+                                packagingWeight: session.metadata.packagingWeight
                             })
                         });
 
@@ -216,9 +250,12 @@ exports.handler = async (event) => {
                         headers,
                         body: JSON.stringify({ 
                             received: true,
-                            memberstackUserId,
-                            memberstackPlanId,
-                            countryCode
+                            memberstackUserId: session.metadata.memberstackUserId,
+                            memberstackPlanId: session.metadata.planId,
+                            countryCode: session.shipping.address.country,
+                            totalWeight: session.metadata.totalWeight,
+                            productWeight: session.metadata.productWeight,
+                            packagingWeight: session.metadata.packagingWeight
                         })
                     };
                 } catch (error) {
