@@ -1,234 +1,88 @@
 <!-- LBH Core Functionality -->
 <script>
-"use strict";
-
-const $lbh = {
-    memberStackAvailable: false,
-    
-    checkMemberstackStatus: function() {
-        return !!(window.memberstack && 
-                 typeof window.memberstack.getCurrentMember === 'function' && 
-                 typeof window.memberstack.getMemberJSON === 'function');
-    },
-    
-    waitForMemberstack: function(timeout = 30000) {
-        return new Promise((resolve, reject) => {
-            if (this.checkMemberstackStatus()) {
-                this.memberStackAvailable = true;
-                resolve(window.memberstack);
-                return;
-            }
-
-            const startTime = Date.now();
-            const pollInterval = 100; // Poll every 100ms
-            
-            const checkInterval = setInterval(() => {
-                if (this.checkMemberstackStatus()) {
-                    clearInterval(checkInterval);
-                    this.memberStackAvailable = true;
-                    resolve(window.memberstack);
-                    return;
-                }
-                
-                if (Date.now() - startTime > timeout) {
-                    clearInterval(checkInterval);
-                    const error = new Error('Memberstack initialization timeout');
-                    console.error(error);
-                    reject(error);
-                }
-            }, pollInterval);
-        });
-    },
-
-    language: () => {
-        const defaultLang = "de";
-        const langs = ["de", "en", "fr", "it"];
-        try {
-            if (!navigator.language) return defaultLang;
-            const langPart = navigator.language.split('-')[0];
-            if (!langPart) return defaultLang;
-            const i = langs.indexOf(langPart.toLowerCase());
-            return i >= 0 ? langs[i] : defaultLang;
-        } catch (e) {
-            console.error('Error detecting language:', e);
-            return defaultLang;
-        }
-    },
-
-    loadJson: async function loadJson() {
-        try {
-            const MS = await this.waitForMemberstack();
-            if (!MS) {
-                console.warn("Falling back to localStorage for JSON storage");
-                return JSON.parse(localStorage.getItem("json") ?? "{}");
-            }
-            const member = await MS.getMemberJSON();
-            return member?.json ?? {};
-        } catch (error) {
-            console.error('Error loading JSON:', error);
-            return JSON.parse(localStorage.getItem("json") ?? "{}");
-        }
-    },
-
-    updateJson: async function updateJson(json) {
-        try {
-            const MS = await this.waitForMemberstack();
-            if (!MS) {
-                console.warn("Falling back to localStorage for JSON storage");
-                localStorage.setItem("json", JSON.stringify(json));
-                return;
-            }
-            await MS.updateMemberJSON({ json });
-        } catch (error) {
-            console.error('Error updating JSON:', error);
-            localStorage.setItem("json", JSON.stringify(json));
-        }
-    },
-
-    tryfind: function tryfind(selector, parent) {
-        return (parent ?? document).querySelector(selector);
-    },
-    find: function find(selector, parent) {
-        const res = $lbh.tryfind(selector, parent);
-        if (!res) {
-            throw new Error(`Can't find element by selector '${selector}' in ${parent ?? document}`);
-        }
-        return res;
-    },
-    formatQuantity: function formatQuantity(q) {
-        if (!q) return "";
-        let nr = Math.floor(q);
-        let fract = q - nr;
-        switch (fract) {
-            case 0: fract = ""; break;
-            case 0.25: fract = "¼"; break;
-            case 0.5: fract = "½"; break;
-        }
-        return nr > 0 ? `${nr}${fract}` : fract;
-    }
-};
-
-// Initialize Memberstack
-(async function initializeMemberstack() {
-    try {
-        console.log('Waiting for Memberstack initialization...');
-        const MS = await $lbh.waitForMemberstack();
-        console.log('Memberstack initialized successfully');
-        
-        // Check for verification token
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
-        if (token) {
-            await handleVerification();
-        }
-    } catch (error) {
-        console.error('Memberstack initialization failed:', error);
-        // Continue with degraded functionality
-    }
-})();
-
-// Handle email verification
-async function handleVerification() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
-        
-        if (!token) {
-            return;
-        }
-
-        console.log('Verification token found, attempting verification...');
-        
-        const response = await fetch('/.netlify/functions/verify-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ token })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Verification failed: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        console.log('Verification result:', result);
-
-        // Refresh the page without the token in URL
-        const newUrl = window.location.href.split('?')[0];
-        window.history.replaceState({}, document.title, newUrl);
-        
-        // Show success message
-        alert('Email verification successful!');
-    } catch (error) {
-        console.error('Verification error:', error);
-        alert('Email verification failed. Please try again or contact support.');
-    }
-}
-
-// Language redirect
-if (location.pathname == "/") {
-    const lang = $lbh.language();
-    if (lang != "de") {
-        const target = `${location.origin}/${lang}/`;
-        console.log("lang-switch", target);
-        location.href = target;
-    }
-}
-</script>
-
-<!-- Email Verification Handler -->
-<script>
-console.log('Initializing LBH verification system...');
-
-async function handleVerification() {
-    // Only handle /verify path specifically
-    if (window.location.pathname !== '/verify') return;
-    
-    console.log('Starting verification process');
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    
-    if (!token) {
-        console.error('No token found in URL parameters:', window.location.search);
-        window.location.href = '/verification-error?message=Missing token';
+(function() {
+    // Only proceed if $lbh hasn't been initialized
+    if (typeof window.$lbh !== 'undefined') {
+        console.log('LBH already initialized');
         return;
     }
 
-    try {
-        console.log('Attempting verification with token');
-        
-        // Wait for MemberStack to be initialized using our Promise
-        console.log('Waiting for MemberStack initialization...');
-        const MS = await $lbh.waitForMemberstack();
-        
-        if (!MS) {
-            console.error('MemberStack initialization failed');
-            throw new Error('MemberStack not available');
+    // Initialize LBH namespace
+    window.$lbh = {
+        config: {
+            supportedLanguages: ['de', 'en', 'fr', 'it'],
+            defaultLanguage: 'de'
+        },
+
+        // Language detection with caching
+        language: (function() {
+            let cachedLanguage = null;
+            return function() {
+                if (cachedLanguage) return cachedLanguage;
+                
+                try {
+                    if (!navigator.language) return this.config.defaultLanguage;
+                    const langPart = navigator.language.split('-')[0].toLowerCase();
+                    cachedLanguage = this.config.supportedLanguages.includes(langPart) ? 
+                        langPart : this.config.defaultLanguage;
+                    return cachedLanguage;
+                } catch (e) {
+                    console.warn('Language detection error:', e);
+                    return this.config.defaultLanguage;
+                }
+            };
+        })(),
+
+        // Storage methods with improved error handling
+        storage: {
+            get: function(key, defaultValue = {}) {
+                try {
+                    const value = localStorage.getItem(key);
+                    return value ? JSON.parse(value) : defaultValue;
+                } catch (e) {
+                    console.warn('Storage get error:', e);
+                    return defaultValue;
+                }
+            },
+            set: function(key, value) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(value));
+                    return true;
+                } catch (e) {
+                    console.warn('Storage set error:', e);
+                    return false;
+                }
+            }
         }
+    };
 
-        console.log('MemberStack initialized successfully');
+    // Initialize system with improved error handling
+    async function init() {
+        try {
+            console.log('Initializing LBH system...');
+            
+            // Handle language redirect for root path
+            if (location.pathname === "/") {
+                const lang = window.$lbh.language();
+                if (lang !== "de") {
+                    const target = `${location.origin}/${lang}/`;
+                    console.log("Language redirect:", target);
+                    location.href = target;
+                    return;
+                }
+            }
 
-        // Use v1 verification method
-        console.log('Verifying email with token:', token);
-        await MS.verifyEmail(token);
-        console.log('Verification successful');
-
-        // Get language for redirect
-        const lang = $lbh.language();
-        window.location.href = lang === 'de' ? '/verification-success' : `/${lang}/verification-success`;
-        
-    } catch (error) {
-        console.error('Verification error:', error);
-        const lang = $lbh.language();
-        const errorPath = lang === 'de' ? '/verification-error' : `/${lang}/verification-error`;
-        window.location.href = `${errorPath}?message=${encodeURIComponent(error?.message || 'Verification failed')}`;
+        } catch (error) {
+            console.error('Initialization error:', error);
+            // Continue with degraded functionality
+        }
     }
-}
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, checking for verification...');
-    handleVerification();
-});
+    // Start initialization when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { passive: true });
+    } else {
+        init();
+    }
+})();
 </script>

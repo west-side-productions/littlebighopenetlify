@@ -112,23 +112,24 @@
         try {
             console.log('Setting up Memberstack...');
             
-            // Wait for Memberstack to load
-            let retries = 0;
-            const maxRetries = 10;
+            // Wait for Memberstack to load with improved detection
+            const maxWaitTime = 10000; // 10 seconds
+            const startTime = Date.now();
             
-            while (!window.Memberstack && retries < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-                retries++;
+            while (Date.now() - startTime < maxWaitTime) {
+                if (window.memberstack && window.memberstack.isInitialized()) {
+                    console.log('Memberstack loaded and initialized');
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 250));
             }
             
-            // Initialize Memberstack v1
-            const ms = window.Memberstack;
-            if (!ms) {
-                throw new Error('Memberstack not loaded after multiple retries');
+            // Check if Memberstack is available
+            if (!window.memberstack || !window.memberstack.isInitialized()) {
+                throw new Error('Memberstack initialization timeout');
             }
 
-            // Initialize Memberstack
-            await ms.init();
+            const ms = window.memberstack;
 
             // Set up event listeners for forms
             const signupForm = document.querySelector('form[data-ms-form="signup"]');
@@ -149,7 +150,7 @@
                         // Update currentUserLanguage to match form selection
                         currentUserLanguage = language;
 
-                        // Use Memberstack v1 signup
+                        // Use Memberstack signup
                         const result = await ms.signupMember({
                             email,
                             password,
@@ -172,7 +173,7 @@
                                 language: language,
                                 variables: {
                                     firstName: firstName || 'User',
-                                    verificationUrl: result.loginRedirect || '/' // Use loginRedirect from v1 response
+                                    verificationUrl: result.loginRedirect || '/'
                                 }
                             })
                         });
