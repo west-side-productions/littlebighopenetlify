@@ -5,37 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Verification Error - Little Big Hope</title>
     <script>
-        // Simple language detection without Memberstack dependency
+        // Simple language detection
         const userLang = navigator.language.split('-')[0] || 'de';
         
         // Define messages for each language
         const messages = {
             de: {
-                title: 'Fehler bei der E-Mail-Bestätigung',
-                message: 'Bei der Bestätigung Ihrer E-Mail-Adresse ist ein Fehler aufgetreten.',
-                details: 'Fehlerdetails:',
-                retry: 'Bitte versuchen Sie es später erneut oder kontaktieren Sie unseren Support.',
+                title: 'Fehler bei der E-Mail-Verifizierung',
+                message: 'Bei der Verifizierung Ihrer E-Mail-Adresse ist ein Fehler aufgetreten.',
                 backToHome: 'Zurück zur Startseite'
             },
             en: {
                 title: 'Email Verification Error',
                 message: 'There was an error verifying your email address.',
-                details: 'Error details:',
-                retry: 'Please try again later or contact our support team.',
                 backToHome: 'Back to Homepage'
             },
             fr: {
                 title: 'Erreur de Vérification Email',
                 message: 'Une erreur s\'est produite lors de la vérification de votre adresse e-mail.',
-                details: 'Détails de l\'erreur :',
-                retry: 'Veuillez réessayer plus tard ou contacter notre support.',
                 backToHome: 'Retour à l\'accueil'
             },
             it: {
                 title: 'Errore di Verifica Email',
                 message: 'Si è verificato un errore durante la verifica del tuo indirizzo email.',
-                details: 'Dettagli errore:',
-                retry: 'Riprova più tardi o contatta il nostro supporto.',
                 backToHome: 'Torna alla Homepage'
             }
         };
@@ -45,20 +37,13 @@
 
         window.onload = function() {
             // Get error message from URL if present
-            const urlParams = new URLSearchParams(window.location.search);
-            const errorMessage = urlParams.get('message');
+            const params = new URLSearchParams(window.location.search);
+            const errorMsg = params.get('message');
 
             // Update content with correct language
             document.title = messages[lang].title;
             document.getElementById('title').textContent = messages[lang].title;
-            document.getElementById('message').textContent = messages[lang].message;
-            if (errorMessage) {
-                document.getElementById('details').textContent = messages[lang].details;
-                document.getElementById('error').textContent = errorMessage;
-            } else {
-                document.getElementById('details-container').style.display = 'none';
-            }
-            document.getElementById('retry').textContent = messages[lang].retry;
+            document.getElementById('message').textContent = errorMsg || messages[lang].message;
             document.getElementById('back-to-home').textContent = messages[lang].backToHome;
         };
     </script>
@@ -82,20 +67,12 @@
             width: 400px;
         }
         h1 {
-            color: #f44336;
+            color: #dc3545;
             margin-bottom: 1rem;
         }
         p {
             color: #666;
             line-height: 1.5;
-        }
-        .error-details {
-            margin: 1.5rem 0;
-            padding: 1rem;
-            background: #fff3f3;
-            border-radius: 4px;
-            font-family: monospace;
-            word-break: break-word;
         }
         .back-link {
             display: inline-block;
@@ -112,11 +89,6 @@
     <div class="container">
         <h1 id="title"></h1>
         <p id="message"></p>
-        <div id="details-container">
-            <p id="details"></p>
-            <div id="error" class="error-details"></div>
-        </div>
-        <p id="retry"></p>
         <a href="/" class="back-link" id="back-to-home"></a>
     </div>
 </body>

@@ -10,29 +10,42 @@
         const params = new URLSearchParams(window.location.search);
 
         if (path === '/verify') {
+            console.log('Verification page detected');
             const token = params.get('token');
+            console.log('Token:', token);
+            
             if (!token) {
+                console.error('No token found in URL');
                 window.location.href = '/verification-error?message=Missing verification token';
                 return;
             }
 
             try {
-                const response = await fetch(`https://lillebighopefunctions.netlify.app/.netlify/functions/verify-email?token=${token}`, {
+                console.log('Sending verification request...');
+                const verificationUrl = `https://lillebighopefunctions.netlify.app/.netlify/functions/verify-email?token=${token}`;
+                console.log('Verification URL:', verificationUrl);
+                
+                const response = await fetch(verificationUrl, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
                     }
                 });
 
+                console.log('Response status:', response.status);
+                const responseData = await response.json();
+                console.log('Response data:', responseData);
+
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Verification failed');
+                    throw new Error(responseData.message || 'Verification failed');
                 }
 
-                // The verify-email function will handle the redirect
+                // If verification successful, redirect to success page
+                console.log('Verification successful, redirecting...');
+                window.location.href = '/verification-success';
             } catch (error) {
-                console.error('Verification error:', error);
-                window.location.href = `/verification-error?message=${encodeURIComponent(error.message)}`;
+                console.error('Verification error details:', error);
+                window.location.href = `/verification-error?message=${encodeURIComponent(error.message || 'Verification failed')}`;
             }
         }
     }
@@ -94,34 +107,28 @@
         }
     }
 
-    // Initialize when DOM is ready
-    document.addEventListener('DOMContentLoaded', () => {
-        setupLanguageField();
-        handleVerificationRoutes();
-    });
-
-    // Wait for Memberstack
-    function waitForMemberstack(maxAttempts = 50) {
-        if (maxAttempts <= 0) return;
-        
-        if (window.$memberstackDom) {
-            setupMemberstack();
-        } else {
-            setTimeout(() => waitForMemberstack(maxAttempts - 1), 100);
-        }
-    }
-
     // Setup Memberstack
     async function setupMemberstack() {
         try {
             console.log('Setting up Memberstack...');
             
-            // Initialize Memberstack 2.0
-            const { client } = await window.$memberstackDom.init({
-                publicKey: 'pk_sb_0062e297a05a98d62226',
-                customEmailVerification: true  // This is the correct 2.0 setting
-            });
-            window.memberstack = client;
+            // Wait for Memberstack to load
+            let retries = 0;
+            const maxRetries = 10;
+            
+            while (!window.Memberstack && retries < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                retries++;
+            }
+            
+            // Initialize Memberstack v1
+            const ms = window.Memberstack;
+            if (!ms) {
+                throw new Error('Memberstack not loaded after multiple retries');
+            }
+
+            // Initialize Memberstack
+            await ms.init();
 
             // Set up event listeners for forms
             const signupForm = document.querySelector('form[data-ms-form="signup"]');
@@ -142,18 +149,18 @@
                         // Update currentUserLanguage to match form selection
                         currentUserLanguage = language;
 
-                        // Use Memberstack 2.0 signup
-                        const { data: member, error } = await window.memberstack.members.createMember({
+                        // Use Memberstack v1 signup
+                        const result = await ms.signupMember({
                             email,
                             password,
-                            customFields: {
+                            data: {
                                 language: language,
                                 'first-name': firstName,
                                 'last-name': lastName
                             }
                         });
 
-                        if (error) throw error;
+                        if (result.error) throw new Error(result.error);
 
                         // Send our custom verification email
                         await fetch('/.netlify/functions/send-email', {
@@ -165,7 +172,7 @@
                                 language: language,
                                 variables: {
                                     firstName: firstName || 'User',
-                                    verificationUrl: member.loginLink  // Memberstack 2.0 provides this
+                                    verificationUrl: result.loginRedirect || '/' // Use loginRedirect from v1 response
                                 }
                             })
                         });
@@ -185,6 +192,10 @@
         }
     }
 
-    // Start initialization
-    waitForMemberstack();
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+        setupLanguageField();
+        handleVerificationRoutes();
+        setupMemberstack();
+    });
 </script>
