@@ -32,7 +32,7 @@ exports.handler = async (event, context) => {
     const { 
       to, 
       templateName, 
-      language = defaultLanguage, 
+      language, 
       variables = {} 
     } = JSON.parse(event.body);
 
