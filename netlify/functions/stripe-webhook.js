@@ -281,107 +281,44 @@ exports.handler = async (event) => {
 
                     console.log('Preparing MemberStack update:', memberStackData);
 
-                    // Add plan to member using Memberstack API
                     try {
-                        // First try V2 API with retry logic
-                        const v2Url = `${MEMBERSTACK_API_V2}/members/${memberStackData.memberId}/plans/${memberStackData.planId}`;
-                        console.log('Attempting MemberStack V2 API:', {
-                            url: v2Url,
+                        // Use V1 API directly since it worked before
+                        const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
+                        console.log('Attempting MemberStack V1 API:', {
+                            url: v1Url,
                             memberId: memberStackData.memberId,
-                            planId: memberStackData.planId,
-                            retryCount: 0
+                            planId: memberStackData.planId
                         });
 
-                        let success = false;
-                        let error = null;
-
-                        try {
-                            const v2Response = await retryWithBackoff(async () => {
-                                return await axios({
-                                    method: 'POST',
-                                    url: v2Url,
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                    },
-                                    data: {
-                                        status: 'ACTIVE',
-                                        customFields: memberStackData.customFields
-                                    }
-                                });
-                            }, 5, 2000); // Increase retries to 5 and initial delay to 2s
-
-                            if (v2Response.status === 200 || v2Response.status === 201) {
-                                console.log('Successfully added plan using V2 API');
-                                success = true;
-                            }
-                        } catch (v2Error) {
-                            error = v2Error;
-                            console.log('V2 API failed, trying V1:', v2Error.message);
-                            
-                            try {
-                                const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
-                                const v1Response = await retryWithBackoff(async () => {
-                                    return await axios({
-                                        method: 'POST',
-                                        url: v1Url,
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                        },
-                                        data: {
-                                            planId: memberStackData.planId,
-                                            memberId: memberStackData.memberId,
-                                            status: 'ACTIVE'
-                                        }
-                                    });
-                                }, 5, 2000);
-
-                                if (v1Response.status === 200) {
-                                    console.log('Successfully added plan using V1 API');
-                                    success = true;
+                        const v1Response = await retryWithBackoff(async () => {
+                            return await axios({
+                                method: 'POST',
+                                url: v1Url,
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                },
+                                data: {
+                                    planId: memberStackData.planId,
+                                    memberId: memberStackData.memberId
                                 }
-                            } catch (v1Error) {
-                                error = v1Error;
-                                console.error('Both V2 and V1 APIs failed');
-                            }
+                            });
+                        }, 3, 1000); // 3 retries, 1 second initial delay
+
+                        console.log('MemberStack V1 API response:', {
+                            status: v1Response.status,
+                            data: v1Response.data
+                        });
+
+                        if (v1Response.status !== 200) {
+                            throw new Error(`Failed to add plan: ${v1Response.status}`);
                         }
 
-                        if (!success) {
-                            // Store the failed request for later processing
-                            const stored = await storeFailedRequest({
-                                memberId: memberStackData.memberId,
-                                planId: memberStackData.planId,
-                                sessionId: session.id,
-                                customFields: memberStackData.customFields,
-                                timestamp: new Date().toISOString(),
-                                error: error?.message
-                            });
-
-                            console.log('MemberStack API failed but request stored for retry:', {
-                                stored,
-                                memberId: memberStackData.memberId,
-                                planId: memberStackData.planId,
-                                sessionId: session.id
-                            });
-
-                            // Return success to Stripe to prevent webhook retries
-                            return {
-                                statusCode: 200,
-                                headers,
-                                body: JSON.stringify({
-                                    received: true,
-                                    status: 'queued_for_retry',
-                                    error: error?.message
-                                })
-                            };
-                        }
-
-                        // Update member custom fields separately with retry logic
-                        const updateUrl = `${MEMBERSTACK_API_V2}/members/${memberStackData.memberId}`;
+                        // Update custom fields separately
+                        const updateUrl = `${MEMBERSTACK_API_V1}/members/${memberStackData.memberId}`;
                         const updateResponse = await retryWithBackoff(async () => {
                             return await axios({
-                                method: 'PATCH',
+                                method: 'POST',
                                 url: updateUrl,
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -391,61 +328,54 @@ exports.handler = async (event) => {
                                     customFields: memberStackData.customFields
                                 }
                             });
-                        });
+                        }, 3, 1000);
 
                         console.log('Member custom fields update response:', {
                             status: updateResponse.status,
                             data: updateResponse.data
                         });
 
-                        // Process shipping information
-                        console.log('Processing shipping...');
-                        try {
+                        // Process shipping if needed
+                        if (memberStackData.customFields.shippingCountry) {
                             const shippingResponse = await axios({
                                 method: 'POST',
                                 url: '/.netlify/functions/process-shipping',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                data: JSON.stringify({
+                                data: {
                                     countryCode: shippingCountry,
-                                    memberId: session.metadata.memberstackUserId,
+                                    memberId: memberStackData.memberId,
                                     sessionId: session.id,
-                                    totalWeight: session.metadata.totalWeight,
-                                    productWeight: session.metadata.productWeight,
-                                    packagingWeight: session.metadata.packagingWeight
-                                })
+                                    totalWeight: memberStackData.customFields.totalWeight,
+                                    productWeight: memberStackData.customFields.productWeight,
+                                    packagingWeight: memberStackData.customFields.packagingWeight
+                                }
                             });
 
-                            console.log('Shipping processed:', shippingResponse.data);
-                        } catch (shippingError) {
-                            console.error('Shipping process failed:', {
-                                error: shippingError.message,
-                                response: shippingError.response?.data
-                            });
-                            // Continue even if shipping fails
+                            console.log('Shipping process response:', shippingResponse.data);
                         }
 
                         return {
                             statusCode: 200,
                             headers,
-                            body: JSON.stringify({ 
+                            body: JSON.stringify({
                                 received: true,
-                                memberstackUserId: session.metadata.memberstackUserId,
-                                memberstackPlanId: session.metadata.planId,
+                                memberstackUserId: memberStackData.memberId,
+                                memberstackPlanId: memberStackData.planId,
                                 countryCode: shippingCountry,
-                                totalWeight: session.metadata.totalWeight,
-                                productWeight: session.metadata.productWeight,
-                                packagingWeight: session.metadata.packagingWeight
+                                totalWeight: memberStackData.customFields.totalWeight,
+                                productWeight: memberStackData.customFields.productWeight,
+                                packagingWeight: memberStackData.customFields.packagingWeight
                             })
                         };
-                    } catch (memberstackError) {
-                        console.error('Memberstack API error:', {
-                            message: memberstackError.message,
-                            response: memberstackError.response?.data,
-                            status: memberstackError.response?.status
+                    } catch (error) {
+                        console.error('MemberStack API error:', {
+                            message: error.message,
+                            response: error.response?.data,
+                            status: error.response?.status
                         });
-                        throw memberstackError;
+                        throw error; // Re-throw to be caught by outer try-catch
                     }
                 } catch (error) {
                     console.error('Error processing webhook:', {
