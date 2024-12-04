@@ -4,23 +4,67 @@
 
 const $lbh = {
     memberStackAvailable: false,
+    initializationAttempts: 0,
+    maxInitAttempts: 3,
     
-    waitForMemberstack: function(timeout = 10000) {
+    waitForMemberstack: function(timeout = 15000) {
         return new Promise((resolve, reject) => {
-            if (window.memberstack) {
+            // If Memberstack is already initialized and available
+            if (window.memberstack && window.memberstack.isInitialized) {
+                this.memberStackAvailable = true;
                 resolve(window.memberstack);
                 return;
             }
 
-            const timeoutId = setTimeout(() => {
+            let initTimeout;
+            const cleanup = () => {
+                clearTimeout(initTimeout);
+                window.removeEventListener('memberstack:initialized', handleInit);
+                window.removeEventListener('memberstack:error', handleError);
+                window.removeEventListener('memberstack:load-error', handleLoadError);
+            };
+
+            const handleInit = () => {
+                cleanup();
+                this.memberStackAvailable = true;
+                resolve(window.memberstack);
+            };
+
+            const handleError = (event) => {
+                cleanup();
+                this.initializationAttempts++;
+                if (this.initializationAttempts < this.maxInitAttempts) {
+                    console.warn(`Memberstack initialization attempt ${this.initializationAttempts} failed, retrying...`);
+                    this.retryInitialization().then(resolve).catch(reject);
+                } else {
+                    reject(new Error(`Memberstack initialization failed after ${this.maxInitAttempts} attempts: ${event.detail || 'Unknown error'}`));
+                }
+            };
+
+            const handleLoadError = () => {
+                cleanup();
+                reject(new Error('Failed to load Memberstack script'));
+            };
+
+            initTimeout = setTimeout(() => {
+                cleanup();
                 reject(new Error('Memberstack initialization timeout'));
             }, timeout);
 
-            document.addEventListener('memberstack:ready', () => {
-                clearTimeout(timeoutId);
-                resolve(window.memberstack);
-            });
+            window.addEventListener('memberstack:initialized', handleInit);
+            window.addEventListener('memberstack:error', handleError);
+            window.addEventListener('memberstack:load-error', handleLoadError);
         });
+    },
+
+    retryInitialization: async function() {
+        const script = document.createElement('script');
+        script.setAttribute('data-memberstack-app', 'app_cm24j3get009s0spw6wz49psh');
+        script.setAttribute('src', 'https://static.memberstack.com/scripts/v1/memberstack.js');
+        script.setAttribute('async', '');
+        script.setAttribute('defer', '');
+        document.head.appendChild(script);
+        return this.waitForMemberstack();
     },
 
     language: () => {
@@ -37,43 +81,37 @@ const $lbh = {
             return defaultLang;
         }
     },
+
     loadJson: async function loadJson() {
-        if (!$lbh.memberStackAvailable) {
-            console.warn("NO MEMBERSTACK AVAILABLE, using localStorage", {
-                memberstack: !!window.memberstack,
-                memberstackDom: !!window.$memberstackDom,
-                location: window.location.href
-            });
+        try {
+            const MS = await this.waitForMemberstack();
+            if (!MS) {
+                console.warn("Falling back to localStorage for JSON storage");
+                return JSON.parse(localStorage.getItem("json") ?? "{}");
+            }
+            const member = await MS.getMemberJSON();
+            return member?.json ?? {};
+        } catch (error) {
+            console.error('Error loading JSON:', error);
             return JSON.parse(localStorage.getItem("json") ?? "{}");
         }
-        try {
-            const MS = await $lbh.waitForMemberstack();
-            const member = await MS.getMemberJSON();
-            console.log("Member data:", member);
-            return member?.data ?? {};
-        } catch (e) {
-            console.error('Error loading member data:', e);
-            return {};
-        }
     },
+
     updateJson: async function updateJson(json) {
-        if (!$lbh.memberStackAvailable) {
-            console.warn("NO MEMBERSTACK AVAILABLE, using localStorage", {
-                memberstack: !!window.memberstack,
-                memberstackDom: !!window.$memberstackDom,
-                location: window.location.href
-            });
-            localStorage.setItem("json", JSON.stringify(json));
-            return;
-        }
         try {
-            const MS = await $lbh.waitForMemberstack();
-            await MS.updateMemberJSON({ json: json });
-        } catch (e) {
-            console.error('Error updating member data:', e);
-            localStorage.setItem("json", JSON.stringify(json)); // Fallback to localStorage
+            const MS = await this.waitForMemberstack();
+            if (!MS) {
+                console.warn("Falling back to localStorage for JSON storage");
+                localStorage.setItem("json", JSON.stringify(json));
+                return;
+            }
+            await MS.updateMemberJSON({ json });
+        } catch (error) {
+            console.error('Error updating JSON:', error);
+            localStorage.setItem("json", JSON.stringify(json));
         }
     },
+
     tryfind: function tryfind(selector, parent) {
         return (parent ?? document).querySelector(selector);
     },
@@ -100,30 +138,64 @@ const $lbh = {
 // Initialize Memberstack
 (async function initializeMemberstack() {
     try {
-        console.log('Initializing Memberstack...');
         await $lbh.waitForMemberstack();
-        $lbh.memberStackAvailable = true;
         console.log('Memberstack initialized successfully');
     } catch (error) {
         console.error('Failed to initialize Memberstack:', error);
-        $lbh.memberStackAvailable = false;
-        console.warn("NO MEMBERSTACK AVAILABLE, using localStorage", {
-            memberstack: !!window.memberstack,
-            memberstackDom: !!window.$memberstackDom,
-            location: window.location.href
-        });
+        // Continue with degraded functionality using localStorage
     }
 })();
 
-// Language redirect
-if (location.pathname == "/") {
-    const lang = $lbh.language();
-    if (lang != "de") {
-        const target = `${location.origin}/${lang}/`;
-        console.log("lang-switch", target);
-        location.href = target;
+// Handle email verification
+async function handleVerification() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        
+        if (!token) {
+            return;
+        }
+
+        console.log('Verification token found, attempting verification...');
+        const MS = await $lbh.waitForMemberstack();
+        
+        if (!MS) {
+            console.error('Memberstack not available for verification');
+            return;
+        }
+
+        const response = await fetch('/.netlify/functions/verify-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Verification failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log('Verification result:', result);
+
+        // Refresh the page without the token in URL
+        const newUrl = window.location.href.split('?')[0];
+        window.history.replaceState({}, document.title, newUrl);
+        
+        // Show success message
+        alert('Email verification successful!');
+    } catch (error) {
+        console.error('Verification error:', error);
+        alert('Email verification failed. Please try again or contact support.');
     }
 }
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, checking for verification...');
+    handleVerification();
+});
 </script>
 
 <!-- Email Verification Handler -->
@@ -180,4 +252,16 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, checking for verification...');
     handleVerification();
 });
+</script>
+
+<!-- Language redirect -->
+<script>
+if (location.pathname == "/") {
+    const lang = $lbh.language();
+    if (lang != "de") {
+        const target = `${location.origin}/${lang}/`;
+        console.log("lang-switch", target);
+        location.href = target;
+    }
+}
 </script>

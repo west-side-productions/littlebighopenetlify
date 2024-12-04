@@ -8,14 +8,37 @@
 
 <!-- Memberstack -->
 <script>
+window.$memberstackFormHandlers = {
+    // Capture form submission events
+    onSubmit: function(data, callback) {
+        console.log('Form submitted:', data);
+        callback();
+    },
+    // Handle successful form submissions
+    onSuccess: function(data) {
+        console.log('Form submission successful:', data);
+    }
+};
+
 window.memberstackOptions = {
     debug: true,  // Enable debug logging
-    loadTimeout: 10000  // 10 second timeout
+    loadTimeout: 15000,  // 15 second timeout
+    customDomains: true,  // Enable custom domain support
+    onReady: function() {
+        console.log('Memberstack initialized successfully');
+        window.dispatchEvent(new Event('memberstack:initialized'));
+    },
+    onError: function(error) {
+        console.error('Memberstack initialization error:', error);
+        window.dispatchEvent(new CustomEvent('memberstack:error', { detail: error }));
+    }
 };
 </script>
 <script 
     data-memberstack-app="app_cm24j3get009s0spw6wz49psh" 
     src="https://static.memberstack.com/scripts/v1/memberstack.js" 
     type="text/javascript"
-    onerror="console.error('Failed to load Memberstack script')"
+    async
+    defer
+    onerror="console.error('Failed to load Memberstack script'); window.dispatchEvent(new Event('memberstack:load-error'));"
 ></script>
