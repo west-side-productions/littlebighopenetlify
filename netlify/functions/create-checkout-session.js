@@ -56,10 +56,100 @@ exports.handler = async (event, context) => {
                 allowed_countries: ['AT', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
                     'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
             },
-            automatic_tax: {
-                enabled: true
-            },
-            shipping_options: undefined,
+            shipping_options: [
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 728,
+                            currency: 'eur',
+                        },
+                        display_name: 'Austria Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        },
+                        metadata: {
+                            type: 'austria'
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 2036,
+                            currency: 'eur',
+                        },
+                        display_name: 'EU Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                        metadata: {
+                            type: 'eu'
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 2072,
+                            currency: 'eur',
+                        },
+                        display_name: 'UK Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                        metadata: {
+                            type: 'uk'
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 3653,
+                            currency: 'eur',
+                        },
+                        display_name: 'Singapore Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 10,
+                            },
+                        },
+                        metadata: {
+                            type: 'singapore'
+                        }
+                    }
+                }
+            ],
             line_items: [{
                 price: data.priceId,
                 quantity: data.quantity || 1,
