@@ -215,43 +215,6 @@ function updatePriceDisplay() {
     }
 }
 
-// Create shipping rate dropdown
-function createShippingRateDropdown() {
-    const container = document.createElement('div');
-    container.className = 'shipping-rate-container';
-    container.style.marginBottom = '20px';
-
-    const label = document.createElement('label');
-    label.textContent = 'Versand nach:';
-    label.style.display = 'block';
-    label.style.marginBottom = '10px';
-
-    const select = document.createElement('select');
-    select.id = 'shipping-rate-select';
-    select.style.width = '100%';
-    select.style.padding = '8px';
-    select.style.borderRadius = '4px';
-    select.style.border = '1px solid #ddd';
-
-    Object.entries(SHIPPING_RATES).forEach(([rateId, rate]) => {
-        const option = document.createElement('option');
-        option.value = rateId;
-        option.textContent = `${rate.label} - €${rate.price.toFixed(2)}`;
-        select.appendChild(option);
-    });
-
-    container.appendChild(label);
-    container.appendChild(select);
-
-    // Insert before the checkout button
-    const checkoutButton = document.querySelector('[data-ms-checkout]');
-    if (checkoutButton && checkoutButton.parentNode) {
-        checkoutButton.parentNode.insertBefore(container, checkoutButton);
-    }
-
-    return select;
-}
-
 // Update price display with shipping
 function updateTotalPrice(basePrice, shippingRateId) {
     const shipping = SHIPPING_RATES[shippingRateId];
@@ -265,15 +228,20 @@ function updateTotalPrice(basePrice, shippingRateId) {
 }
 
 // Initialize shipping rate selection
-const shippingSelect = createShippingRateDropdown();
 const basePrice = 39.90; // Base product price
 
-shippingSelect.addEventListener('change', (e) => {
-    updateTotalPrice(basePrice, e.target.value);
-});
+// Find the shipping select element
+const shippingSelect = document.getElementById('shipping-rate-select');
+if (shippingSelect) {
+    // Add change event listener
+    shippingSelect.addEventListener('change', (e) => {
+        updateTotalPrice(basePrice, e.target.value);
+    });
 
-// Initialize with Austria as default shipping option
-updateTotalPrice(basePrice, 'shr_1QScKFJRMXFic4sW9e80ABBp');
+    // Initialize with current selection or Austria as default
+    const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
+    updateTotalPrice(basePrice, initialShippingRate);
+}
 
 // Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
@@ -367,6 +335,61 @@ document.addEventListener('DOMContentLoaded', async () => {
                 quantitySelect.addEventListener('change', updatePriceDisplay);
                 updatePriceDisplay();
             }
+            
+            // Handle checkout button click
+            document.querySelector('[data-ms-checkout]').addEventListener('click', async (e) => {
+                e.preventDefault();
+                
+                try {
+                    const customerEmail = await window.$memberstackDom.getCurrentMember().then(member => member.data.auth.email);
+                    const memberstackUserId = await window.$memberstackDom.getCurrentMember().then(member => member.data.id);
+                    
+                    // Get selected shipping rate
+                    const shippingSelect = document.getElementById('shipping-rate-select');
+                    if (!shippingSelect) {
+                        throw new Error('Shipping selection not found');
+                    }
+                    const selectedShippingRate = shippingSelect.value;
+                    
+                    const response = await fetch(`${getBaseUrl()}${CONFIG.functionsUrl}/create-checkout-session`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            priceId: CONFIG.stripePriceId,
+                            customerEmail: customerEmail,
+                            shippingRateId: selectedShippingRate, // Add shipping rate ID
+                            metadata: {
+                                memberstackUserId: memberstackUserId,
+                                planId: CONFIG.memberstackPlanId,
+                                totalWeight: '1000',
+                                productWeight: '900',
+                                packagingWeight: '100'
+                            }
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`Failed to create checkout session: ${errorData.message || response.statusText}`);
+                    }
+
+                    const { sessionId } = await response.json();
+                    const stripe = window.Stripe(CONFIG.stripePublicKey);
+                    
+                    console.log('Redirecting to Stripe with sessionId:', sessionId);
+                    
+                    // Redirect to Stripe Checkout
+                    const { error } = await stripe.redirectToCheckout({ sessionId });
+                    if (error) {
+                        throw error;
+                    }
+                } catch (error) {
+                    console.error('Checkout error:', error);
+                    alert('An error occurred during checkout. Please try again.');
+                }
+            });
         }
     } catch (error) {
         console.error('Initialization error:', error);
