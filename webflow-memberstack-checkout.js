@@ -1,3 +1,5 @@
+
+// Unified Shipping Calculator and Checkout for Webflow + Stripe
 // Unified Shipping Calculator and Checkout for Webflow + Stripe
 
 // Configuration
@@ -174,8 +176,8 @@ function getBaseUrl() {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:8888';
     } else {
-        // For production, use the dedicated functions domain
-        return 'https://lillebighopefunctions.netlify.app';
+        // For production, use the same domain as the website
+        return window.location.origin;
     }
 }
 
@@ -238,59 +240,123 @@ async function handleCheckout(event) {
 async function createCheckoutSession(event) {
     event.preventDefault();
     
-    // Get the language using the language() function
-    const language = window.$lbh.language();
-    const priceId = CONFIG.stripePrices[language];
-    
-    console.log('Creating checkout session with language:', language, 'priceId:', priceId);
-    
-    if (!priceId) {
-        console.error('No price ID found for language:', language);
-        return;
-    }
-
     try {
-        const response = await fetch(`${CONFIG.baseUrl}${CONFIG.functionsUrl}/create-checkout-session`, {
+        // Ensure Memberstack is initialized
+        await waitForMemberstack();
+        
+        // Get the language and shipping information
+        const language = window.$lbh.language();
+        const shippingSelect = document.querySelector('[id="shipping-rate-select"]');
+        const shippingRateId = shippingSelect ? shippingSelect.value : 'shr_1QScKFJRMXFic4sW9e80ABBp';
+        const shippingCountry = getShippingCountry(shippingRateId);
+        
+        // Get price ID based on language
+        const priceId = CONFIG.stripePrices[language];
+        if (!priceId) {
+            throw new Error(`No price ID found for language: ${language}`);
+        }
+
+        // Get customer email from Memberstack
+        console.log('Getting member data from Memberstack...');
+        const member = await window.$memberstackDom.getCurrentMember();
+        console.log('Member data:', member);
+
+        let customerEmail = member?.data?.auth?.email;
+        console.log('Customer email:', customerEmail);
+
+        if (!customerEmail) {
+            // Try to get member information from cookie
+            try {
+                const memberCookie = await window.$memberstackDom.getMemberCookie();
+                console.log('Member cookie info:', memberCookie);
+                
+                // Parse the JWT token if it exists
+                if (memberCookie) {
+                    try {
+                        const tokenPayload = JSON.parse(atob(memberCookie.split('.')[1]));
+                        if (tokenPayload.email) {
+                            customerEmail = tokenPayload.email;
+                            console.log('Retrieved email from cookie:', customerEmail);
+                        }
+                    } catch (parseError) {
+                        console.error('Error parsing member cookie:', parseError);
+                    }
+                }
+                
+                if (!customerEmail) {
+                    throw new Error('Unable to retrieve customer email. Please ensure your account has a valid email.');
+                }
+            } catch (emailError) {
+                console.error('Error getting member email:', emailError);
+                throw new Error('Unable to retrieve customer email. Please ensure you are logged in with a valid email.');
+            }
+        }
+        
+        console.log('Creating checkout session:', {
+            language,
+            shippingRateId,
+            shippingCountry,
+            priceId,
+            customerEmail,
+            memberId: member.data.id
+        });
+
+        const response = await fetch(`${getBaseUrl()}/netlify/functions/create-checkout-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                priceId: priceId,
-                successUrl: window.location.origin + '/vielen-dank-email',
-                cancelUrl: window.location.origin + '/produkte',
+                priceId,
+                customerEmail,
+                shippingRateId,
                 metadata: {
-                    memberstackUserId: window.$memberstackDom.getMemberCookie()?.data?.id,
+                    memberstackUserId: member.data.id,
                     source: 'checkout',
-                    language: language,
+                    language,
                     planId: CONFIG.memberstackPlanId,
                     totalWeight: '1000',
-                    countryCode: getShippingCountry(),
                     productWeight: '900',
-                    packagingWeight: '100'
+                    packagingWeight: '100',
+                    countryCode: shippingCountry
                 }
             })
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to create checkout session: ${errorData.message || response.statusText}`);
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`HTTP error! status: ${response.status}${errorData.error ? ` - ${errorData.error}` : ''}`);
         }
 
-        const { sessionId } = await response.json();
-        const stripe = window.Stripe(CONFIG.stripePublicKey);
+        const session = await response.json();
         
-        console.log('Redirecting to Stripe with sessionId:', sessionId);
-        
-        // Redirect to Stripe Checkout
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-            throw error;
+        if (session.error) {
+            throw new Error(session.error);
+        }
+
+        // Redirect to Stripe checkout
+        const stripe = await loadStripe();
+        const result = await stripe.redirectToCheckout({
+            sessionId: session.id
+        });
+
+        if (result.error) {
+            throw result.error;
         }
     } catch (error) {
         console.error('Checkout error:', error);
-        alert('An error occurred during checkout. Please try again.');
+        if (error.message.includes('log in') || error.message.includes('email')) {
+            alert(error.message);
+        } else {
+            alert('An error occurred during checkout. Please try again.');
+        }
     }
+}
+
+// Get shipping country from shipping rate ID
+function getShippingCountry(shippingRateId) {
+    const shipping = SHIPPING_RATES[shippingRateId];
+    return shipping ? shipping.countries[0] : 'AT'; // Default to Austria if not found
 }
 
 // Update price display
@@ -325,7 +391,7 @@ const basePrice = 49; // Base product price
 
 // Find all shipping select elements
 function initializeShippingSelects() {
-    const shippingSelects = document.querySelectorAll('[id^="shipping-rate-select"]');
+    const shippingSelects = document.querySelectorAll('[id="shipping-rate-select"]');
     shippingSelects.forEach(shippingSelect => {
         if (shippingSelect) {
             // Add change event listener
@@ -500,16 +566,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
+                // Get the language and corresponding price ID
+                const language = window.$lbh.language() || 'de';
+                const priceId = CONFIG.stripePrices[language];
+                if (!priceId) {
+                    throw new Error(`No price found for language: ${language}`);
+                }
+                console.log(`Using price ID for language ${language}:`, priceId);
+
                 console.log('Creating checkout session with shipping rate:', shippingRateId);
                 
-                const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
+                // Get the correct base URL
+                const baseUrl = getBaseUrl();
+                const checkoutUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
+                console.log('Using checkout URL:', checkoutUrl);
+                
+                const response = await fetch(checkoutUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'Origin': window.location.origin
                     },
                     body: JSON.stringify({
-                        priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
+                        priceId: priceId,
                         customerEmail: member.data.auth.email,
                         shippingRateId: shippingRateId,
                         metadata: {

@@ -1,8 +1,8 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const headers = {
-    'Access-Control-Allow-Origin': 'https://www.littlebighope.com',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Origin': '*',  
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
 };
