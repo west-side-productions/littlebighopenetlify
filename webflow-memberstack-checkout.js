@@ -51,12 +51,10 @@ const EU_COUNTRIES = [
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
-    stripePriceId: 'price_1QRN3aJRMXFic4sWBBilYzAc', // Add your actual test price ID here
-    memberstackPlanId: 'prc_online-kochkurs-8b540kc2',
+    stripePriceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
+    memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
     debug: true,
-    // For local development, use localhost. For production, use relative URL
     baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
-    // For testing with Netlify Dev
     isLocalDev: window.location.hostname === 'localhost' || window.location.hostname.includes('192.168.') || window.location.hostname.includes('.local')
 };
 

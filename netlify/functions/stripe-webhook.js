@@ -1,9 +1,8 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
-// Memberstack API URLs
+// Memberstack API URL
 const MEMBERSTACK_API_V1 = 'https://api.memberstack.com/v1';
-const MEMBERSTACK_API_V2 = 'https://api.memberstack.com/v2';
 
 // CORS headers
 const headers = {
