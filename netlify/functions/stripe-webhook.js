@@ -318,6 +318,58 @@ exports.handler = async (event) => {
                             throw new Error(`Failed to add plan: ${v1Response.status}`);
                         }
 
+                        // Send order notification email
+                        try {
+                            const emailResponse = await axios({
+                                method: 'POST',
+                                url: '/.netlify/functions/send-email',
+                                data: {
+                                    to: 'office@west-side-productions.at', // Fixed recipient email
+                                    templateName: 'order_notification',
+                                    language: 'de',
+                                    variables: {
+                                        orderDetails: {
+                                            orderNumber: session.id,
+                                            customerEmail: session.customer_details.email,
+                                            shippingAddress: {
+                                                name: session.shipping_details.name,
+                                                line1: session.shipping_details.address.line1,
+                                                line2: session.shipping_details.address.line2,
+                                                city: session.shipping_details.address.city,
+                                                state: session.shipping_details.address.state,
+                                                postal_code: session.shipping_details.address.postal_code,
+                                                country: session.shipping_details.address.country
+                                            },
+                                            items: [{
+                                                name: 'Online Kochkurs',
+                                                price: (session.amount_subtotal / 100).toFixed(2),
+                                                currency: session.currency.toUpperCase()
+                                            }],
+                                            shipping: {
+                                                method: 'Standard Shipping',
+                                                cost: (session.shipping_cost.amount_total / 100).toFixed(2),
+                                                currency: session.currency.toUpperCase()
+                                            },
+                                            total: {
+                                                subtotal: (session.amount_subtotal / 100).toFixed(2),
+                                                shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
+                                                tax: (session.total_details.amount_tax / 100).toFixed(2),
+                                                total: (session.amount_total / 100).toFixed(2),
+                                                currency: session.currency.toUpperCase()
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                            console.log('Order notification email sent:', emailResponse.data);
+                        } catch (emailError) {
+                            console.error('Failed to send order notification email:', {
+                                error: emailError.message,
+                                response: emailError.response?.data
+                            });
+                            // Don't throw the error as the purchase was successful
+                        }
+
                         // Update custom fields separately
                         const updateUrl = `${MEMBERSTACK_API_V1}/members/${memberStackData.memberId}`;
                         const updateResponse = await retryWithBackoff(async () => {

@@ -123,5 +123,91 @@ module.exports = {
                 <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
             </div>
         `
+    },
+    order_notification: {
+        subject: 'Neue Bestellung eingegangen',
+        html: ({ orderDetails = {} }) => `
+            ${baseStyles}
+            <style>
+                .order-details {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                }
+                .order-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 15px 0;
+                }
+                .order-table th, .order-table td {
+                    padding: 10px;
+                    text-align: left;
+                    border-bottom: 1px solid #ddd;
+                }
+                .order-table th {
+                    background: #edf2f7;
+                }
+                .address-box {
+                    background: white;
+                    border: 1px solid #ddd;
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 4px;
+                }
+                .total-row {
+                    font-weight: bold;
+                    background: #edf2f7;
+                }
+            </style>
+            <h1>Neue Bestellung Eingegangen</h1>
+            <div class="order-details">
+                <h2>Bestellnummer: ${sanitizeInput(orderDetails.orderNumber)}</h2>
+                
+                <h3>Kundeninformationen</h3>
+                <div class="address-box">
+                    <p><strong>Lieferadresse:</strong><br>
+                    ${sanitizeInput(orderDetails.shippingAddress.name)}<br>
+                    ${sanitizeInput(orderDetails.shippingAddress.line1)}
+                    ${orderDetails.shippingAddress.line2 ? `<br>${sanitizeInput(orderDetails.shippingAddress.line2)}` : ''}<br>
+                    ${sanitizeInput(orderDetails.shippingAddress.postal_code)} ${sanitizeInput(orderDetails.shippingAddress.city)}
+                    ${orderDetails.shippingAddress.state ? `<br>${sanitizeInput(orderDetails.shippingAddress.state)}` : ''}<br>
+                    ${sanitizeInput(orderDetails.shippingAddress.country)}</p>
+                </div>
+
+                <h3>Bestellübersicht</h3>
+                <table class="order-table">
+                    <thead>
+                        <tr>
+                            <th>Produkt</th>
+                            <th>Preis</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${orderDetails.items.map(item => `
+                            <tr>
+                                <td>${sanitizeInput(item.name)}</td>
+                                <td>${sanitizeInput(item.price)} ${sanitizeInput(item.currency)}</td>
+                            </tr>
+                        `).join('')}
+                        <tr>
+                            <td>Versand (${sanitizeInput(orderDetails.shipping.method)})</td>
+                            <td>${sanitizeInput(orderDetails.shipping.cost)} ${sanitizeInput(orderDetails.shipping.currency)}</td>
+                        </tr>
+                        <tr>
+                            <td>Mehrwertsteuer</td>
+                            <td>${sanitizeInput(orderDetails.total.tax)} ${sanitizeInput(orderDetails.total.currency)}</td>
+                        </tr>
+                        <tr class="total-row">
+                            <td>Gesamtbetrag</td>
+                            <td>${sanitizeInput(orderDetails.total.total)} ${sanitizeInput(orderDetails.total.currency)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="footer">
+                <p>Dies ist eine automatische Benachrichtigung von Ihrem Little Big Hope System.</p>
+            </div>
+        `
     }
 };
