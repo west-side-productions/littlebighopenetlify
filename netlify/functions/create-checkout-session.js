@@ -51,6 +51,77 @@ exports.handler = async (event, context) => {
             throw new Error('Invalid metadata format');
         }
 
+        // Create shipping options based on the shipping address
+        const getShippingOptions = () => {
+            const shippingOptions = [];
+            
+            // Austria shipping
+            shippingOptions.push({
+                shipping_rate_data: {
+                    display_name: 'Standard Versand Österreich',
+                    type: 'fixed_amount',
+                    fixed_amount: { amount: 728, currency: 'eur' },
+                    delivery_estimate: {
+                        minimum: { unit: 'business_day', value: 3 },
+                        maximum: { unit: 'business_day', value: 5 }
+                    },
+                    metadata: {
+                        country: 'AT'
+                    }
+                }
+            });
+
+            // UK shipping
+            shippingOptions.push({
+                shipping_rate_data: {
+                    display_name: 'UK Standard Delivery',
+                    type: 'fixed_amount',
+                    fixed_amount: { amount: 2072, currency: 'eur' },
+                    delivery_estimate: {
+                        minimum: { unit: 'business_day', value: 5 },
+                        maximum: { unit: 'business_day', value: 7 }
+                    },
+                    metadata: {
+                        country: 'GB'
+                    }
+                }
+            });
+
+            // Singapore shipping
+            shippingOptions.push({
+                shipping_rate_data: {
+                    display_name: 'Singapore Express Delivery',
+                    type: 'fixed_amount',
+                    fixed_amount: { amount: 3653, currency: 'eur' },
+                    delivery_estimate: {
+                        minimum: { unit: 'business_day', value: 7 },
+                        maximum: { unit: 'business_day', value: 10 }
+                    },
+                    metadata: {
+                        country: 'SG'
+                    }
+                }
+            });
+
+            // EU shipping
+            shippingOptions.push({
+                shipping_rate_data: {
+                    display_name: 'EU Standard Delivery',
+                    type: 'fixed_amount',
+                    fixed_amount: { amount: 2036, currency: 'eur' },
+                    delivery_estimate: {
+                        minimum: { unit: 'business_day', value: 5 },
+                        maximum: { unit: 'business_day', value: 7 }
+                    },
+                    metadata: {
+                        type: 'eu'
+                    }
+                }
+            });
+
+            return shippingOptions;
+        };
+
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -66,86 +137,7 @@ exports.handler = async (event, context) => {
                 price: data.priceId,
                 quantity: 1
             }],
-            shipping_options: [
-                {
-                    shipping_rate_data: {
-                        display_name: 'Standard Versand Österreich',
-                        type: 'fixed_amount',
-                        fixed_amount: { amount: 728, currency: 'eur' },
-                        delivery_estimate: {
-                            minimum: { unit: 'business_day', value: 3 },
-                            maximum: { unit: 'business_day', value: 5 }
-                        },
-                        shipping_rate_type: 'at_only'
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        display_name: 'UK Standard Delivery',
-                        type: 'fixed_amount',
-                        fixed_amount: { amount: 2072, currency: 'eur' },
-                        delivery_estimate: {
-                            minimum: { unit: 'business_day', value: 5 },
-                            maximum: { unit: 'business_day', value: 7 }
-                        },
-                        shipping_rate_type: 'uk_only'
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        display_name: 'Singapore Express Delivery',
-                        type: 'fixed_amount',
-                        fixed_amount: { amount: 3653, currency: 'eur' },
-                        delivery_estimate: {
-                            minimum: { unit: 'business_day', value: 7 },
-                            maximum: { unit: 'business_day', value: 10 }
-                        },
-                        shipping_rate_type: 'sg_only'
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        display_name: 'EU Standard Delivery',
-                        type: 'fixed_amount',
-                        fixed_amount: { amount: 2036, currency: 'eur' },
-                        delivery_estimate: {
-                            minimum: { unit: 'business_day', value: 5 },
-                            maximum: { unit: 'business_day', value: 7 }
-                        },
-                        shipping_rate_type: 'eu_only'
-                    }
-                }
-            ],
-            shipping_rate_selection: {
-                type: 'conditional',
-                conditions: [
-                    {
-                        shipping_rate_type: 'at_only',
-                        condition: {
-                            shipping_countries: ['AT']
-                        }
-                    },
-                    {
-                        shipping_rate_type: 'uk_only',
-                        condition: {
-                            shipping_countries: ['GB']
-                        }
-                    },
-                    {
-                        shipping_rate_type: 'sg_only',
-                        condition: {
-                            shipping_countries: ['SG']
-                        }
-                    },
-                    {
-                        shipping_rate_type: 'eu_only',
-                        condition: {
-                            shipping_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
-                                'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
-                        }
-                    }
-                ]
-            },
+            shipping_options: getShippingOptions(),
             success_url: 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
