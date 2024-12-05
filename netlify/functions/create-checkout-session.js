@@ -89,15 +89,15 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: getAllowedCountries()
+                allowed_countries: SHIPPING_RATE_COUNTRIES[data.shippingRateId]
             },
             line_items: [{
                 price: data.priceId,
                 quantity: 1
             }],
-            shipping_options: Object.entries(SHIPPING_RATE_COUNTRIES).map(([rateId, countries]) => ({
-                shipping_rate: rateId
-            })),
+            shipping_options: [
+                { shipping_rate: data.shippingRateId }  // Use the selected shipping rate
+            ],
             success_url: data.successUrl || 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
