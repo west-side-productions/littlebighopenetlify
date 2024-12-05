@@ -246,151 +246,144 @@ if (shippingSelect) {
 // Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        await initializeDependencies();
-        
-        // Different behavior based on current page
-        const currentPath = window.location.pathname;
-        
-        if (currentPath === '/membershome') {
-            console.log('On membershome page, checking for pending checkout');
-            // Check if we need to redirect back to product page
-            const returnUrl = localStorage.getItem('checkoutReturnUrl');
-            const member = await window.$memberstackDom.getCurrentMember();
+        // Wait for Memberstack to be ready
+        await window.$memberstackDom.getCurrentMember();
+
+        // Find elements
+        const checkoutButton = document.querySelector('[data-checkout-button]');
+        const shippingSelect = document.getElementById('shipping-rate-select');
+        const subtotalElement = document.getElementById('subtotal-price');
+        const totalElement = document.getElementById('total-price');
+        const basePrice = parseFloat(document.querySelector('.product').dataset.basePrice);
+
+        if (!checkoutButton) {
+            console.error('Checkout button not found');
+            return;
+        }
+
+        if (!shippingSelect) {
+            console.error('Shipping selection not found');
+            return;
+        }
+
+        // Update price display with shipping
+        function updatePriceDisplay(shippingRateId) {
+            const shipping = SHIPPING_RATES[shippingRateId];
+            if (!shipping) return;
+
+            const subtotal = basePrice;
+            const total = subtotal + shipping.price;
+
+            // Update display elements
+            if (subtotalElement) subtotalElement.textContent = subtotal.toFixed(2);
+            if (totalElement) totalElement.textContent = total.toFixed(2);
             
-            if (returnUrl && member?.data?.auth?.email) {
-                console.log('Found return URL and member is logged in');
-                localStorage.removeItem('checkoutReturnUrl');
+            // Update checkout button text
+            checkoutButton.textContent = `Jetzt Kaufen (€${total.toFixed(2)})`;
+        }
+
+        // Handle shipping selection change
+        shippingSelect.addEventListener('change', (e) => {
+            updatePriceDisplay(e.target.value);
+        });
+
+        // Initialize with first shipping option
+        updatePriceDisplay(shippingSelect.value);
+
+        // Handle checkout button click
+        checkoutButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const member = await window.$memberstackDom.getCurrentMember();
+                if (!member) {
+                    alert('Bitte melden Sie sich an, um fortzufahren.');
+                    return;
+                }
+                const customerEmail = member.data.auth.email;
+                const memberstackUserId = member.data.id;
                 
-                // Extract the base URL without any parameters
-                const baseUrl = returnUrl.split('?')[0];
+                // Get selected shipping rate
+                const selectedShippingRate = shippingSelect.value;
+                if (!selectedShippingRate) {
+                    alert('Bitte wählen Sie eine Versandoption aus');
+                    return;
+                }
+
+                console.log('Creating checkout session with shipping rate:', selectedShippingRate);
                 
-                // Create checkout session directly from membershome
-                const checkoutData = {
-                    priceId: CONFIG.stripePriceId,
-                    quantity: 1,
-                    successUrl: `${window.location.origin}/success`,
-                    cancelUrl: `${window.location.origin}/cancel`,
-                    customerEmail: member.data.auth.email,
-                    metadata: {
-                        memberstackUserId: member.data.id || '',
-                        source: 'webflow_checkout',
-                        planId: 'prc_online-kochkurs-8b540kc2',
-                        planName: 'Online Kochkurs'
+                const functionUrl = 'https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session';
+                console.log('Calling function URL:', functionUrl);
+                
+                const response = await fetch(functionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
-                    shipping: {
-                        name: `${member.data.customFields?.['first-name'] || ''} ${member.data.customFields?.['last-name'] || ''}`.trim(),
-                        address: {
-                            country: 'AT'
+                    body: JSON.stringify({
+                        priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
+                        customerEmail: customerEmail,
+                        shippingRateId: selectedShippingRate,
+                        successUrl: 'https://www.littlebighope.com/vielen-dank-email',
+                        cancelUrl: 'https://www.littlebighope.com/produkte',
+                        metadata: {
+                            memberstackUserId: memberstackUserId,
+                            planId: 'prc_online-kochkurs-8b540kc2',
+                            totalWeight: '1000',
+                            productWeight: '900',
+                            packagingWeight: '100'
                         }
-                    },
-                    locale: 'de',
-                    allow_promotion_codes: true
-                };
-                
+                    })
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server response error:', errorText);
+                    throw new Error(`Failed to create checkout session: ${errorText}`);
+                }
+
+                const responseText = await response.text();
+                console.log('Raw response:', responseText);
+
+                let session;
                 try {
-                    console.log('Creating checkout session from membershome');
-                    // Get the base URL for the API endpoint
-                    const baseUrl = getBaseUrl();
-                    const endpointUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
-                    
-                    const response = await fetch(endpointUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(checkoutData)
-                    });
-                    
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(`Checkout failed: ${errorData.message || response.statusText}`);
-                    }
-                    
-                    const session = await response.json();
-                    console.log('Checkout session created:', session);
-                    
-                    // Initialize Stripe and redirect
-                    const stripe = Stripe(CONFIG.stripePublicKey);
+                    session = JSON.parse(responseText);
+                    console.log('Parsed session:', session);
+                } catch (e) {
+                    console.error('Failed to parse response as JSON:', e);
+                    throw new Error('Invalid response format from server');
+                }
+
+                if (!session) {
+                    throw new Error('No session data received');
+                }
+
+                if (session.sessionId) {
+                    // Initialize Stripe
+                    const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG');
                     const { error } = await stripe.redirectToCheckout({
                         sessionId: session.sessionId
                     });
-                    
-                    if (error) {
-                        console.error('Stripe redirect error:', error);
-                        throw error;
-                    }
-                } catch (error) {
-                    console.error('Error starting checkout:', error);
-                    // If there's an error, redirect back to product page
-                    window.location.href = baseUrl;
-                }
-            }
-        } else if (currentPath.includes('products-test')) {
-            console.log('On product page, initializing checkout');
-            await initializeCheckoutButton();
-            
-            // Set up quantity change handler
-            const quantitySelect = document.getElementById('book-quantity');
-            if (quantitySelect) {
-                quantitySelect.addEventListener('change', updatePriceDisplay);
-                updatePriceDisplay();
-            }
-            
-            // Handle checkout button click
-            document.querySelector('[data-ms-checkout]').addEventListener('click', async (e) => {
-                e.preventDefault();
-                
-                try {
-                    const customerEmail = await window.$memberstackDom.getCurrentMember().then(member => member.data.auth.email);
-                    const memberstackUserId = await window.$memberstackDom.getCurrentMember().then(member => member.data.id);
-                    
-                    // Get selected shipping rate
-                    const shippingSelect = document.getElementById('shipping-rate-select');
-                    if (!shippingSelect) {
-                        throw new Error('Shipping selection not found');
-                    }
-                    const selectedShippingRate = shippingSelect.value;
-                    
-                    const response = await fetch(`${getBaseUrl()}${CONFIG.functionsUrl}/create-checkout-session`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            priceId: CONFIG.stripePriceId,
-                            customerEmail: customerEmail,
-                            shippingRateId: selectedShippingRate, // Add shipping rate ID
-                            metadata: {
-                                memberstackUserId: memberstackUserId,
-                                planId: CONFIG.memberstackPlanId,
-                                totalWeight: '1000',
-                                productWeight: '900',
-                                packagingWeight: '100'
-                            }
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(`Failed to create checkout session: ${errorData.message || response.statusText}`);
-                    }
-
-                    const { sessionId } = await response.json();
-                    const stripe = window.Stripe(CONFIG.stripePublicKey);
-                    
-                    console.log('Redirecting to Stripe with sessionId:', sessionId);
-                    
-                    // Redirect to Stripe Checkout
-                    const { error } = await stripe.redirectToCheckout({ sessionId });
                     if (error) {
                         throw error;
                     }
-                } catch (error) {
-                    console.error('Checkout error:', error);
-                    alert('An error occurred during checkout. Please try again.');
+                } else if (session.url) {
+                    window.location.href = session.url;
+                } else {
+                    console.error('Session data:', session);
+                    throw new Error('No session URL or ID received');
                 }
-            });
-        }
+            } catch (error) {
+                console.error('Checkout error:', error);
+                alert('Es gab einen Fehler beim Erstellen Ihrer Checkout-Session. Bitte versuchen Sie es erneut.');
+            }
+        });
+
+        console.log('Checkout system initialized successfully');
     } catch (error) {
         console.error('Initialization error:', error);
     }
