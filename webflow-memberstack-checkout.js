@@ -272,9 +272,7 @@ function loadStripe() {
         try {
             if (window.Stripe) {
                 console.log('Using existing Stripe instance');
-                const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG', {
-                    betas: ['shipping_rate_checkout_beta_1']
-                });
+                const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG');
                 resolve(stripe);
                 return;
             }
@@ -285,9 +283,7 @@ function loadStripe() {
             script.onload = () => {
                 console.log('Stripe script loaded, initializing...');
                 try {
-                    const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG', {
-                        betas: ['shipping_rate_checkout_beta_1']
-                    });
+                    const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG');
                     console.log('Stripe initialized successfully');
                     resolve(stripe);
                 } catch (error) {

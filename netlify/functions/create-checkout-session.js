@@ -19,6 +19,11 @@ const SHIPPING_RATE_COUNTRIES = {
     ]
 };
 
+// Get allowed countries for shipping
+const getAllowedCountries = () => {
+    return Object.values(SHIPPING_RATE_COUNTRIES).flat();
+};
+
 // Validate shipping rate for allowed countries
 const validateShippingRate = (shippingRateId) => {
     return SHIPPING_RATE_COUNTRIES.hasOwnProperty(shippingRateId);
@@ -84,15 +89,15 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: SHIPPING_RATE_COUNTRIES[data.shippingRateId]
+                allowed_countries: getAllowedCountries()
             },
             line_items: [{
                 price: data.priceId,
                 quantity: 1
             }],
-            shipping_options: [
-                { shipping_rate: data.shippingRateId }  // Use the selected shipping rate
-            ],
+            shipping_options: Object.entries(SHIPPING_RATE_COUNTRIES).map(([rateId, countries]) => ({
+                shipping_rate: rateId
+            })),
             success_url: data.successUrl || 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
