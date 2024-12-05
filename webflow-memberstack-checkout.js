@@ -382,19 +382,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 console.log('Creating checkout session with shipping rate:', selectedShippingRate);
                 
-                const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
+                const response = await fetch(`${CONFIG.baseUrl}${CONFIG.functionsUrl}/create-checkout-session`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
+                        priceId: CONFIG.stripePriceId,
                         customerEmail: member.data.auth.email,
                         shippingRateId: selectedShippingRate,
                         metadata: {
                             memberstackUserId: member.data.id,
-                            planId: 'prc_online-kochkurs-8b540kc2',
+                            planId: CONFIG.memberstackPlanId,
                             totalWeight: '1000',
                             productWeight: '900',
                             packagingWeight: '100'

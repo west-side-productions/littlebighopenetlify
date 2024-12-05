@@ -45,60 +45,43 @@ const validateShippingRate = (shippingRateId) => {
 };
 
 exports.handler = async (event, context) => {
-    // Log request details for debugging
-    console.log('Request details:', {
-        method: event.httpMethod,
-        headers: event.headers,
-        path: event.path
-    });
-
-    // Handle preflight requests
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 204,
-            headers,
-            body: ''
-        };
-    }
-
-    // Only allow POST requests
     if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            headers,
-            body: JSON.stringify({ 
-                error: 'Method not allowed',
-                allowedMethods: ['POST', 'OPTIONS']
-            })
-        };
+        return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
-        const data = JSON.parse(event.body);
-        console.log('Received checkout request:', data);
+        console.log('Received request:', event.body);
+        
+        if (!process.env.STRIPE_SECRET_KEY) {
+            throw new Error('Missing STRIPE_SECRET_KEY environment variable');
+        }
 
+        const data = JSON.parse(event.body);
+        console.log('Parsed request data:', data);
+        
         // Validate required fields
         if (!data.priceId) {
-            throw new Error('Missing required field: priceId');
-        }
-        if (!data.customerEmail) {
-            throw new Error('Missing required field: customerEmail');
-        }
-        if (data.metadata && typeof data.metadata !== 'object') {
-            throw new Error('Invalid metadata format');
+            throw new Error('Missing priceId');
         }
         if (!data.shippingRateId) {
-            throw new Error('Missing required field: shippingRateId');
+            throw new Error('Missing shippingRateId');
         }
 
         // Validate shipping rate
         const shippingRate = validateShippingRate(data.shippingRateId);
+        console.log('Validated shipping rate:', shippingRate);
 
         // Create Stripe checkout session
+        console.log('Creating checkout session with params:', {
+            priceId: data.priceId,
+            shippingRateId: data.shippingRateId,
+            customerEmail: data.customerEmail,
+            metadata: data.metadata
+        });
+
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
             mode: 'payment',
-            locale: 'de',
+            payment_method_types: ['card'],
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
@@ -108,17 +91,18 @@ exports.handler = async (event, context) => {
                 price: data.priceId,
                 quantity: 1
             }],
-            shipping_options: [
-                { shipping_rate: data.shippingRateId }  // Use the selected shipping rate
-            ],
-            success_url: data.successUrl || 'https://www.littlebighope.com/vielen-dank-email',
-            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
-            customer_email: data.customerEmail,
+            shipping_options: [{
+                shipping_rate: data.shippingRateId
+            }],
+            customer_email: data.customerEmail || undefined,
             metadata: {
-                ...(data.metadata || {}),
-                source: 'checkout'
+                ...data.metadata,
+                totalWeight: data.metadata?.totalWeight || '1000',
+                productWeight: data.metadata?.productWeight || '900',
+                packagingWeight: data.metadata?.packagingWeight || '100'
             },
-            automatic_tax: { enabled: true }
+            success_url: process.env.SUCCESS_URL || 'https://lillebighope.com/success',
+            cancel_url: process.env.CANCEL_URL || 'https://lillebighope.com/cancel'
         });
 
         console.log('Created checkout session:', session.id);
@@ -126,22 +110,14 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({
-                sessionId: session.id,
-                url: session.url
-            })
+            body: JSON.stringify({ url: session.url })
         };
-
     } catch (error) {
-        console.error('Checkout error:', error);
-        
+        console.error('Error creating checkout session:', error);
         return {
-            statusCode: 400,
+            statusCode: 500,
             headers,
-            body: JSON.stringify({ 
-                error: error.message,
-                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            })
+            body: JSON.stringify({ error: error.message })
         };
     }
 };
