@@ -51,7 +51,11 @@ const EU_COUNTRIES = [
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
-    stripePriceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
+    stripePrices: {
+        de: 'price_1Q8g1MJRMXFic4sWWumarOmt',
+        en: 'price_1QSkXZJRMXFic4sWATnFuSzO',
+        it: 'price_1QSkYvJRMXFic4sWeAmPTYAe'
+    },
     memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
     debug: true,
     baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
@@ -231,6 +235,62 @@ async function handleCheckout(event) {
     }
 }
 
+async function createCheckoutSession(event) {
+    event.preventDefault();
+    
+    // Get the language from the LBH namespace, fallback to 'de'
+    const language = window.$lbh?.language?.getCurrent() || 'de';
+    const priceId = CONFIG.stripePrices[language];
+    
+    if (!priceId) {
+        console.error('No price ID found for language:', language);
+        return;
+    }
+
+    try {
+        const response = await fetch(`${CONFIG.baseUrl}${CONFIG.functionsUrl}/create-checkout-session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                priceId: priceId,
+                successUrl: window.location.origin + '/vielen-dank-email',
+                cancelUrl: window.location.origin + '/produkte',
+                metadata: {
+                    memberstackUserId: window.$memberstackDom.getMemberCookie()?.data?.id,
+                    source: 'checkout',
+                    language: language,
+                    planId: CONFIG.memberstackPlanId,
+                    totalWeight: '1000',
+                    countryCode: getShippingCountry(),
+                    productWeight: '900',
+                    packagingWeight: '100'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to create checkout session: ${errorData.message || response.statusText}`);
+        }
+
+        const { sessionId } = await response.json();
+        const stripe = window.Stripe(CONFIG.stripePublicKey);
+        
+        console.log('Redirecting to Stripe with sessionId:', sessionId);
+        
+        // Redirect to Stripe Checkout
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        if (error) {
+            throw error;
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        alert('An error occurred during checkout. Please try again.');
+    }
+}
+
 // Update price display
 function updatePriceDisplay() {
     const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
@@ -371,7 +431,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Handle checkout button click
             checkoutButton.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await startCheckout(shippingSelect.value);
+                await createCheckoutSession(e);
             });
         }
 
