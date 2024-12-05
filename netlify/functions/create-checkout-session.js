@@ -1,8 +1,8 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const headers = {
-    'Access-Control-Allow-Origin': '*',  
-    'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin, Authorization, X-Requested-With',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
 };
@@ -46,10 +46,11 @@ const validateShippingRate = (shippingRateId) => {
 
 exports.handler = async function(event, context) {
     // Log request details for debugging
-    console.log('Request details:', {
+    console.log('Incoming request:', {
         method: event.httpMethod,
         headers: event.headers,
-        path: event.path
+        path: event.path,
+        body: event.body ? JSON.parse(event.body) : null
     });
 
     // Handle preflight requests
@@ -112,7 +113,7 @@ exports.handler = async function(event, context) {
         console.log('Sending metadata to Stripe:', metadata);
 
         // Create Stripe checkout session
-        const session = await stripe.checkout.sessions.create({
+        const sessionConfig = {
             payment_method_types: ['card'],
             mode: 'payment',
             locale: metadata.language,
@@ -136,28 +137,27 @@ exports.handler = async function(event, context) {
                 metadata: metadata  // Add metadata to payment intent as well
             },
             automatic_tax: { enabled: true }
-        });
+        };
 
-        console.log('Created checkout session:', session.id);
-
+        const session = await stripe.checkout.sessions.create(sessionConfig);
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({
+            body: JSON.stringify({ 
                 sessionId: session.id,
-                url: session.url
+                publishableKey: process.env.STRIPE_PUBLISHABLE_KEY 
             })
         };
 
     } catch (error) {
-        console.error('Checkout error:', error);
-        
+        console.error('Stripe session creation failed:', error);
         return {
-            statusCode: 400,
+            statusCode: error.statusCode || 500,
             headers,
             body: JSON.stringify({ 
                 error: error.message,
-                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+                type: error.type,
+                code: error.code
             })
         };
     }

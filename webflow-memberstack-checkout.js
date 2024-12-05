@@ -548,7 +548,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Function to start checkout process
         const startCheckout = async (shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') => {
             console.log('Starting checkout process');
+            const button = document.querySelector('#checkout-button');
+            const originalText = button ? button.textContent : '';
+            
             try {
+                if (button) {
+                    button.textContent = 'Processing...';
+                    button.disabled = true;
+                }
+
                 console.log('Getting current member...');
                 const member = await memberstack.getCurrentMember();
                 console.log('Current member:', member);
@@ -576,8 +584,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 console.log('Creating checkout session with shipping rate:', shippingRateId);
                 
-                // Get the correct base URL
-                const baseUrl = getBaseUrl();
+                // Get the correct base URL and construct the endpoint URL
+                const baseUrl = 'https://lillebighopefunctions.netlify.app';
                 const checkoutUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
                 console.log('Using checkout URL:', checkoutUrl);
                 
@@ -597,45 +605,40 @@ document.addEventListener('DOMContentLoaded', async () => {
                             planId: 'prc_online-kochkurs-8b540kc2',
                             totalWeight: '1000',
                             productWeight: '900',
-                            packagingWeight: '100'
+                            packagingWeight: '100',
+                            language: language,
+                            source: window.location.href
                         }
                     })
                 });
 
-                console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
-
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Server response error:', errorText);
-                    throw new Error(`Failed to create checkout session: ${errorText}`);
+                    const errorData = await response.json();
+                    console.error('Checkout session creation failed:', errorData);
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                 }
 
-                const session = await response.json();
-                console.log('Received session:', session);
-                
-                if (!session || (!session.sessionId && !session.url)) {
-                    console.error('Invalid session data:', session);
-                    throw new Error('Invalid session data received from server');
+                const { sessionId } = await response.json();
+                console.log('Session created successfully:', sessionId);
+
+                // Initialize Stripe and redirect to checkout
+                const stripe = await loadStripe(CONFIG.stripePublicKey);
+                if (!stripe) {
+                    throw new Error('Failed to initialize Stripe');
                 }
 
-                if (session.url) {
-                    console.log('Redirecting to session URL:', session.url);
-                    window.location.href = session.url;
-                } else {
-                    console.log('Redirecting to checkout with sessionId:', session.sessionId);
-                    const { error } = await stripe.redirectToCheckout({
-                        sessionId: session.sessionId
-                    });
-                    
-                    if (error) {
-                        console.error('Checkout redirect error:', error);
-                        throw error;
-                    }
+                const { error } = await stripe.redirectToCheckout({ sessionId });
+                if (error) {
+                    throw error;
                 }
+
             } catch (error) {
                 console.error('Checkout error:', error);
-                alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+                if (button) {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
+                alert(`Checkout failed: ${error.message}`);
             }
         };
 
