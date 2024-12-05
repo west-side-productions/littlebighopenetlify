@@ -45,6 +45,39 @@ exports.handler = async (event, context) => {
             throw new Error('Missing required field: priceId');
         }
 
+        // Function to get shipping cost based on country
+        const getShippingCost = (country) => {
+            switch(country) {
+                case 'AT':
+                    return {
+                        amount: 728,
+                        delivery_min: 3,
+                        delivery_max: 5
+                    };
+                case 'GB':
+                    return {
+                        amount: 2072,
+                        delivery_min: 5,
+                        delivery_max: 7
+                    };
+                case 'SG':
+                    return {
+                        amount: 3653,
+                        delivery_min: 7,
+                        delivery_max: 10
+                    };
+                default:
+                    return {
+                        amount: 2036,  // EU rate
+                        delivery_min: 5,
+                        delivery_max: 7
+                    };
+            }
+        };
+
+        // Get shipping details based on the shipping country
+        const shippingDetails = getShippingCost(data.shippingAddress?.country || 'DE');
+
         // Create Stripe checkout session with enhanced configuration
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -56,113 +89,22 @@ exports.handler = async (event, context) => {
                 allowed_countries: ['AT', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
                     'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
             },
-            shipping_options: [
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 728,
-                            currency: 'eur',
-                        },
-                        display_name: 'Shipping',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                        },
-                        shipping_rate_type: 'fixed_amount',
-                        tax_behavior: 'exclusive',
-                        tax_code: 'txcd_92010001', // Shipping tax code
-                        shipping_address_collection: {
-                            allowed_countries: ['AT']
-                        }
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 2036,
-                            currency: 'eur',
-                        },
-                        display_name: 'Shipping',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                        },
-                        shipping_rate_type: 'fixed_amount',
-                        tax_behavior: 'exclusive',
-                        tax_code: 'txcd_92010001',
-                        shipping_address_collection: {
-                            allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
-                                'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
-                        }
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 2072,
-                            currency: 'eur',
-                        },
-                        display_name: 'Shipping',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                        },
-                        shipping_rate_type: 'fixed_amount',
-                        tax_behavior: 'exclusive',
-                        tax_code: 'txcd_92010001',
-                        shipping_address_collection: {
-                            allowed_countries: ['GB']
-                        }
-                    }
-                },
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 3653,
-                            currency: 'eur',
-                        },
-                        display_name: 'Shipping',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 10,
-                            },
-                        },
-                        shipping_rate_type: 'fixed_amount',
-                        tax_behavior: 'exclusive',
-                        tax_code: 'txcd_92010001',
-                        shipping_address_collection: {
-                            allowed_countries: ['SG']
-                        }
-                    }
+            automatic_tax: { enabled: false },
+            shipping_cost: {
+                shipping_rate_data: {
+                    type: 'fixed_amount',
+                    fixed_amount: {
+                        amount: shippingDetails.amount,
+                        currency: 'eur',
+                    },
+                    display_name: 'Shipping',
+                    delivery_estimate: {
+                        minimum: { unit: 'business_day', value: shippingDetails.delivery_min },
+                        maximum: { unit: 'business_day', value: shippingDetails.delivery_max }
+                    },
+                    tax_behavior: 'exclusive'
                 }
-            ],
+            },
             line_items: [{
                 price: data.priceId,
                 quantity: data.quantity || 1,
