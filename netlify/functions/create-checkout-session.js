@@ -51,77 +51,6 @@ exports.handler = async (event, context) => {
             throw new Error('Invalid metadata format');
         }
 
-        // Create shipping options based on the shipping address
-        const getShippingOptions = () => {
-            const shippingOptions = [];
-            
-            // Austria shipping
-            shippingOptions.push({
-                shipping_rate_data: {
-                    display_name: 'Standard Versand Österreich',
-                    type: 'fixed_amount',
-                    fixed_amount: { amount: 728, currency: 'eur' },
-                    delivery_estimate: {
-                        minimum: { unit: 'business_day', value: 3 },
-                        maximum: { unit: 'business_day', value: 5 }
-                    },
-                    metadata: {
-                        country: 'AT'
-                    }
-                }
-            });
-
-            // UK shipping
-            shippingOptions.push({
-                shipping_rate_data: {
-                    display_name: 'UK Standard Delivery',
-                    type: 'fixed_amount',
-                    fixed_amount: { amount: 2072, currency: 'eur' },
-                    delivery_estimate: {
-                        minimum: { unit: 'business_day', value: 5 },
-                        maximum: { unit: 'business_day', value: 7 }
-                    },
-                    metadata: {
-                        country: 'GB'
-                    }
-                }
-            });
-
-            // Singapore shipping
-            shippingOptions.push({
-                shipping_rate_data: {
-                    display_name: 'Singapore Express Delivery',
-                    type: 'fixed_amount',
-                    fixed_amount: { amount: 3653, currency: 'eur' },
-                    delivery_estimate: {
-                        minimum: { unit: 'business_day', value: 7 },
-                        maximum: { unit: 'business_day', value: 10 }
-                    },
-                    metadata: {
-                        country: 'SG'
-                    }
-                }
-            });
-
-            // EU shipping
-            shippingOptions.push({
-                shipping_rate_data: {
-                    display_name: 'EU Standard Delivery',
-                    type: 'fixed_amount',
-                    fixed_amount: { amount: 2036, currency: 'eur' },
-                    delivery_estimate: {
-                        minimum: { unit: 'business_day', value: 5 },
-                        maximum: { unit: 'business_day', value: 7 }
-                    },
-                    metadata: {
-                        type: 'eu'
-                    }
-                }
-            });
-
-            return shippingOptions;
-        };
-
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -137,7 +66,12 @@ exports.handler = async (event, context) => {
                 price: data.priceId,
                 quantity: 1
             }],
-            shipping_options: getShippingOptions(),
+            shipping_options: [
+                { shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp' },  // AT €7.28
+                { shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36' },  // GB €20.72
+                { shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl' },  // SG €36.53
+                { shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7' }   // EU €20.36
+            ],
             success_url: 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
