@@ -75,7 +75,8 @@ exports.handler = async (event, context) => {
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 3 },
                             maximum: { unit: 'business_day', value: 5 }
-                        }
+                        },
+                        shipping_rate_type: 'at_only'
                     }
                 },
                 {
@@ -86,7 +87,8 @@ exports.handler = async (event, context) => {
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
-                        }
+                        },
+                        shipping_rate_type: 'uk_only'
                     }
                 },
                 {
@@ -97,7 +99,8 @@ exports.handler = async (event, context) => {
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 7 },
                             maximum: { unit: 'business_day', value: 10 }
-                        }
+                        },
+                        shipping_rate_type: 'sg_only'
                     }
                 },
                 {
@@ -108,10 +111,41 @@ exports.handler = async (event, context) => {
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
-                        }
+                        },
+                        shipping_rate_type: 'eu_only'
                     }
                 }
             ],
+            shipping_rate_selection: {
+                type: 'conditional',
+                conditions: [
+                    {
+                        shipping_rate_type: 'at_only',
+                        condition: {
+                            shipping_countries: ['AT']
+                        }
+                    },
+                    {
+                        shipping_rate_type: 'uk_only',
+                        condition: {
+                            shipping_countries: ['GB']
+                        }
+                    },
+                    {
+                        shipping_rate_type: 'sg_only',
+                        condition: {
+                            shipping_countries: ['SG']
+                        }
+                    },
+                    {
+                        shipping_rate_type: 'eu_only',
+                        condition: {
+                            shipping_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
+                                'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+                        }
+                    }
+                ]
+            },
             success_url: 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
