@@ -1,5 +1,12 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// Load email templates
+const emailTemplates = {
+    de: require('./email-templates/de')
+};
 
 // Memberstack API URL
 const MEMBERSTACK_API_V1 = 'https://api.memberstack.com/v1';
@@ -285,52 +292,67 @@ exports.handler = async (event) => {
                     // Send order notification email first
                     try {
                         console.log('Sending order notification email...');
-                        const emailResponse = await axios({
-                            method: 'POST',
-                            url: '/.netlify/functions/send-email',
-                            data: {
-                                to: 'office@west-side-productions.at',
-                                templateName: 'order_notification',
-                                language: 'de',
-                                variables: {
-                                    orderDetails: {
-                                        orderNumber: session.id,
-                                        customerEmail: session.customer_details.email,
-                                        shippingAddress: {
-                                            name: session.customer_details.name,
-                                            line1: session.customer_details.address.line1,
-                                            line2: session.customer_details.address.line2,
-                                            city: session.customer_details.address.city,
-                                            state: session.customer_details.address.state,
-                                            postal_code: session.customer_details.address.postal_code,
-                                            country: session.customer_details.address.country
-                                        },
-                                        items: [{
-                                            name: 'Online Kochkurs',
-                                            price: (session.amount_subtotal / 100).toFixed(2),
-                                            currency: session.currency.toUpperCase()
-                                        }],
-                                        shipping: {
-                                            method: 'Standard Versand',
-                                            cost: (session.shipping_cost.amount_total / 100).toFixed(2),
-                                            currency: session.currency.toUpperCase()
-                                        },
-                                        total: {
-                                            subtotal: (session.amount_subtotal / 100).toFixed(2),
-                                            shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
-                                            tax: (session.total_details.amount_tax / 100).toFixed(2),
-                                            total: (session.amount_total / 100).toFixed(2),
-                                            currency: session.currency.toUpperCase()
-                                        }
-                                    }
+                        const template = emailTemplates['de'];
+                        const emailData = {
+                            orderDetails: {
+                                orderNumber: session.id,
+                                customerEmail: session.customer_details.email,
+                                shippingAddress: {
+                                    name: session.customer_details.name,
+                                    line1: session.customer_details.address.line1,
+                                    line2: session.customer_details.address.line2,
+                                    city: session.customer_details.address.city,
+                                    state: session.customer_details.address.state,
+                                    postal_code: session.customer_details.address.postal_code,
+                                    country: session.customer_details.address.country
+                                },
+                                items: [{
+                                    name: 'Online Kochkurs',
+                                    price: (session.amount_subtotal / 100).toFixed(2),
+                                    currency: session.currency.toUpperCase()
+                                }],
+                                shipping: {
+                                    method: 'Standard Versand',
+                                    cost: (session.shipping_cost.amount_total / 100).toFixed(2),
+                                    currency: session.currency.toUpperCase()
+                                },
+                                total: {
+                                    subtotal: (session.amount_subtotal / 100).toFixed(2),
+                                    shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
+                                    tax: (session.total_details.amount_tax / 100).toFixed(2),
+                                    total: (session.amount_total / 100).toFixed(2),
+                                    currency: session.currency.toUpperCase()
                                 }
                             }
-                        });
-                        console.log('Order notification email sent successfully:', emailResponse.data);
+                        };
+
+                        const msg = {
+                            to: 'office@west-side-productions.at',
+                            from: process.env.SENDGRID_FROM_EMAIL,
+                            subject: template.order_notification.subject(emailData),
+                            html: template.order_notification.html(emailData),
+                            text: template.order_notification.text(emailData)
+                        };
+
+                        await retryWithBackoff(async () => {
+                            const response = await sgMail.send(msg);
+                            console.log('Order notification email sent successfully:', response);
+                            return response;
+                        }, 3, 1000);
                     } catch (emailError) {
                         console.error('Failed to send order notification email:', {
                             error: emailError.message,
-                            response: emailError.response?.data
+                            response: emailError.response?.data,
+                            stack: emailError.stack
+                        });
+                        // Store failed email request for retry
+                        await storeFailedRequest({
+                            type: 'email',
+                            data: {
+                                sessionId: session.id,
+                                customerEmail: session.customer_details.email,
+                                error: emailError.message
+                            }
                         });
                     }
 
