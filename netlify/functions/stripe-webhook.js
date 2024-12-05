@@ -306,6 +306,11 @@ exports.handler = async (event) => {
                                     postal_code: session.customer_details.address.postal_code,
                                     country: session.customer_details.address.country
                                 },
+                                weights: {
+                                    productWeight: session.metadata.productWeight,
+                                    packagingWeight: session.metadata.packagingWeight,
+                                    totalWeight: session.metadata.totalWeight
+                                },
                                 items: [{
                                     name: 'Online Kochkurs',
                                     price: (session.amount_subtotal / 100).toFixed(2),
