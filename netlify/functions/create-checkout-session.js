@@ -7,6 +7,17 @@ const headers = {
     'Content-Type': 'application/json'
 };
 
+// Shipping rate to country mapping
+const SHIPPING_RATE_COUNTRIES = {
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': ['AT', 'DE'], // Austria & Germany rate
+    'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG']  // Singapore rate
+};
+
+// Validate shipping rate for allowed countries
+const validateShippingRate = (shippingRateId) => {
+    return SHIPPING_RATE_COUNTRIES.hasOwnProperty(shippingRateId);
+};
+
 exports.handler = async (event, context) => {
     // Log request details for debugging
     console.log('Request details:', {
@@ -54,6 +65,11 @@ exports.handler = async (event, context) => {
             throw new Error('Missing required field: shippingRateId');
         }
 
+        // Validate shipping rate
+        if (!validateShippingRate(data.shippingRateId)) {
+            throw new Error('Invalid shipping rate for selected country');
+        }
+
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -62,7 +78,7 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: ['AT', 'GB', 'SG', 'DE', 'FR', 'IT', 'ES', 'PT', 'BE', 'NL', 'LU', 'DK', 'SE', 'FI', 'IE', 'PL', 'CZ', 'SK', 'HU', 'SI', 'EE', 'LV', 'LT', 'RO', 'BG', 'HR', 'CY', 'MT', 'GR']
+                allowed_countries: SHIPPING_RATE_COUNTRIES[data.shippingRateId]
             },
             line_items: [{
                 price: data.priceId,

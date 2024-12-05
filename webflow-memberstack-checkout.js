@@ -307,6 +307,41 @@ function loadStripe() {
     });
 }
 
+// Shipping rate to country mapping
+const SHIPPING_RATE_COUNTRIES = {
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': ['AT', 'DE'], // Austria & Germany rate
+    'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG']  // Singapore rate
+};
+
+// Get all allowed countries from shipping rates
+const getAllowedCountries = () => {
+    const countries = new Set();
+    Object.values(SHIPPING_RATE_COUNTRIES).forEach(countryList => {
+        countryList.forEach(country => countries.add(country));
+    });
+    return Array.from(countries);
+};
+
+// Get shipping rate for country
+const getShippingRateForCountry = (country) => {
+    for (const [rateId, countries] of Object.entries(SHIPPING_RATE_COUNTRIES)) {
+        if (countries.includes(country)) {
+            return rateId;
+        }
+    }
+    return null;
+};
+
+// Update shipping rate based on selected country
+function updateShippingRate(country) {
+    const rateId = getShippingRateForCountry(country);
+    if (rateId && shippingSelect) {
+        shippingSelect.value = rateId;
+        const event = new Event('change');
+        shippingSelect.dispatchEvent(event);
+    }
+}
+
 // Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
     try {
