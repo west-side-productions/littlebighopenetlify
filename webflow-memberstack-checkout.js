@@ -2,9 +2,10 @@
 
 // Configuration
 const SHIPPING_RATES = {
-    AT: { price: 5, label: "Austria (€5)" },
-    DE: { price: 10, label: "Germany Shipping" },
-    EU: { price: 10, label: "Europe Shipping" }
+    AT: { price: 7.28, label: "Austria Shipping (€7.28)", days: "3-5 Werktage" },
+    GB: { price: 20.72, label: "Great Britain Shipping (€20.72)", days: "5-7 Werktage" },
+    SG: { price: 36.53, label: "Singapore Shipping (€36.53)", days: "7-10 Werktage" },
+    EU: { price: 20.36, label: "Europe Shipping (€20.36)", days: "5-7 Werktage" }
 };
 
 const EU_COUNTRIES = [
@@ -152,18 +153,10 @@ async function handleCheckout(event) {
             throw new Error('No member found');
         }
 
-        // Get country code from shipping-country select or default to AT
-        const countrySelect = document.querySelector('[name="shipping-country"]');
-        const countryCode = countrySelect ? countrySelect.value : 'AT';
-        
-        console.log('Country code from select:', countryCode);
-        console.log('Country select element:', countrySelect);
-
         // Get metadata
         const metadata = {
             memberstackUserId: member.data.id,
             planId: CONFIG.memberstackPlanId,
-            countryCode: countryCode,
             totalWeight: '1000', // Example weight in grams
             productWeight: '900',
             packagingWeight: '100'
@@ -183,10 +176,15 @@ async function handleCheckout(event) {
                 cancelUrl: `${window.location.origin}/produkte`,
                 metadata: metadata,
                 customerEmail: member.data.auth.email,
-                shipping: {
-                    address: {
-                        country: countryCode
-                    }
+                shipping_options: [
+                    { shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp' },  // Austria
+                    { shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36' },  // Great Britain
+                    { shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl' },  // Singapore
+                    { shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7' }   // EU
+                ],
+                shipping_address_collection: {
+                    allowed_countries: ['AT', 'DE', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+                        'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
                 }
             })
         });
