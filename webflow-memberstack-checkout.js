@@ -238,9 +238,11 @@ async function handleCheckout(event) {
 async function createCheckoutSession(event) {
     event.preventDefault();
     
-    // Get the language from the LBH namespace, fallback to 'de'
-    const language = window.$lbh?.language?.getCurrent() || 'de';
+    // Get the language using the language() function
+    const language = window.$lbh.language();
     const priceId = CONFIG.stripePrices[language];
+    
+    console.log('Creating checkout session with language:', language, 'priceId:', priceId);
     
     if (!priceId) {
         console.error('No price ID found for language:', language);
@@ -331,6 +333,7 @@ if (shippingSelect) {
 
     // Initialize with current selection or Austria as default
     const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
+    console.log('Initial shipping rate:', initialShippingRate);
     updateTotalPrice(basePrice, initialShippingRate);
 }
 
@@ -393,6 +396,28 @@ function loadStripe() {
         }
     });
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize language from URL or browser preference
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLang = urlParams.get('lang');
+    
+    if (urlLang && ['de', 'en', 'it'].includes(urlLang)) {
+        window.$lbh.language._current = urlLang;
+    } else {
+        // Try to detect from browser
+        const browserLang = (navigator.language || navigator.userLanguage).split('-')[0].toLowerCase();
+        window.$lbh.language._current = ['de', 'en', 'it'].includes(browserLang) ? browserLang : 'de';
+    }
+    
+    // Update language selector if it exists
+    const languageSelect = document.getElementById('language-select');
+    if (languageSelect) {
+        languageSelect.value = window.$lbh.language._current;
+    }
+    
+    console.log('Initialized with language:', window.$lbh.language._current);
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Initializing checkout system...');

@@ -1,10 +1,10 @@
-<!-- 
-==============================================
-REFERENCE: Official Memberstack Webflow Install
-==============================================
-<script data-memberstack-app="app_cm24j3get009s0spw6wz49psh" src="https://static.memberstack.com/scripts/v1/memberstack.js" type="text/javascript"></script>
-============================================== 
--->
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MD9FWSRJ');</script>
+<!-- End Google Tag Manager -->
 
 <!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -14,191 +14,154 @@ REFERENCE: Official Memberstack Webflow Install
     })(window,document,'script','dataLayer','GTM-MD9FWSRJ');</script>
 <!-- End Google Tag Manager -->
 
-<!-- LBH Core Functionality -->
+<!-- Initialize $lbh immediately -->
 <script>
-(function() {
-    // Configuration
-    const SUPPORTED_LANGUAGES = ['de', 'en', 'fr', 'it'];
-    const DEFAULT_LANGUAGE = 'de';
-    let currentUserLanguage = DEFAULT_LANGUAGE;
-
-    // Initialize LBH namespace
-    window.$lbh = {
-        config: {
-            supportedLanguages: SUPPORTED_LANGUAGES,
-            defaultLanguage: DEFAULT_LANGUAGE
-        },
-
-        // Language detection with caching
-        language: {
-            detect: function() {
-                try {
-                    const browserLang = (navigator.language || navigator.userLanguage).split('-')[0].toLowerCase();
-                    return SUPPORTED_LANGUAGES.includes(browserLang) ? browserLang : DEFAULT_LANGUAGE;
-                } catch (e) {
-                    console.warn('Language detection error:', e);
-                    return DEFAULT_LANGUAGE;
-                }
-            },
-            getCurrent: function() {
-                return currentUserLanguage;
-            },
-            setCurrent: function(lang) {
-                if (SUPPORTED_LANGUAGES.includes(lang)) {
-                    currentUserLanguage = lang;
-                    return true;
-                }
-                return false;
-            }
-        },
-
-        // Email functionality
-        email: {
-            send: async function(to, templateName, variables) {
-                try {
-                    console.log('Sending email:', { templateName, language: currentUserLanguage });
-                    const response = await fetch('/.netlify/functions/send-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            to,
-                            templateName,
-                            language: currentUserLanguage,
-                            variables
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.message || 'Failed to send email');
-                    }
-
-                    return await response.json();
-                } catch (error) {
-                    console.error('Error sending email:', error);
-                    throw error;
-                }
-            }
-        },
-
-        // Verification handling
-        verification: {
-            handleRoutes: async function() {
-                const path = window.location.pathname;
-                const params = new URLSearchParams(window.location.search);
-
-                if (path === '/verify') {
-                    console.log('Verification page detected');
-                    const token = params.get('token');
-                    
-                    if (!token) {
-                        console.error('No token found in URL');
-                        window.location.href = '/verification-error?message=Missing verification token';
-                        return;
-                    }
-
-                    try {
-                        const verificationUrl = `https://lillebighopefunctions.netlify.app/.netlify/functions/verify-email?token=${token}`;
-                        const response = await fetch(verificationUrl, {
-                            method: 'GET',
-                            headers: { 'Content-Type': 'application/json' }
-                        });
-
-                        const responseData = await response.json();
-
-                        if (!response.ok) {
-                            throw new Error(responseData.message || 'Verification failed');
-                        }
-
-                        window.location.href = '/verification-success';
-                    } catch (error) {
-                        console.error('Verification error:', error);
-                        window.location.href = `/verification-error?message=${encodeURIComponent(error.message || 'Verification failed')}`;
-                    }
-                }
-            }
+// Initialize $lbh globally first
+window.$lbh = {
+    memberStackAvailable: false,
+    
+    loadJson: async function() {
+        if (!this.memberStackAvailable) {
+            return JSON.parse(localStorage.getItem("json") ?? "{}");
         }
-    };
-
-    // Setup language field in forms
-    function setupLanguageField() {
-        const langSelect = document.querySelector('select[data-ms-field="language"]');
-        if (!langSelect) return;
-
-        const browserLang = window.$lbh.language.detect();
-        const options = Array.from(langSelect.options);
-        const matchingOption = options.find(option => option.value === browserLang);
-        
-        if (matchingOption) {
-            langSelect.value = browserLang;
-            window.$lbh.language.setCurrent(browserLang);
+        try {
+            const member = await window.memberstack.getMemberJSON();
+            return member?.data ?? {};
+        } catch (e) {
+            console.error('Error loading member data:', e);
+            return {};
         }
+    },
 
-        langSelect.addEventListener('change', (event) => {
-            window.$lbh.language.setCurrent(event.target.value);
-        });
-    }
+    updateJson: async function(json) {
+        if (!this.memberStackAvailable) {
+            localStorage.setItem("json", JSON.stringify(json));
+            return;
+        }
+        try {
+            await window.memberstack.updateMemberJSON({ json });
+        } catch (e) {
+            console.error('Error updating member data:', e);
+            localStorage.setItem("json", JSON.stringify(json)); // Fallback
+        }
+    },
 
-    // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            setupLanguageField();
-            window.$lbh.verification.handleRoutes();
-        }, { passive: true });
-    } else {
-        setupLanguageField();
-        window.$lbh.verification.handleRoutes();
+    tryfind: function(selector, parent) {
+        return (parent ?? document).querySelector(selector);
+    },
+
+    find: function(selector, parent) {
+        const res = this.tryfind(selector, parent);
+        if (!res) {
+            throw new Error(`Can't find element by selector '${selector}'`);
+        }
+        return res;
+    },
+
+    formatQuantity: function(q) {
+        if (!q) return "";
+        let nr = Math.floor(q);
+        let fract = q - nr;
+        switch (fract) {
+            case 0: fract = ""; break;
+            case 0.25: fract = "¼"; break;
+            case 0.5: fract = "½"; break;
+        }
+        return nr > 0 ? `${nr}${fract}` : fract;
+    },
+
+    language: function() {
+        const defaultLang = "de";
+        const langs = ["de", "en", "fr", "it"];
+        try {
+            if (!navigator.language) return defaultLang;
+            const langPart = navigator.language.split('-')[0];
+            if (!langPart) return defaultLang;
+            const i = langs.indexOf(langPart.toLowerCase());
+            return i >= 0 ? langs[i] : defaultLang;
+        } catch (e) {
+            console.error('Error detecting language:', e);
+            return defaultLang;
+        }
     }
-})();
+};
 </script>
 
 <!-- Memberstack Configuration -->
 <script>
-window.$memberstackFormHandlers = {
-    onSubmit: function(data, callback) {
-        console.log('Form submitted:', data);
-        callback();
-    },
-    onSuccess: async function(data) {
-        console.log('Form submission successful:', data);
-        
-        if (data.type === 'signup') {
-            const form = data.form;
-            const email = form.querySelector('input[type="email"]').value;
-            const language = form.querySelector('select[data-ms-field="language"]').value || window.$lbh.language.getCurrent();
-            const firstName = form.querySelector('input[data-ms-field="first-name"]')?.value || '';
-
-            try {
-                await window.$lbh.email.send(email, 'verification', {
-                    firstName: firstName || 'User',
-                    verificationUrl: data.loginRedirect || '/'
-                });
-                window.location.href = '/email-verification';
-            } catch (error) {
-                console.error('Error in signup process:', error);
-            }
-        }
-    }
-};
-
 window.memberstackOptions = {
     debug: true,
     loadTimeout: 15000,
     customDomains: true,
     onReady: function() {
         console.log('Memberstack initialized successfully');
+        window.$lbh.memberStackAvailable = true;
         window.dispatchEvent(new Event('memberstack:initialized'));
     },
     onError: function(error) {
         console.error('Memberstack initialization error:', error);
+        window.$lbh.memberStackAvailable = false;
         window.dispatchEvent(new CustomEvent('memberstack:error', { detail: error }));
     }
 };
 </script>
 
-<!-- Memberstack Script - Official Webflow Installation -->
+<!-- Memberstack Script -->
 <script 
     data-memberstack-app="app_cm24j3get009s0spw6wz49psh" 
     src="https://static.memberstack.com/scripts/v1/memberstack.js" 
     type="text/javascript"
+    async
 ></script>
+
+<!-- Verification Handler -->
+<script>
+(async function init() {
+    try {
+        // Wait for Memberstack to be ready
+        await new Promise((resolve, reject) => {
+            if (window.memberstack) {
+                resolve();
+                return;
+            }
+            
+            window.addEventListener('memberstack:initialized', resolve);
+            setTimeout(() => reject(new Error('Memberstack timeout')), 15000);
+        });
+
+        // Handle verification if on verify page
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        
+        if (token && location.pathname.includes('verify')) {
+            console.log('Starting verification process...');
+            try {
+                await window.memberstack.verifyEmail(token);
+                console.log('Verification successful');
+                
+                const lang = window.$lbh.language();
+                window.location.href = lang === 'de' ? '/verification-success' : `/${lang}/verification-success`;
+            } catch (error) {
+                console.error('Verification error:', error);
+                const lang = window.$lbh.language();
+                const errorPath = lang === 'de' ? '/verification-error' : `/${lang}/verification-error`;
+                window.location.href = `${errorPath}?message=${encodeURIComponent(error?.message || 'Verification failed')}`;
+            }
+        }
+
+        // Handle language redirect for root path
+        if (location.pathname === "/") {
+            const lang = window.$lbh.language();
+            if (lang !== "de") {
+                const target = `${location.origin}/${lang}/`;
+                console.log("Language redirect to:", target);
+                window.location.href = target;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to initialize Memberstack:', error);
+        window.$lbh.memberStackAvailable = false;
+        console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
+    }
+})();
+</script>
