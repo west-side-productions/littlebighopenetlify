@@ -177,7 +177,8 @@ async function handleCheckout(event) {
                 metadata: metadata,
                 customerEmail: member.data.auth.email,
                 shipping_address_collection: {
-                    allowed_countries: ['AT', 'DE']  // Only allow Austria and Germany
+                    allowed_countries: ['AT', 'DE', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+                        'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
                 }
             })
         });
