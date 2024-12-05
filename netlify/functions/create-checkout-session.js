@@ -56,72 +56,54 @@ exports.handler = async (event, context) => {
                 allowed_countries: ['AT', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
                     'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
             },
+            line_items: [{
+                price: data.priceId,
+                quantity: 1
+            }],
             shipping_options: [
                 {
                     shipping_rate_data: {
+                        display_name: 'Standard Versand Österreich',
                         type: 'fixed_amount',
                         fixed_amount: { amount: 728, currency: 'eur' },
-                        display_name: 'Standard Versand Österreich',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 3 },
                             maximum: { unit: 'business_day', value: 5 }
-                        },
-                        tax_behavior: 'exclusive',
-                        metadata: {
-                            country: 'AT'
                         }
                     }
                 },
                 {
                     shipping_rate_data: {
+                        display_name: 'UK Standard Delivery',
                         type: 'fixed_amount',
                         fixed_amount: { amount: 2072, currency: 'eur' },
-                        display_name: 'UK Standard Delivery',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
-                        },
-                        tax_behavior: 'exclusive',
-                        metadata: {
-                            country: 'GB'
                         }
                     }
                 },
                 {
                     shipping_rate_data: {
+                        display_name: 'Singapore Express Delivery',
                         type: 'fixed_amount',
                         fixed_amount: { amount: 3653, currency: 'eur' },
-                        display_name: 'Singapore Express Delivery',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 7 },
                             maximum: { unit: 'business_day', value: 10 }
-                        },
-                        tax_behavior: 'exclusive',
-                        metadata: {
-                            country: 'SG'
                         }
                     }
                 },
                 {
                     shipping_rate_data: {
+                        display_name: 'EU Standard Delivery',
                         type: 'fixed_amount',
                         fixed_amount: { amount: 2036, currency: 'eur' },
-                        display_name: 'EU Standard Delivery',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
-                        },
-                        tax_behavior: 'exclusive',
-                        metadata: {
-                            type: 'eu'
                         }
                     }
-                }
-            ],
-            line_items: [
-                {
-                    price: data.priceId,
-                    quantity: 1
                 }
             ],
             success_url: `${process.env.DOMAIN}/verification-success`,
@@ -129,16 +111,8 @@ exports.handler = async (event, context) => {
             customer_email: data.customerEmail,
             metadata: {
                 ...data.metadata,
-                source: 'webflow_checkout'
-            },
-            custom_text: {
-                shipping_address: {
-                    message: 'Please note: We currently only ship to Austria and Germany.',
-                },
-                submit: {
-                    message: 'We will process your order within 24 hours.',
-                },
-            },
+                source: 'checkout'
+            }
         });
 
         console.log('Created checkout session:', session.id);
