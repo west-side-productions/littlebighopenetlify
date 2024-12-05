@@ -59,8 +59,7 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: ['AT', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
-                    'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+                allowed_countries: ['AT', 'GB', 'SG', 'DE', 'FR', 'IT', 'ES', 'PT', 'BE', 'NL', 'LU', 'DK', 'SE', 'FI', 'IE', 'PL', 'CZ', 'SK', 'HU', 'SI', 'EE', 'LV', 'LT', 'RO', 'BG', 'HR', 'CY', 'MT', 'GR']
             },
             line_items: [{
                 price: data.priceId,

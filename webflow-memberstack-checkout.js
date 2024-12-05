@@ -2,10 +2,10 @@
 
 // Configuration
 const SHIPPING_RATES = {
-    AT: { price: 7.28, label: "Austria Shipping (€7.28)", days: "3-5 Werktage" },
-    GB: { price: 20.72, label: "Great Britain Shipping (€20.72)", days: "5-7 Werktage" },
-    SG: { price: 36.53, label: "Singapore Shipping (€36.53)", days: "7-10 Werktage" },
-    EU: { price: 20.36, label: "Europe Shipping (€20.36)", days: "5-7 Werktage" }
+    'shr_1QScKFJRMXFic4sW9e80ABBp': { price: 7.28, label: 'Österreich', country: 'AT' },
+    'shr_1QScMXJRMXFic4sWih6q9v36': { price: 20.72, label: 'Großbritannien', country: 'GB' },
+    'shr_1QScNqJRMXFic4sW3NVUUckl': { price: 36.53, label: 'Singapur', country: 'SG' },
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': { price: 20.36, label: 'EU', country: 'EU' }
 };
 
 const EU_COUNTRIES = [
@@ -214,6 +214,66 @@ function updatePriceDisplay() {
         button.textContent = `Proceed to Checkout (€${subtotal})`;
     }
 }
+
+// Create shipping rate dropdown
+function createShippingRateDropdown() {
+    const container = document.createElement('div');
+    container.className = 'shipping-rate-container';
+    container.style.marginBottom = '20px';
+
+    const label = document.createElement('label');
+    label.textContent = 'Versand nach:';
+    label.style.display = 'block';
+    label.style.marginBottom = '10px';
+
+    const select = document.createElement('select');
+    select.id = 'shipping-rate-select';
+    select.style.width = '100%';
+    select.style.padding = '8px';
+    select.style.borderRadius = '4px';
+    select.style.border = '1px solid #ddd';
+
+    Object.entries(SHIPPING_RATES).forEach(([rateId, rate]) => {
+        const option = document.createElement('option');
+        option.value = rateId;
+        option.textContent = `${rate.label} - €${rate.price.toFixed(2)}`;
+        select.appendChild(option);
+    });
+
+    container.appendChild(label);
+    container.appendChild(select);
+
+    // Insert before the checkout button
+    const checkoutButton = document.querySelector('[data-ms-checkout]');
+    if (checkoutButton && checkoutButton.parentNode) {
+        checkoutButton.parentNode.insertBefore(container, checkoutButton);
+    }
+
+    return select;
+}
+
+// Update price display with shipping
+function updateTotalPrice(basePrice, shippingRateId) {
+    const shipping = SHIPPING_RATES[shippingRateId];
+    if (!shipping) return;
+
+    const total = basePrice + shipping.price;
+    const priceElement = document.querySelector('.product-price');
+    if (priceElement) {
+        priceElement.textContent = `€${total.toFixed(2)}`;
+    }
+}
+
+// Initialize shipping rate selection
+const shippingSelect = createShippingRateDropdown();
+const basePrice = 39.90; // Base product price
+
+shippingSelect.addEventListener('change', (e) => {
+    updateTotalPrice(basePrice, e.target.value);
+});
+
+// Initialize with Austria as default shipping option
+updateTotalPrice(basePrice, 'shr_1QScKFJRMXFic4sW9e80ABBp');
 
 // Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
