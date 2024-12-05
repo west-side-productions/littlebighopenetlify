@@ -64,7 +64,7 @@ exports.handler = async (event, context) => {
                             amount: 728,
                             currency: 'eur',
                         },
-                        display_name: 'Austria Shipping',
+                        display_name: 'Shipping',
                         delivery_estimate: {
                             minimum: {
                                 unit: 'business_day',
@@ -75,8 +75,11 @@ exports.handler = async (event, context) => {
                                 value: 5,
                             },
                         },
-                        metadata: {
-                            type: 'austria'
+                        shipping_rate_type: 'fixed_amount',
+                        tax_behavior: 'exclusive',
+                        tax_code: 'txcd_92010001', // Shipping tax code
+                        shipping_address_collection: {
+                            allowed_countries: ['AT']
                         }
                     }
                 },
@@ -87,7 +90,7 @@ exports.handler = async (event, context) => {
                             amount: 2036,
                             currency: 'eur',
                         },
-                        display_name: 'EU Shipping',
+                        display_name: 'Shipping',
                         delivery_estimate: {
                             minimum: {
                                 unit: 'business_day',
@@ -98,8 +101,12 @@ exports.handler = async (event, context) => {
                                 value: 7,
                             },
                         },
-                        metadata: {
-                            type: 'eu'
+                        shipping_rate_type: 'fixed_amount',
+                        tax_behavior: 'exclusive',
+                        tax_code: 'txcd_92010001',
+                        shipping_address_collection: {
+                            allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
+                                'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
                         }
                     }
                 },
@@ -110,7 +117,7 @@ exports.handler = async (event, context) => {
                             amount: 2072,
                             currency: 'eur',
                         },
-                        display_name: 'UK Shipping',
+                        display_name: 'Shipping',
                         delivery_estimate: {
                             minimum: {
                                 unit: 'business_day',
@@ -121,8 +128,11 @@ exports.handler = async (event, context) => {
                                 value: 7,
                             },
                         },
-                        metadata: {
-                            type: 'uk'
+                        shipping_rate_type: 'fixed_amount',
+                        tax_behavior: 'exclusive',
+                        tax_code: 'txcd_92010001',
+                        shipping_address_collection: {
+                            allowed_countries: ['GB']
                         }
                     }
                 },
@@ -133,7 +143,7 @@ exports.handler = async (event, context) => {
                             amount: 3653,
                             currency: 'eur',
                         },
-                        display_name: 'Singapore Shipping',
+                        display_name: 'Shipping',
                         delivery_estimate: {
                             minimum: {
                                 unit: 'business_day',
@@ -144,8 +154,11 @@ exports.handler = async (event, context) => {
                                 value: 10,
                             },
                         },
-                        metadata: {
-                            type: 'singapore'
+                        shipping_rate_type: 'fixed_amount',
+                        tax_behavior: 'exclusive',
+                        tax_code: 'txcd_92010001',
+                        shipping_address_collection: {
+                            allowed_countries: ['SG']
                         }
                     }
                 }

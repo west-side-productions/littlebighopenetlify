@@ -176,7 +176,6 @@ async function handleCheckout(event) {
                 cancelUrl: `${window.location.origin}/produkte`,
                 metadata: metadata,
                 customerEmail: member.data.auth.email,
-                shippingCountry: document.querySelector('select[name="shipping-country"]').value,
                 shipping_address_collection: {
                     allowed_countries: ['AT', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
                         'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
