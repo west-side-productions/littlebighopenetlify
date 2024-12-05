@@ -58,16 +58,77 @@ exports.handler = async (event, context) => {
             },
             shipping_options: [
                 {
-                    shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp'
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: { amount: 728, currency: 'eur' },
+                        display_name: 'Standard Versand Österreich',
+                        delivery_estimate: {
+                            minimum: { unit: 'business_day', value: 3 },
+                            maximum: { unit: 'business_day', value: 5 }
+                        },
+                        tax_behavior: 'exclusive',
+                        shipping_rate_data: {
+                            type: 'fixed_amount',
+                            fixed_amount: { amount: 728, currency: 'eur' },
+                            tax_behavior: 'exclusive'
+                        },
+                        allowed_countries: ['AT']
+                    }
                 },
                 {
-                    shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36'
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: { amount: 2072, currency: 'eur' },
+                        display_name: 'UK Standard Delivery',
+                        delivery_estimate: {
+                            minimum: { unit: 'business_day', value: 5 },
+                            maximum: { unit: 'business_day', value: 7 }
+                        },
+                        tax_behavior: 'exclusive',
+                        shipping_rate_data: {
+                            type: 'fixed_amount',
+                            fixed_amount: { amount: 2072, currency: 'eur' },
+                            tax_behavior: 'exclusive'
+                        },
+                        allowed_countries: ['GB']
+                    }
                 },
                 {
-                    shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl'
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: { amount: 3653, currency: 'eur' },
+                        display_name: 'Singapore Express Delivery',
+                        delivery_estimate: {
+                            minimum: { unit: 'business_day', value: 7 },
+                            maximum: { unit: 'business_day', value: 10 }
+                        },
+                        tax_behavior: 'exclusive',
+                        shipping_rate_data: {
+                            type: 'fixed_amount',
+                            fixed_amount: { amount: 3653, currency: 'eur' },
+                            tax_behavior: 'exclusive'
+                        },
+                        allowed_countries: ['SG']
+                    }
                 },
                 {
-                    shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7'
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: { amount: 2036, currency: 'eur' },
+                        display_name: 'EU Standard Delivery',
+                        delivery_estimate: {
+                            minimum: { unit: 'business_day', value: 5 },
+                            maximum: { unit: 'business_day', value: 7 }
+                        },
+                        tax_behavior: 'exclusive',
+                        shipping_rate_data: {
+                            type: 'fixed_amount',
+                            fixed_amount: { amount: 2036, currency: 'eur' },
+                            tax_behavior: 'exclusive'
+                        },
+                        allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
+                            'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+                    }
                 }
             ],
             line_items: [
