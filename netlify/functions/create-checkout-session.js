@@ -53,14 +53,49 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: ['AT', 'DE', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
-                    'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'],
+                allowed_countries: ['AT', 'DE'],
             },
             shipping_options: [
-                { shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp' },  // Austria (€7.28)
-                { shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36' },  // Great Britain (€20.72)
-                { shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl' },  // Singapore (€36.53)
-                { shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7' }   // EU (€20.36)
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 728,  // €7.28
+                            currency: 'eur',
+                        },
+                        display_name: 'Austria Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        },
+                    },
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 1000,  // €10.00
+                            currency: 'eur',
+                        },
+                        display_name: 'Germany Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                    },
+                },
             ],
             line_items: [{
                 price: data.priceId,

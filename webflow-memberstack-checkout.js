@@ -176,15 +176,8 @@ async function handleCheckout(event) {
                 cancelUrl: `${window.location.origin}/produkte`,
                 metadata: metadata,
                 customerEmail: member.data.auth.email,
-                shipping_options: [
-                    { shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp' },  // Austria
-                    { shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36' },  // Great Britain
-                    { shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl' },  // Singapore
-                    { shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7' }   // EU
-                ],
                 shipping_address_collection: {
-                    allowed_countries: ['AT', 'DE', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
-                        'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+                    allowed_countries: ['AT', 'DE']  // Only allow Austria and Germany
                 }
             })
         });
