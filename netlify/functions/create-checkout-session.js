@@ -44,7 +44,7 @@ const validateShippingRate = (shippingRateId) => {
     return rate;
 };
 
-exports.handler = async (event, context) => {
+exports.handler = async function(event, context) {
     // Log request details for debugging
     console.log('Request details:', {
         method: event.httpMethod,
@@ -105,7 +105,8 @@ exports.handler = async (event, context) => {
             productWeight: data.metadata?.productWeight || '900',
             packagingWeight: data.metadata?.packagingWeight || '100',
             planId: 'pln_kostenloser-zugang-84l80t3u', // Ensure this specific plan is always set
-            countryCode: countryCode // Add the country code to metadata
+            countryCode: countryCode, // Add the country code to metadata
+            language: data.language || 'de' // Default to German if not specified
         };
         
         console.log('Sending metadata to Stripe:', metadata);
@@ -114,7 +115,7 @@ exports.handler = async (event, context) => {
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'payment',
-            locale: 'de',
+            locale: metadata.language,
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
