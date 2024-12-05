@@ -94,6 +94,17 @@ exports.handler = async (event, context) => {
         // Validate shipping rate
         const shippingRate = validateShippingRate(data.shippingRateId);
 
+        // Create metadata object
+        const metadata = {
+            ...data.metadata,
+            source: 'checkout',
+            totalWeight: data.metadata?.totalWeight || '1000',
+            productWeight: data.metadata?.productWeight || '900',
+            packagingWeight: data.metadata?.packagingWeight || '100'
+        };
+        
+        console.log('Sending metadata to Stripe:', metadata);
+
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -114,13 +125,7 @@ exports.handler = async (event, context) => {
             success_url: data.successUrl || 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
-            metadata: {
-                ...(data.metadata || {}),
-                source: 'checkout',
-                totalWeight: data.metadata?.totalWeight,
-                productWeight: data.metadata?.productWeight,
-                packagingWeight: data.metadata?.packagingWeight
-            },
+            metadata: metadata,
             automatic_tax: { enabled: true }
         });
 
