@@ -47,9 +47,6 @@ exports.handler = async (event, context) => {
         if (!data.customerEmail) {
             throw new Error('Missing required field: customerEmail');
         }
-        if (!data.country) {
-            throw new Error('Missing required field: country');
-        }
         if (data.metadata && typeof data.metadata !== 'object') {
             throw new Error('Invalid metadata format');
         }
