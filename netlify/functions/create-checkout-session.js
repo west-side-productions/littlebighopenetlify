@@ -66,8 +66,10 @@ exports.handler = async (event, context) => {
                             minimum: { unit: 'business_day', value: 3 },
                             maximum: { unit: 'business_day', value: 5 }
                         },
-                        tax_behavior: 'exclusive',
-                        metadata: { type: 'at' }
+                        tax_behavior: 'exclusive'
+                    },
+                    shipping_rate_data_condition: {
+                        allowed_countries: ['AT']
                     }
                 },
                 {
@@ -79,8 +81,10 @@ exports.handler = async (event, context) => {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
                         },
-                        tax_behavior: 'exclusive',
-                        metadata: { type: 'gb' }
+                        tax_behavior: 'exclusive'
+                    },
+                    shipping_rate_data_condition: {
+                        allowed_countries: ['GB']
                     }
                 },
                 {
@@ -92,8 +96,10 @@ exports.handler = async (event, context) => {
                             minimum: { unit: 'business_day', value: 7 },
                             maximum: { unit: 'business_day', value: 10 }
                         },
-                        tax_behavior: 'exclusive',
-                        metadata: { type: 'sg' }
+                        tax_behavior: 'exclusive'
+                    },
+                    shipping_rate_data_condition: {
+                        allowed_countries: ['SG']
                     }
                 },
                 {
@@ -105,8 +111,11 @@ exports.handler = async (event, context) => {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
                         },
-                        tax_behavior: 'exclusive',
-                        metadata: { type: 'eu' }
+                        tax_behavior: 'exclusive'
+                    },
+                    shipping_rate_data_condition: {
+                        allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
+                            'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
                     }
                 }
             ],
