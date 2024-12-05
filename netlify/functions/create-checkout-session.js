@@ -67,12 +67,9 @@ exports.handler = async (event, context) => {
                             maximum: { unit: 'business_day', value: 5 }
                         },
                         tax_behavior: 'exclusive',
-                        shipping_rate_data: {
-                            type: 'fixed_amount',
-                            fixed_amount: { amount: 728, currency: 'eur' },
-                            tax_behavior: 'exclusive'
-                        },
-                        allowed_countries: ['AT']
+                        metadata: {
+                            country: 'AT'
+                        }
                     }
                 },
                 {
@@ -85,12 +82,9 @@ exports.handler = async (event, context) => {
                             maximum: { unit: 'business_day', value: 7 }
                         },
                         tax_behavior: 'exclusive',
-                        shipping_rate_data: {
-                            type: 'fixed_amount',
-                            fixed_amount: { amount: 2072, currency: 'eur' },
-                            tax_behavior: 'exclusive'
-                        },
-                        allowed_countries: ['GB']
+                        metadata: {
+                            country: 'GB'
+                        }
                     }
                 },
                 {
@@ -103,12 +97,9 @@ exports.handler = async (event, context) => {
                             maximum: { unit: 'business_day', value: 10 }
                         },
                         tax_behavior: 'exclusive',
-                        shipping_rate_data: {
-                            type: 'fixed_amount',
-                            fixed_amount: { amount: 3653, currency: 'eur' },
-                            tax_behavior: 'exclusive'
-                        },
-                        allowed_countries: ['SG']
+                        metadata: {
+                            country: 'SG'
+                        }
                     }
                 },
                 {
@@ -121,13 +112,9 @@ exports.handler = async (event, context) => {
                             maximum: { unit: 'business_day', value: 7 }
                         },
                         tax_behavior: 'exclusive',
-                        shipping_rate_data: {
-                            type: 'fixed_amount',
-                            fixed_amount: { amount: 2036, currency: 'eur' },
-                            tax_behavior: 'exclusive'
-                        },
-                        allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
-                            'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+                        metadata: {
+                            type: 'eu'
+                        }
                     }
                 }
             ],
