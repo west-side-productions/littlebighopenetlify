@@ -24,9 +24,10 @@ function calculateShippingRate(country) {
     
     // Define shipping rates
     const SHIPPING_RATES = {
-        AT: { price: 500, label: "Austria Shipping" },
-        DE: { price: 1000, label: "Germany Shipping" },
-        EU: { price: 1000, label: "Europe Shipping" }
+        AT: { price: 728, label: "Austria Shipping" },
+        GB: { price: 2072, label: "Great Britain Shipping" },
+        SG: { price: 3653, label: "Singapore Shipping" },
+        EU: { price: 2036, label: "Europe Shipping" }
     };
 
     // EU country list
@@ -37,7 +38,8 @@ function calculateShippingRate(country) {
     ];
 
     if (countryCode === 'AT') return SHIPPING_RATES.AT;
-    if (countryCode === 'DE') return SHIPPING_RATES.DE;
+    if (countryCode === 'GB') return SHIPPING_RATES.GB;
+    if (countryCode === 'SG') return SHIPPING_RATES.SG;
     if (EU_COUNTRIES.includes(countryCode)) return SHIPPING_RATES.EU;
 
     throw new Error(`No shipping rate available for country: ${countryCode}`);
