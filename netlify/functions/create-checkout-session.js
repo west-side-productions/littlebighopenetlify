@@ -58,42 +58,26 @@ exports.handler = async (event, context) => {
             },
             shipping_options: [
                 {
-                    shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp',
-                    shipping_rate_data_condition: {
-                        allowed_countries: ['AT']
-                    }
+                    shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp'
                 },
                 {
-                    shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36',
-                    shipping_rate_data_condition: {
-                        allowed_countries: ['GB']
-                    }
+                    shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36'
                 },
                 {
-                    shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl',
-                    shipping_rate_data_condition: {
-                        allowed_countries: ['SG']
-                    }
+                    shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl'
                 },
                 {
-                    shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7',
-                    shipping_rate_data_condition: {
-                        allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
-                            'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
-                    }
+                    shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7'
                 }
             ],
-            line_items: [{
-                price: data.priceId,
-                quantity: data.quantity || 1,
-                adjustable_quantity: {
-                    enabled: true,
-                    minimum: 1,
-                    maximum: 10,
-                },
-            }],
-            success_url: data.successUrl || process.env.SUCCESS_URL || `${process.env.URL}/success`,
-            cancel_url: data.cancelUrl || process.env.CANCEL_URL || `${process.env.URL}/cancel`,
+            line_items: [
+                {
+                    price: data.priceId,
+                    quantity: 1
+                }
+            ],
+            success_url: `${process.env.DOMAIN}/verification-success`,
+            cancel_url: `${process.env.DOMAIN}/verification-cancel`,
             customer_email: data.customerEmail,
             metadata: {
                 ...data.metadata,
