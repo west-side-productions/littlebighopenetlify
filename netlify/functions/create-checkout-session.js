@@ -68,9 +68,6 @@ exports.handler = async (event, context) => {
                         },
                         tax_behavior: 'exclusive',
                         metadata: { type: 'at' }
-                    },
-                    shipping_rate_data_condition: {
-                        shipping_address: { country: 'AT' }
                     }
                 },
                 {
@@ -84,9 +81,6 @@ exports.handler = async (event, context) => {
                         },
                         tax_behavior: 'exclusive',
                         metadata: { type: 'gb' }
-                    },
-                    shipping_rate_data_condition: {
-                        shipping_address: { country: 'GB' }
                     }
                 },
                 {
@@ -100,9 +94,6 @@ exports.handler = async (event, context) => {
                         },
                         tax_behavior: 'exclusive',
                         metadata: { type: 'sg' }
-                    },
-                    shipping_rate_data_condition: {
-                        shipping_address: { country: 'SG' }
                     }
                 },
                 {
@@ -117,7 +108,6 @@ exports.handler = async (event, context) => {
                         tax_behavior: 'exclusive',
                         metadata: { type: 'eu' }
                     }
-                    // No condition means this is the default for all other countries
                 }
             ],
             line_items: [{
