@@ -116,7 +116,10 @@ exports.handler = async (event, context) => {
             customer_email: data.customerEmail,
             metadata: {
                 ...(data.metadata || {}),
-                source: 'checkout'
+                source: 'checkout',
+                totalWeight: data.metadata?.totalWeight,
+                productWeight: data.metadata?.productWeight,
+                packagingWeight: data.metadata?.packagingWeight
             },
             automatic_tax: { enabled: true }
         });
