@@ -126,6 +126,9 @@ exports.handler = async (event, context) => {
             cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
             metadata: metadata,
+            payment_intent_data: {
+                metadata: metadata  // Add metadata to payment intent as well
+            },
             automatic_tax: { enabled: true }
         });
 
