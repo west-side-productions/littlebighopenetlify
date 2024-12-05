@@ -2,10 +2,43 @@
 
 // Configuration
 const SHIPPING_RATES = {
-    'shr_1QScKFJRMXFic4sW9e80ABBp': { price: 7.28, label: 'Österreich', country: 'AT' },
-    'shr_1QScMXJRMXFic4sWih6q9v36': { price: 20.72, label: 'Großbritannien', country: 'GB' },
-    'shr_1QScNqJRMXFic4sW3NVUUckl': { price: 36.53, label: 'Singapur', country: 'SG' },
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': { price: 20.36, label: 'EU', country: 'EU' }
+    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+        price: 7.28, 
+        label: 'Österreich', 
+        countries: ['AT']
+    },
+    'shr_1QScMXJRMXFic4sWih6q9v36': { 
+        price: 20.72, 
+        label: 'Great Britain', 
+        countries: ['GB']
+    },
+    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+        price: 36.53, 
+        label: 'Singapore', 
+        countries: ['SG']
+    },
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+        price: 20.36, 
+        label: 'European Union', 
+        countries: [
+            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
+            'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
+            'SI', 'SK', 'FI', 'SE'
+        ]
+    }
+};
+
+const getCountriesForShippingRate = (shippingRateId) => {
+    return SHIPPING_RATES[shippingRateId]?.countries || [];
+};
+
+const getShippingRateForCountry = (country) => {
+    for (const [rateId, rate] of Object.entries(SHIPPING_RATES)) {
+        if (rate.countries.includes(country)) {
+            return rateId;
+        }
+    }
+    return null;
 };
 
 const EU_COUNTRIES = [
@@ -303,48 +336,6 @@ function loadStripe() {
     });
 }
 
-// Shipping rate to country mapping
-const SHIPPING_RATE_COUNTRIES = {
-    'shr_1QScKFJRMXFic4sW9e80ABBp': ['AT'],  // Austria €7.28
-    'shr_1QScMXJRMXFic4sWih6q9v36': ['GB'],  // UK €20.72
-    'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG'],  // Singapore €36.53
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': [        // EU €20.36
-        'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
-        'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
-        'SI', 'SK', 'FI', 'SE'
-    ]
-};
-
-// Get all allowed countries from shipping rates
-const getAllowedCountries = () => {
-    const countries = new Set();
-    Object.values(SHIPPING_RATE_COUNTRIES).forEach(countryList => {
-        countryList.forEach(country => countries.add(country));
-    });
-    return Array.from(countries);
-};
-
-// Get shipping rate for country
-const getShippingRateForCountry = (country) => {
-    for (const [rateId, countries] of Object.entries(SHIPPING_RATE_COUNTRIES)) {
-        if (countries.includes(country)) {
-            return rateId;
-        }
-    }
-    return null;
-};
-
-// Update shipping rate based on selected country
-function updateShippingRate(country) {
-    const rateId = getShippingRateForCountry(country);
-    if (rateId && shippingSelect) {
-        shippingSelect.value = rateId;
-        const event = new Event('change');
-        shippingSelect.dispatchEvent(event);
-    }
-}
-
-// Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Wait for both Memberstack and Stripe to be ready
@@ -357,53 +348,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Find elements
         const checkoutButton = document.querySelector('[data-checkout-button]');
         const shippingSelect = document.getElementById('shipping-rate-select');
-        const subtotalElement = document.getElementById('subtotal-price');
-        const totalElement = document.getElementById('total-price');
-        const productElement = document.querySelector('.product');
-
-        if (!checkoutButton || !shippingSelect || !subtotalElement || !totalElement || !productElement) {
-            console.error('Required elements not found');
-            return;
+        if (!checkoutButton || !shippingSelect) {
+            throw new Error('Required elements not found');
         }
 
-        // Get base price from product data attribute
-        const basePrice = parseFloat(productElement.dataset.basePrice) || 49;
-        console.log('Base price:', basePrice);
-
-        // Update price display with shipping
-        function updatePriceDisplay(shippingRateId) {
-            const shipping = SHIPPING_RATES[shippingRateId];
-            if (!shipping) {
-                console.error('Shipping rate not found:', shippingRateId);
-                return;
-            }
-
-            // Format subtotal
-            subtotalElement.textContent = basePrice.toFixed(2);
-
-            // Calculate and format total
-            const total = basePrice + shipping.price;
-            totalElement.textContent = total.toFixed(2);
-            
-            // Update checkout button text
-            checkoutButton.textContent = `Jetzt Kaufen (€${total.toFixed(2)})`;
-
-            console.log('Price updated:', {
-                basePrice: basePrice,
-                shippingPrice: shipping.price,
-                total: total
-            });
-        }
+        // Initialize with first shipping option
+        const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
+        console.log('Initial shipping rate:', initialShippingRate);
+        updateTotalPrice(basePrice, initialShippingRate);
 
         // Handle shipping selection change
         shippingSelect.addEventListener('change', (e) => {
             console.log('Shipping selection changed:', e.target.value);
-            updatePriceDisplay(e.target.value);
+            updateTotalPrice(basePrice, e.target.value);
         });
-
-        // Initialize with first shipping option
-        console.log('Initial shipping rate:', shippingSelect.value);
-        updatePriceDisplay(shippingSelect.value);
 
         // Handle checkout button click
         checkoutButton.addEventListener('click', async (e) => {
@@ -415,10 +373,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     alert('Bitte melden Sie sich an, um fortzufahren.');
                     return;
                 }
-                const customerEmail = member.data.auth.email;
-                const memberstackUserId = member.data.id;
-                
-                // Get selected shipping rate
+
                 const selectedShippingRate = shippingSelect.value;
                 if (!selectedShippingRate) {
                     alert('Bitte wählen Sie eine Versandoption aus');
@@ -427,10 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 console.log('Creating checkout session with shipping rate:', selectedShippingRate);
                 
-                const functionUrl = 'https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session';
-                console.log('Calling function URL:', functionUrl);
-                
-                const response = await fetch(functionUrl, {
+                const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -438,12 +390,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     },
                     body: JSON.stringify({
                         priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
-                        customerEmail: customerEmail,
+                        customerEmail: member.data.auth.email,
                         shippingRateId: selectedShippingRate,
-                        successUrl: 'https://www.littlebighope.com/vielen-dank-email',
-                        cancelUrl: 'https://www.littlebighope.com/produkte',
                         metadata: {
-                            memberstackUserId: memberstackUserId,
+                            memberstackUserId: member.data.id,
                             planId: 'prc_online-kochkurs-8b540kc2',
                             totalWeight: '1000',
                             productWeight: '900',
@@ -453,7 +403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
 
                 console.log('Response status:', response.status);
-                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                console.log('Response headers:', response.headers);
 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -485,7 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (error) {
                 console.error('Checkout error:', error);
-                alert('Es gab einen Fehler beim Erstellen Ihrer Checkout-Session. Bitte versuchen Sie es erneut.');
+                alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
             }
         });
 

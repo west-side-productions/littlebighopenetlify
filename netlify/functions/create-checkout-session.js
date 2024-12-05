@@ -7,26 +7,41 @@ const headers = {
     'Content-Type': 'application/json'
 };
 
-// Shipping rate to country mapping
-const SHIPPING_RATE_COUNTRIES = {
-    'shr_1QScKFJRMXFic4sW9e80ABBp': ['AT'],  // Austria €7.28
-    'shr_1QScMXJRMXFic4sWih6q9v36': ['GB'],  // UK €20.72
-    'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG'],  // Singapore €36.53
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': [        // EU €20.36
-        'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
-        'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
-        'SI', 'SK', 'FI', 'SE'
-    ]
+// Shipping rate configuration
+const SHIPPING_RATES = {
+    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+        price: 7.28, 
+        label: 'Österreich', 
+        countries: ['AT']
+    },
+    'shr_1QScMXJRMXFic4sWih6q9v36': { 
+        price: 20.72, 
+        label: 'Great Britain', 
+        countries: ['GB']
+    },
+    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+        price: 36.53, 
+        label: 'Singapore', 
+        countries: ['SG']
+    },
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+        price: 20.36, 
+        label: 'European Union', 
+        countries: [
+            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
+            'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
+            'SI', 'SK', 'FI', 'SE'
+        ]
+    }
 };
 
-// Get allowed countries for shipping
-const getAllowedCountries = () => {
-    return Object.values(SHIPPING_RATE_COUNTRIES).flat();
-};
-
-// Validate shipping rate for allowed countries
+// Helper function to validate shipping rate against country
 const validateShippingRate = (shippingRateId) => {
-    return SHIPPING_RATE_COUNTRIES.hasOwnProperty(shippingRateId);
+    const rate = SHIPPING_RATES[shippingRateId];
+    if (!rate) {
+        throw new Error(`Invalid shipping rate: ${shippingRateId}`);
+    }
+    return rate;
 };
 
 exports.handler = async (event, context) => {
@@ -77,9 +92,7 @@ exports.handler = async (event, context) => {
         }
 
         // Validate shipping rate
-        if (!validateShippingRate(data.shippingRateId)) {
-            throw new Error('Invalid shipping rate for selected country');
-        }
+        const shippingRate = validateShippingRate(data.shippingRateId);
 
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
@@ -89,7 +102,7 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: SHIPPING_RATE_COUNTRIES[data.shippingRateId]
+                allowed_countries: shippingRate.countries
             },
             line_items: [{
                 price: data.priceId,
