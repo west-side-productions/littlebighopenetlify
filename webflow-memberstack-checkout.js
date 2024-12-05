@@ -323,18 +323,23 @@ function updateTotalPrice(basePrice, shippingRateId) {
 // Initialize shipping rate selection
 const basePrice = 49; // Base product price
 
-// Find the shipping select element
-const shippingSelect = document.getElementById('shipping-rate-select');
-if (shippingSelect) {
-    // Add change event listener
-    shippingSelect.addEventListener('change', (e) => {
-        updateTotalPrice(basePrice, e.target.value);
-    });
+// Find all shipping select elements
+function initializeShippingSelects() {
+    const shippingSelects = document.querySelectorAll('[id^="shipping-rate-select"]');
+    shippingSelects.forEach(shippingSelect => {
+        if (shippingSelect) {
+            // Add change event listener
+            shippingSelect.addEventListener('change', (e) => {
+                updateTotalPrice(basePrice, e.target.value);
+            });
 
-    // Initialize with current selection or Austria as default
-    const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
-    console.log('Initial shipping rate:', initialShippingRate);
-    updateTotalPrice(basePrice, initialShippingRate);
+            // Initialize with current selection or Austria as default
+            const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
+            console.log('Initial shipping rate:', initialShippingRate);
+            updateTotalPrice(basePrice, initialShippingRate);
+        }
+    });
+    return shippingSelects.length > 0;
 }
 
 // Wait for Memberstack to be available
@@ -398,13 +403,31 @@ function loadStripe() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize language selector if it exists
-    const languageSelect = document.getElementById('language-select');
-    if (languageSelect) {
-        languageSelect.value = window.$lbh.language();
+    try {
+        // Initialize all language selectors
+        const languageSelectors = document.querySelectorAll('.language-selector');
+        const currentLanguage = window.$lbh.language();
+        
+        languageSelectors.forEach(selector => {
+            if (selector) {
+                selector.value = currentLanguage;
+                
+                // Add change listener to sync all selectors
+                selector.addEventListener('change', function(e) {
+                    const newLang = e.target.value;
+                    languageSelectors.forEach(sel => {
+                        if (sel !== e.target) {
+                            sel.value = newLang;
+                        }
+                    });
+                });
+            }
+        });
+        
+        console.log('Initialized with language:', currentLanguage);
+    } catch (error) {
+        console.error('Error initializing language selectors:', error);
     }
-    
-    console.log('Initialized with language:', window.$lbh.language());
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -412,41 +435,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
         // Check if we're on membershome
-        const isOnMembershome = window.location.pathname === '/membershome';
+        const isOnMembershome = window.location.pathname.includes('/memberbereich');
         console.log('Is on membershome:', isOnMembershome);
 
-        // Only check for elements if not on membershome
-        if (!isOnMembershome) {
-            const checkoutButton = document.querySelector('[data-checkout-button]');
-            const shippingSelect = document.getElementById('shipping-rate-select');
-            
-            console.log('Found elements:', {
-                checkoutButton: !!checkoutButton,
-                shippingSelect: !!shippingSelect
-            });
+        // Initialize shipping selects
+        const hasShippingSelects = initializeShippingSelects();
+        
+        // Initialize checkout button
+        const checkoutButton = document.querySelector('[data-checkout-button]');
+        
+        console.log('Found elements:', {
+            checkoutButton: !!checkoutButton,
+            shippingSelect: hasShippingSelects
+        });
 
-            if (!checkoutButton || !shippingSelect) {
-                console.log('Required elements not found, skipping initialization');
-                return;
-            }
+        if (!checkoutButton) {
+            console.log('Required elements not found, skipping initialization');
+            return;
+        }
 
-            // Initialize shipping related functionality
-            const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
-            console.log('Initial shipping rate:', initialShippingRate);
-            updateTotalPrice(basePrice, initialShippingRate);
-
-            // Handle shipping selection change
-            shippingSelect.addEventListener('change', (e) => {
-                console.log('Shipping selection changed:', e.target.value);
-                updateTotalPrice(basePrice, e.target.value);
-            });
-
-            // Handle checkout button click
-            checkoutButton.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await createCheckoutSession(e);
+        // Handle shipping selection change
+        if (hasShippingSelects) {
+            const shippingSelects = document.querySelectorAll('[id^="shipping-rate-select"]');
+            shippingSelects.forEach(shippingSelect => {
+                shippingSelect.addEventListener('change', (e) => {
+                    console.log('Shipping selection changed:', e.target.value);
+                    updateTotalPrice(basePrice, e.target.value);
+                });
             });
         }
+
+        // Handle checkout button click
+        checkoutButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await createCheckoutSession(e);
+        });
 
         // Wait for both Memberstack and Stripe to be ready
         console.log('Loading Memberstack and Stripe...');
