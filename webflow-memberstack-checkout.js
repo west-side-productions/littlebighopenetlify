@@ -337,50 +337,76 @@ function loadStripe() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Initializing checkout system...');
+    
     try {
+        // Check if we're on membershome
+        const isOnMembershome = window.location.pathname === '/membershome';
+        console.log('Is on membershome:', isOnMembershome);
+
+        // Only check for elements if not on membershome
+        if (!isOnMembershome) {
+            const checkoutButton = document.querySelector('[data-checkout-button]');
+            const shippingSelect = document.getElementById('shipping-rate-select');
+            
+            console.log('Found elements:', {
+                checkoutButton: !!checkoutButton,
+                shippingSelect: !!shippingSelect
+            });
+
+            if (!checkoutButton || !shippingSelect) {
+                console.log('Required elements not found, skipping initialization');
+                return;
+            }
+
+            // Initialize shipping related functionality
+            const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
+            console.log('Initial shipping rate:', initialShippingRate);
+            updateTotalPrice(basePrice, initialShippingRate);
+
+            // Handle shipping selection change
+            shippingSelect.addEventListener('change', (e) => {
+                console.log('Shipping selection changed:', e.target.value);
+                updateTotalPrice(basePrice, e.target.value);
+            });
+
+            // Handle checkout button click
+            checkoutButton.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await startCheckout(shippingSelect.value);
+            });
+        }
+
         // Wait for both Memberstack and Stripe to be ready
+        console.log('Loading Memberstack and Stripe...');
         const [memberstack, stripe] = await Promise.all([
             waitForMemberstack(),
             loadStripe()
         ]);
-        console.log('Memberstack and Stripe loaded');
+        console.log('Memberstack and Stripe loaded successfully');
 
-        // Find elements
-        const checkoutButton = document.querySelector('[data-checkout-button]');
-        const shippingSelect = document.getElementById('shipping-rate-select');
-        if (!checkoutButton || !shippingSelect) {
-            throw new Error('Required elements not found');
-        }
-
-        // Initialize with first shipping option
-        const initialShippingRate = shippingSelect.value || 'shr_1QScKFJRMXFic4sW9e80ABBp';
-        console.log('Initial shipping rate:', initialShippingRate);
-        updateTotalPrice(basePrice, initialShippingRate);
-
-        // Handle shipping selection change
-        shippingSelect.addEventListener('change', (e) => {
-            console.log('Shipping selection changed:', e.target.value);
-            updateTotalPrice(basePrice, e.target.value);
-        });
-
-        // Handle checkout button click
-        checkoutButton.addEventListener('click', async (e) => {
-            e.preventDefault();
-            
+        // Function to start checkout process
+        const startCheckout = async (shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') => {
+            console.log('Starting checkout process');
             try {
+                console.log('Getting current member...');
                 const member = await memberstack.getCurrentMember();
+                console.log('Current member:', member);
+
                 if (!member) {
-                    alert('Bitte melden Sie sich an, um fortzufahren.');
+                    console.log('No member found, redirecting to registration');
+                    window.location.href = '/registrieren';
                     return;
                 }
 
-                const selectedShippingRate = shippingSelect.value;
-                if (!selectedShippingRate) {
-                    alert('Bitte wählen Sie eine Versandoption aus');
+                // Verify member data exists
+                if (!member.data?.auth?.email) {
+                    console.error('Member data incomplete:', member);
+                    window.location.href = '/registrieren';
                     return;
                 }
 
-                console.log('Creating checkout session with shipping rate:', selectedShippingRate);
+                console.log('Creating checkout session with shipping rate:', shippingRateId);
                 
                 const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
                     method: 'POST',
@@ -391,7 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     body: JSON.stringify({
                         priceId: 'price_1QRN3aJRMXFic4sWBBilYzAc',
                         customerEmail: member.data.auth.email,
-                        shippingRateId: selectedShippingRate,
+                        shippingRateId: shippingRateId,
                         metadata: {
                             memberstackUserId: member.data.id,
                             planId: 'prc_online-kochkurs-8b540kc2',
@@ -437,14 +463,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error('Checkout error:', error);
                 alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
             }
-        });
+        };
+
+        // Start checkout automatically if on membershome
+        if (isOnMembershome) {
+            console.log('On membershome page, starting checkout automatically');
+            await startCheckout();
+        }
 
         console.log('Checkout system initialized successfully');
     } catch (error) {
         console.error('Initialization error:', error);
         if (error.message === 'Memberstack timeout') {
             console.log('Proceeding without Memberstack');
-            // You might want to add fallback behavior here
         }
     }
 });

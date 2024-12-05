@@ -286,14 +286,15 @@ exports.handler = async (event) => {
                     try {
                         // Use V1 API directly since it worked before
                         const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
-                        console.log('Attempting MemberStack V1 API:', {
+                        console.log('Attempting MemberStack plan addition:', {
                             url: v1Url,
                             memberId: memberStackData.memberId,
-                            planId: memberStackData.planId
+                            planId: memberStackData.planId,
+                            planIdValue: 'pln_kostenloser-zugang-84l80t3u' // Log the expected plan ID
                         });
 
                         const v1Response = await retryWithBackoff(async () => {
-                            return await axios({
+                            const response = await axios({
                                 method: 'POST',
                                 url: v1Url,
                                 headers: {
@@ -301,13 +302,15 @@ exports.handler = async (event) => {
                                     'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                                 },
                                 data: {
-                                    planId: memberStackData.planId,
+                                    planId: 'pln_kostenloser-zugang-84l80t3u', // Use the specific plan ID
                                     memberId: memberStackData.memberId
                                 }
                             });
+                            console.log('MemberStack plan addition response:', response.data);
+                            return response;
                         }, 3, 1000); // 3 retries, 1 second initial delay
 
-                        console.log('MemberStack V1 API response:', {
+                        console.log('MemberStack plan addition response:', {
                             status: v1Response.status,
                             data: v1Response.data
                         });
