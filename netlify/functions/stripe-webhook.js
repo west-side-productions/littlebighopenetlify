@@ -282,162 +282,152 @@ exports.handler = async (event) => {
 
                     console.log('Preparing MemberStack update:', memberStackData);
 
+                    // Send order notification email first
                     try {
-                        // Use V1 API directly since it worked before
-                        const v1Url = `${MEMBERSTACK_API_V1}/members/add-plan`;
-                        console.log('Attempting MemberStack plan addition:', {
-                            url: v1Url,
-                            memberId: memberStackData.memberId,
-                            planId: memberStackData.planId,
-                            planIdValue: 'pln_kostenloser-zugang-84l80t3u' // Log the expected plan ID
-                        });
-
-                        const v1Response = await retryWithBackoff(async () => {
-                            const response = await axios({
-                                method: 'POST',
-                                url: v1Url,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                },
-                                data: {
-                                    planId: 'pln_kostenloser-zugang-84l80t3u', // Use the specific plan ID
-                                    memberId: memberStackData.memberId
-                                }
-                            });
-                            console.log('MemberStack plan addition response:', response.data);
-                            return response;
-                        }, 3, 1000); // 3 retries, 1 second initial delay
-
-                        console.log('MemberStack plan addition response:', {
-                            status: v1Response.status,
-                            data: v1Response.data
-                        });
-
-                        if (v1Response.status !== 200) {
-                            throw new Error(`Failed to add plan: ${v1Response.status}`);
-                        }
-
-                        // Send order notification email
-                        try {
-                            const emailResponse = await axios({
-                                method: 'POST',
-                                url: '/.netlify/functions/send-email',
-                                data: {
-                                    to: 'office@west-side-productions.at', // Fixed recipient email
-                                    templateName: 'order_notification',
-                                    language: 'de',
-                                    variables: {
-                                        orderDetails: {
-                                            orderNumber: session.id,
-                                            customerEmail: session.customer_details.email,
-                                            shippingAddress: {
-                                                name: session.shipping_details.name,
-                                                line1: session.shipping_details.address.line1,
-                                                line2: session.shipping_details.address.line2,
-                                                city: session.shipping_details.address.city,
-                                                state: session.shipping_details.address.state,
-                                                postal_code: session.shipping_details.address.postal_code,
-                                                country: session.shipping_details.address.country
-                                            },
-                                            items: [{
-                                                name: 'Online Kochkurs',
-                                                price: (session.amount_subtotal / 100).toFixed(2),
-                                                currency: session.currency.toUpperCase()
-                                            }],
-                                            shipping: {
-                                                method: 'Standard Shipping',
-                                                cost: (session.shipping_cost.amount_total / 100).toFixed(2),
-                                                currency: session.currency.toUpperCase()
-                                            },
-                                            total: {
-                                                subtotal: (session.amount_subtotal / 100).toFixed(2),
-                                                shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
-                                                tax: (session.total_details.amount_tax / 100).toFixed(2),
-                                                total: (session.amount_total / 100).toFixed(2),
-                                                currency: session.currency.toUpperCase()
-                                            }
+                        console.log('Sending order notification email...');
+                        const emailResponse = await axios({
+                            method: 'POST',
+                            url: '/.netlify/functions/send-email',
+                            data: {
+                                to: 'office@west-side-productions.at',
+                                templateName: 'order_notification',
+                                language: 'de',
+                                variables: {
+                                    orderDetails: {
+                                        orderNumber: session.id,
+                                        customerEmail: session.customer_details.email,
+                                        shippingAddress: {
+                                            name: session.customer_details.name,
+                                            line1: session.customer_details.address.line1,
+                                            line2: session.customer_details.address.line2,
+                                            city: session.customer_details.address.city,
+                                            state: session.customer_details.address.state,
+                                            postal_code: session.customer_details.address.postal_code,
+                                            country: session.customer_details.address.country
+                                        },
+                                        items: [{
+                                            name: 'Online Kochkurs',
+                                            price: (session.amount_subtotal / 100).toFixed(2),
+                                            currency: session.currency.toUpperCase()
+                                        }],
+                                        shipping: {
+                                            method: 'Standard Versand',
+                                            cost: (session.shipping_cost.amount_total / 100).toFixed(2),
+                                            currency: session.currency.toUpperCase()
+                                        },
+                                        total: {
+                                            subtotal: (session.amount_subtotal / 100).toFixed(2),
+                                            shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
+                                            tax: (session.total_details.amount_tax / 100).toFixed(2),
+                                            total: (session.amount_total / 100).toFixed(2),
+                                            currency: session.currency.toUpperCase()
                                         }
                                     }
                                 }
-                            });
-                            console.log('Order notification email sent:', emailResponse.data);
-                        } catch (emailError) {
-                            console.error('Failed to send order notification email:', {
-                                error: emailError.message,
-                                response: emailError.response?.data
-                            });
-                            // Don't throw the error as the purchase was successful
-                        }
-
-                        // Update custom fields separately
-                        const updateUrl = `${MEMBERSTACK_API_V1}/members/${memberStackData.memberId}`;
-                        const updateResponse = await retryWithBackoff(async () => {
-                            return await axios({
-                                method: 'POST',
-                                url: updateUrl,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                                },
-                                data: {
-                                    customFields: memberStackData.customFields
-                                }
-                            });
-                        }, 3, 1000);
-
-                        console.log('Member custom fields update response:', {
-                            status: updateResponse.status,
-                            data: updateResponse.data
+                            }
                         });
+                        console.log('Order notification email sent successfully:', emailResponse.data);
+                    } catch (emailError) {
+                        console.error('Failed to send order notification email:', {
+                            error: emailError.message,
+                            response: emailError.response?.data
+                        });
+                    }
 
-                        // Process shipping if needed
-                        if (memberStackData.customFields.shippingCountry) {
-                            const shippingResponse = await axios({
-                                method: 'POST',
-                                url: '/.netlify/functions/process-shipping',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                data: {
-                                    countryCode: shippingCountry,
-                                    memberId: memberStackData.memberId,
-                                    sessionId: session.id,
-                                    totalWeight: memberStackData.customFields.totalWeight,
-                                    productWeight: memberStackData.customFields.productWeight,
-                                    packagingWeight: memberStackData.customFields.packagingWeight
-                                }
-                            });
+                    // Now try to add the Memberstack plan
+                    console.log('Attempting MemberStack plan addition:', {
+                        url: `${MEMBERSTACK_API_V1}/members/add-plan`,
+                        memberId: memberStackData.memberId,
+                        planId: memberStackData.planId,
+                        planIdValue: 'pln_kostenloser-zugang-84l80t3u' // Log the expected plan ID
+                    });
 
-                            console.log('Shipping process response:', shippingResponse.data);
-                        }
+                    const v1Response = await retryWithBackoff(async () => {
+                        const response = await axios({
+                            method: 'POST',
+                            url: `${MEMBERSTACK_API_V1}/members/add-plan`,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                            },
+                            data: {
+                                planId: 'pln_kostenloser-zugang-84l80t3u', // Use the specific plan ID
+                                memberId: memberStackData.memberId
+                            }
+                        });
+                        console.log('MemberStack plan addition response:', response.data);
+                        return response;
+                    }, 3, 1000); // 3 retries, 1 second initial delay
 
-                        return {
-                            statusCode: 200,
-                            headers,
-                            body: JSON.stringify({
-                                received: true,
-                                memberstackUserId: memberStackData.memberId,
-                                memberstackPlanId: memberStackData.planId,
+                    console.log('MemberStack plan addition response:', {
+                        status: v1Response.status,
+                        data: v1Response.data
+                    });
+
+                    if (v1Response.status !== 200) {
+                        throw new Error(`Failed to add plan: ${v1Response.status}`);
+                    }
+
+                    // Update custom fields separately
+                    const updateUrl = `${MEMBERSTACK_API_V1}/members/${memberStackData.memberId}`;
+                    const updateResponse = await retryWithBackoff(async () => {
+                        return await axios({
+                            method: 'POST',
+                            url: updateUrl,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                            },
+                            data: {
+                                customFields: memberStackData.customFields
+                            }
+                        });
+                    }, 3, 1000);
+
+                    console.log('Member custom fields update response:', {
+                        status: updateResponse.status,
+                        data: updateResponse.data
+                    });
+
+                    // Process shipping if needed
+                    if (memberStackData.customFields.shippingCountry) {
+                        const shippingResponse = await axios({
+                            method: 'POST',
+                            url: '/.netlify/functions/process-shipping',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            data: {
                                 countryCode: shippingCountry,
+                                memberId: memberStackData.memberId,
+                                sessionId: session.id,
                                 totalWeight: memberStackData.customFields.totalWeight,
                                 productWeight: memberStackData.customFields.productWeight,
                                 packagingWeight: memberStackData.customFields.packagingWeight
-                            })
-                        };
-                    } catch (error) {
-                        console.error('MemberStack API error:', {
-                            message: error.message,
-                            response: error.response?.data,
-                            status: error.response?.status
+                            }
                         });
-                        throw error; // Re-throw to be caught by outer try-catch
+
+                        console.log('Shipping process response:', shippingResponse.data);
                     }
+
+                    return {
+                        statusCode: 200,
+                        headers,
+                        body: JSON.stringify({
+                            received: true,
+                            memberstackUserId: memberStackData.memberId,
+                            memberstackPlanId: memberStackData.planId,
+                            countryCode: shippingCountry,
+                            totalWeight: memberStackData.customFields.totalWeight,
+                            productWeight: memberStackData.customFields.productWeight,
+                            packagingWeight: memberStackData.customFields.packagingWeight
+                        })
+                    };
                 } catch (error) {
-                    console.error('Error processing webhook:', {
+                    console.error('MemberStack API error:', {
                         message: error.message,
                         response: error.response?.data,
-                        stack: error.stack
+                        status: error.response?.status
                     });
                     throw error; // Re-throw to be caught by outer try-catch
                 }
