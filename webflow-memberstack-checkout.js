@@ -398,25 +398,13 @@ function loadStripe() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize language from URL or browser preference
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlLang = urlParams.get('lang');
-    
-    if (urlLang && ['de', 'en', 'it'].includes(urlLang)) {
-        window.$lbh.language._current = urlLang;
-    } else {
-        // Try to detect from browser
-        const browserLang = (navigator.language || navigator.userLanguage).split('-')[0].toLowerCase();
-        window.$lbh.language._current = ['de', 'en', 'it'].includes(browserLang) ? browserLang : 'de';
-    }
-    
-    // Update language selector if it exists
+    // Initialize language selector if it exists
     const languageSelect = document.getElementById('language-select');
     if (languageSelect) {
-        languageSelect.value = window.$lbh.language._current;
+        languageSelect.value = window.$lbh.language();
     }
     
-    console.log('Initialized with language:', window.$lbh.language._current);
+    console.log('Initialized with language:', window.$lbh.language());
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
