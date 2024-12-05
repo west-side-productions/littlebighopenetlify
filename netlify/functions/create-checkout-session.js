@@ -13,7 +13,7 @@ const SHIPPING_RATE_COUNTRIES = {
     'shr_1QScMXJRMXFic4sWih6q9v36': ['GB'],  // UK €20.72
     'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG'],  // Singapore €36.53
     'shr_1QScOlJRMXFic4sW8MHW0kq7': [        // EU €20.36
-        'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'EL', 'ES', 'FR', 'HR', 
+        'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
         'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
         'SI', 'SK', 'FI', 'SE'
     ]
