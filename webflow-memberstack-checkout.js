@@ -157,7 +157,7 @@ async function handleCheckout(event) {
         const metadata = {
             memberstackUserId: member.data.id,
             planId: CONFIG.memberstackPlanId,
-            totalWeight: '1000', // Example weight in grams
+            totalWeight: '1000',
             productWeight: '900',
             packagingWeight: '100'
         };

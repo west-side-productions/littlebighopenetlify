@@ -54,21 +54,6 @@ exports.handler = async (event, context) => {
             throw new Error('Invalid metadata format');
         }
 
-        // Get shipping rate based on country
-        const getShippingRate = (country) => {
-            switch(country) {
-                case 'AT':
-                    return 'shr_1QScKFJRMXFic4sW9e80ABBp';  // AT €7.28
-                case 'GB':
-                    return 'shr_1QScMXJRMXFic4sWih6q9v36';  // GB €20.72
-                case 'SG':
-                    return 'shr_1QScNqJRMXFic4sW3NVUUckl';  // SG €36.53
-                default:
-                    // For all other EU countries
-                    return 'shr_1QScOlJRMXFic4sW8MHW0kq7';  // EU €20.36
-            }
-        };
-
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -85,7 +70,10 @@ exports.handler = async (event, context) => {
                 quantity: 1
             }],
             shipping_options: [
-                { shipping_rate: getShippingRate(data.country) }
+                { shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp' },  // AT €7.28
+                { shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36' },  // GB €20.72
+                { shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl' },  // SG €36.53
+                { shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7' }   // EU €20.36
             ],
             success_url: 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: 'https://www.littlebighope.com/produkte',
