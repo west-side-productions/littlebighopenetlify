@@ -93,6 +93,9 @@ exports.handler = async (event, context) => {
 
         // Validate shipping rate
         const shippingRate = validateShippingRate(data.shippingRateId);
+        
+        // Get the country code from the shipping rate
+        const countryCode = shippingRate.countries[0]; // Use first country as default
 
         // Create metadata object
         const metadata = {
@@ -100,7 +103,9 @@ exports.handler = async (event, context) => {
             source: 'checkout',
             totalWeight: data.metadata?.totalWeight || '1000',
             productWeight: data.metadata?.productWeight || '900',
-            packagingWeight: data.metadata?.packagingWeight || '100'
+            packagingWeight: data.metadata?.packagingWeight || '100',
+            planId: 'pln_kostenloser-zugang-84l80t3u', // Ensure this specific plan is always set
+            countryCode: countryCode // Add the country code to metadata
         };
         
         console.log('Sending metadata to Stripe:', metadata);
