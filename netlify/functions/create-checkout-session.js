@@ -53,7 +53,8 @@ exports.handler = async (event, context) => {
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             shipping_address_collection: {
-                allowed_countries: ['AT', 'DE'],
+                allowed_countries: ['AT', 'DE', 'GB', 'SG', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+                    'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
             },
             shipping_options: [
                 {
@@ -96,6 +97,66 @@ exports.handler = async (event, context) => {
                         },
                     },
                 },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 2072,  // €20.72
+                            currency: 'eur',
+                        },
+                        display_name: 'Great Britain Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                    },
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 3653,  // €36.53
+                            currency: 'eur',
+                        },
+                        display_name: 'Singapore Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 10,
+                            },
+                        },
+                    },
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 2036,  // €20.36
+                            currency: 'eur',
+                        },
+                        display_name: 'Europe Shipping',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                    },
+                }
             ],
             line_items: [{
                 price: data.priceId,
