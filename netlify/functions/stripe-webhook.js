@@ -312,7 +312,7 @@ exports.handler = async (event) => {
                                     totalWeight: session.metadata.totalWeight
                                 },
                                 items: [{
-                                    name: 'Online Kochkurs',
+                                    name: 'Little Big Hope Kochbuch',
                                     price: (session.amount_subtotal / 100).toFixed(2),
                                     currency: session.currency.toUpperCase()
                                 }],
