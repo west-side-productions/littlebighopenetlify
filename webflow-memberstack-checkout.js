@@ -309,8 +309,14 @@ function loadStripe() {
 
 // Shipping rate to country mapping
 const SHIPPING_RATE_COUNTRIES = {
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': ['AT', 'DE'], // Austria & Germany rate
-    'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG']  // Singapore rate
+    'shr_1QScKFJRMXFic4sW9e80ABBp': ['AT'],  // Austria €7.28
+    'shr_1QScMXJRMXFic4sWih6q9v36': ['GB'],  // UK €20.72
+    'shr_1QScNqJRMXFic4sW3NVUUckl': ['SG'],  // Singapore €36.53
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': [        // EU €20.36
+        'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'EL', 'ES', 'FR', 'HR', 
+        'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
+        'SI', 'SK', 'FI', 'SE'
+    ]
 };
 
 // Get all allowed countries from shipping rates
