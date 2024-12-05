@@ -44,6 +44,12 @@ exports.handler = async (event, context) => {
         if (!data.priceId) {
             throw new Error('Missing required field: priceId');
         }
+        if (!data.customerEmail) {
+            throw new Error('Missing required field: customerEmail');
+        }
+        if (data.metadata && typeof data.metadata !== 'object') {
+            throw new Error('Invalid metadata format');
+        }
 
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
@@ -106,11 +112,11 @@ exports.handler = async (event, context) => {
                     }
                 }
             ],
-            success_url: `${process.env.DOMAIN}/verification-success`,
-            cancel_url: `${process.env.DOMAIN}/verification-cancel`,
+            success_url: 'https://www.littlebighope.com/vielen-dank-email',
+            cancel_url: 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
             metadata: {
-                ...data.metadata,
+                ...(data.metadata || {}),
                 source: 'checkout'
             }
         });
