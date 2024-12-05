@@ -66,18 +66,23 @@ exports.handler = async (event, context) => {
                 price: data.priceId,
                 quantity: 1
             }],
-            shipping_options: [
-                { shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp' },  // AT €7.28
-                { shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36' },  // GB €20.72
-                { shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl' },  // SG €36.53
-                { shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7' }   // EU €20.36
-            ],
             success_url: 'https://www.littlebighope.com/vielen-dank-email',
             cancel_url: 'https://www.littlebighope.com/produkte',
             customer_email: data.customerEmail,
             metadata: {
                 ...(data.metadata || {}),
                 source: 'checkout'
+            },
+            shipping_options: undefined,
+            automatic_tax: { enabled: true },
+            shipping_rate_data: {
+                type: 'fixed_amount',
+                fixed_amount: { amount: 0, currency: 'eur' },
+                display_name: 'Shipping',
+                delivery_estimate: {
+                    minimum: { unit: 'business_day', value: 3 },
+                    maximum: { unit: 'business_day', value: 7 }
+                }
             }
         });
 
