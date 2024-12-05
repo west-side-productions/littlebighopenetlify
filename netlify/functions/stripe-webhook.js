@@ -329,14 +329,13 @@ exports.handler = async (event) => {
                         const msg = {
                             to: 'office@west-side-productions.at',
                             from: process.env.SENDGRID_FROM_EMAIL,
-                            subject: template.order_notification.subject(emailData),
-                            html: template.order_notification.html(emailData),
-                            text: template.order_notification.text(emailData)
+                            subject: template.order_notification.subject,
+                            html: template.order_notification.html(emailData)
                         };
 
                         await retryWithBackoff(async () => {
                             const response = await sgMail.send(msg);
-                            console.log('Order notification email sent successfully:', response);
+                            console.log('Order notification email sent successfully:', response[0].statusCode);
                             return response;
                         }, 3, 1000);
                     } catch (emailError) {
