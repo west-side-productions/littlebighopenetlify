@@ -40,76 +40,12 @@ exports.handler = async (event, context) => {
         const data = JSON.parse(event.body);
         console.log('Received checkout request:', data);
 
-        // First, create or update the shipping rates
-        const shippingRates = {
-            at: await stripe.shippingRates.create({
-                display_name: 'Standard Versand Österreich',
-                type: 'fixed_amount',
-                fixed_amount: {
-                    amount: 728,
-                    currency: 'eur',
-                },
-                delivery_estimate: {
-                    minimum: { unit: 'business_day', value: 3 },
-                    maximum: { unit: 'business_day', value: 5 }
-                },
-                metadata: {
-                    country: 'AT'
-                }
-            }),
-            gb: await stripe.shippingRates.create({
-                display_name: 'UK Standard Delivery',
-                type: 'fixed_amount',
-                fixed_amount: {
-                    amount: 2072,
-                    currency: 'eur',
-                },
-                delivery_estimate: {
-                    minimum: { unit: 'business_day', value: 5 },
-                    maximum: { unit: 'business_day', value: 7 }
-                },
-                metadata: {
-                    country: 'GB'
-                }
-            }),
-            sg: await stripe.shippingRates.create({
-                display_name: 'Singapore Express Delivery',
-                type: 'fixed_amount',
-                fixed_amount: {
-                    amount: 3653,
-                    currency: 'eur',
-                },
-                delivery_estimate: {
-                    minimum: { unit: 'business_day', value: 7 },
-                    maximum: { unit: 'business_day', value: 10 }
-                },
-                metadata: {
-                    country: 'SG'
-                }
-            }),
-            eu: await stripe.shippingRates.create({
-                display_name: 'EU Standard Delivery',
-                type: 'fixed_amount',
-                fixed_amount: {
-                    amount: 2036,
-                    currency: 'eur',
-                },
-                delivery_estimate: {
-                    minimum: { unit: 'business_day', value: 5 },
-                    maximum: { unit: 'business_day', value: 7 }
-                },
-                metadata: {
-                    type: 'eu'
-                }
-            })
-        };
-
         // Validate required fields
         if (!data.priceId) {
             throw new Error('Missing required field: priceId');
         }
 
-        // Create Stripe checkout session with shipping rate IDs
+        // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'payment',
@@ -122,25 +58,25 @@ exports.handler = async (event, context) => {
             },
             shipping_options: [
                 {
-                    shipping_rate: shippingRates.at.id,
+                    shipping_rate: 'shr_1QScKFJRMXFic4sW9e80ABBp',
                     shipping_rate_data_condition: {
                         allowed_countries: ['AT']
                     }
                 },
                 {
-                    shipping_rate: shippingRates.gb.id,
+                    shipping_rate: 'shr_1QScMXJRMXFic4sWih6q9v36',
                     shipping_rate_data_condition: {
                         allowed_countries: ['GB']
                     }
                 },
                 {
-                    shipping_rate: shippingRates.sg.id,
+                    shipping_rate: 'shr_1QScNqJRMXFic4sW3NVUUckl',
                     shipping_rate_data_condition: {
                         allowed_countries: ['SG']
                     }
                 },
                 {
-                    shipping_rate: shippingRates.eu.id,
+                    shipping_rate: 'shr_1QScOlJRMXFic4sW8MHW0kq7',
                     shipping_rate_data_condition: {
                         allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
                             'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
