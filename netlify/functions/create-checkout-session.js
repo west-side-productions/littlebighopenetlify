@@ -61,12 +61,11 @@ exports.handler = async (event, context) => {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: { amount: 728, currency: 'eur' },
-                        display_name: 'Shipping',
+                        display_name: 'Standard Versand Österreich',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 3 },
                             maximum: { unit: 'business_day', value: 5 }
-                        },
-                        tax_behavior: 'exclusive'
+                        }
                     },
                     shipping_rate_data_condition: {
                         allowed_countries: ['AT']
@@ -76,12 +75,11 @@ exports.handler = async (event, context) => {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: { amount: 2072, currency: 'eur' },
-                        display_name: 'Shipping',
+                        display_name: 'UK Standard Delivery',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
-                        },
-                        tax_behavior: 'exclusive'
+                        }
                     },
                     shipping_rate_data_condition: {
                         allowed_countries: ['GB']
@@ -91,12 +89,11 @@ exports.handler = async (event, context) => {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: { amount: 3653, currency: 'eur' },
-                        display_name: 'Shipping',
+                        display_name: 'Singapore Express Delivery',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 7 },
                             maximum: { unit: 'business_day', value: 10 }
-                        },
-                        tax_behavior: 'exclusive'
+                        }
                     },
                     shipping_rate_data_condition: {
                         allowed_countries: ['SG']
@@ -106,12 +103,11 @@ exports.handler = async (event, context) => {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: { amount: 2036, currency: 'eur' },
-                        display_name: 'Shipping',
+                        display_name: 'EU Standard Delivery',
                         delivery_estimate: {
                             minimum: { unit: 'business_day', value: 5 },
                             maximum: { unit: 'business_day', value: 7 }
-                        },
-                        tax_behavior: 'exclusive'
+                        }
                     },
                     shipping_rate_data_condition: {
                         allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
