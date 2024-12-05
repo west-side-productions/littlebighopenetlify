@@ -228,7 +228,7 @@ function updateTotalPrice(basePrice, shippingRateId) {
 }
 
 // Initialize shipping rate selection
-const basePrice = 39.90; // Base product price
+const basePrice = 49; // Base product price
 
 // Find the shipping select element
 const shippingSelect = document.getElementById('shipping-rate-select');
@@ -243,51 +243,129 @@ if (shippingSelect) {
     updateTotalPrice(basePrice, initialShippingRate);
 }
 
+// Wait for Memberstack to be available
+function waitForMemberstack(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+
+        function checkMemberstack() {
+            if (window.$memberstackDom) {
+                resolve(window.$memberstackDom);
+                return;
+            }
+
+            if (Date.now() - startTime > timeout) {
+                reject(new Error('Memberstack timeout'));
+                return;
+            }
+
+            setTimeout(checkMemberstack, 100);
+        }
+
+        checkMemberstack();
+    });
+}
+
+// Load Stripe.js
+function loadStripe() {
+    return new Promise((resolve, reject) => {
+        try {
+            if (window.Stripe) {
+                console.log('Using existing Stripe instance');
+                const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG', {
+                    betas: ['shipping_rate_checkout_beta_1']
+                });
+                resolve(stripe);
+                return;
+            }
+
+            console.log('Loading Stripe script');
+            const script = document.createElement('script');
+            script.src = 'https://js.stripe.com/v3/';
+            script.onload = () => {
+                console.log('Stripe script loaded, initializing...');
+                try {
+                    const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG', {
+                        betas: ['shipping_rate_checkout_beta_1']
+                    });
+                    console.log('Stripe initialized successfully');
+                    resolve(stripe);
+                } catch (error) {
+                    console.error('Error initializing Stripe:', error);
+                    reject(error);
+                }
+            };
+            script.onerror = (error) => {
+                console.error('Failed to load Stripe script:', error);
+                reject(new Error('Failed to load Stripe.js'));
+            };
+            document.head.appendChild(script);
+        } catch (error) {
+            console.error('Error in loadStripe:', error);
+            reject(error);
+        }
+    });
+}
+
 // Initialize the system
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Wait for Memberstack to be ready
-        await window.$memberstackDom.getCurrentMember();
+        // Wait for both Memberstack and Stripe to be ready
+        const [memberstack, stripe] = await Promise.all([
+            waitForMemberstack(),
+            loadStripe()
+        ]);
+        console.log('Memberstack and Stripe loaded');
 
         // Find elements
         const checkoutButton = document.querySelector('[data-checkout-button]');
         const shippingSelect = document.getElementById('shipping-rate-select');
         const subtotalElement = document.getElementById('subtotal-price');
         const totalElement = document.getElementById('total-price');
-        const basePrice = parseFloat(document.querySelector('.product').dataset.basePrice);
+        const productElement = document.querySelector('.product');
 
-        if (!checkoutButton) {
-            console.error('Checkout button not found');
+        if (!checkoutButton || !shippingSelect || !subtotalElement || !totalElement || !productElement) {
+            console.error('Required elements not found');
             return;
         }
 
-        if (!shippingSelect) {
-            console.error('Shipping selection not found');
-            return;
-        }
+        // Get base price from product data attribute
+        const basePrice = parseFloat(productElement.dataset.basePrice) || 49;
+        console.log('Base price:', basePrice);
 
         // Update price display with shipping
         function updatePriceDisplay(shippingRateId) {
             const shipping = SHIPPING_RATES[shippingRateId];
-            if (!shipping) return;
+            if (!shipping) {
+                console.error('Shipping rate not found:', shippingRateId);
+                return;
+            }
 
-            const subtotal = basePrice;
-            const total = subtotal + shipping.price;
+            // Format subtotal
+            subtotalElement.textContent = basePrice.toFixed(2);
 
-            // Update display elements
-            if (subtotalElement) subtotalElement.textContent = subtotal.toFixed(2);
-            if (totalElement) totalElement.textContent = total.toFixed(2);
+            // Calculate and format total
+            const total = basePrice + shipping.price;
+            totalElement.textContent = total.toFixed(2);
             
             // Update checkout button text
             checkoutButton.textContent = `Jetzt Kaufen (€${total.toFixed(2)})`;
+
+            console.log('Price updated:', {
+                basePrice: basePrice,
+                shippingPrice: shipping.price,
+                total: total
+            });
         }
 
         // Handle shipping selection change
         shippingSelect.addEventListener('change', (e) => {
+            console.log('Shipping selection changed:', e.target.value);
             updatePriceDisplay(e.target.value);
         });
 
         // Initialize with first shipping option
+        console.log('Initial shipping rate:', shippingSelect.value);
         updatePriceDisplay(shippingSelect.value);
 
         // Handle checkout button click
@@ -295,7 +373,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             
             try {
-                const member = await window.$memberstackDom.getCurrentMember();
+                const member = await memberstack.getCurrentMember();
                 if (!member) {
                     alert('Bitte melden Sie sich an, um fortzufahren.');
                     return;
@@ -346,36 +424,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(`Failed to create checkout session: ${errorText}`);
                 }
 
-                const responseText = await response.text();
-                console.log('Raw response:', responseText);
-
-                let session;
-                try {
-                    session = JSON.parse(responseText);
-                    console.log('Parsed session:', session);
-                } catch (e) {
-                    console.error('Failed to parse response as JSON:', e);
-                    throw new Error('Invalid response format from server');
+                const session = await response.json();
+                console.log('Received session:', session);
+                
+                if (!session || (!session.sessionId && !session.url)) {
+                    console.error('Invalid session data:', session);
+                    throw new Error('Invalid session data received from server');
                 }
 
-                if (!session) {
-                    throw new Error('No session data received');
-                }
-
-                if (session.sessionId) {
-                    // Initialize Stripe
-                    const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG');
+                if (session.url) {
+                    console.log('Redirecting to session URL:', session.url);
+                    window.location.href = session.url;
+                } else {
+                    console.log('Redirecting to checkout with sessionId:', session.sessionId);
                     const { error } = await stripe.redirectToCheckout({
                         sessionId: session.sessionId
                     });
+                    
                     if (error) {
+                        console.error('Checkout redirect error:', error);
                         throw error;
                     }
-                } else if (session.url) {
-                    window.location.href = session.url;
-                } else {
-                    console.error('Session data:', session);
-                    throw new Error('No session URL or ID received');
                 }
             } catch (error) {
                 console.error('Checkout error:', error);
@@ -386,5 +455,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Checkout system initialized successfully');
     } catch (error) {
         console.error('Initialization error:', error);
+        if (error.message === 'Memberstack timeout') {
+            console.log('Proceeding without Memberstack');
+            // You might want to add fallback behavior here
+        }
     }
 });
