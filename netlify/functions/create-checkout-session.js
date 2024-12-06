@@ -96,7 +96,7 @@ exports.handler = async function(event, context) {
         let shippingRate = null;
         let countryCode = 'DE'; // Default for digital products
 
-        if (!isDigitalProduct) {
+        if (!isDigitalProduct && data.metadata?.requiresShipping) {
             if (!data.shippingRateId) {
                 throw new Error('Please select a shipping option');
             }
@@ -108,7 +108,7 @@ exports.handler = async function(event, context) {
         // Create metadata object
         const metadata = {
             ...data.metadata,
-            source: 'checkout',
+            source: data.metadata.source || 'checkout',
             countryCode: countryCode,
             language: data.language || 'de'
         };
@@ -132,28 +132,24 @@ exports.handler = async function(event, context) {
             },
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            locale: data.language || 'de',
-            automatic_tax: { enabled: true }
+            locale: data.language || 'de'
         };
 
-        // Add shipping options if shipping rate is provided
-        if (data.shippingRateId) {
-            const shippingRate = validateShippingRate(data.shippingRateId);
-            sessionConfig.shipping_address_collection = {
-                allowed_countries: shippingRate.countries
-            };
-            sessionConfig.shipping_options = [{
-                shipping_rate: data.shippingRateId
-            }];
-        } else {
-            // For digital products, still collect billing address but limit to supported countries
-            sessionConfig.billing_address_collection = 'required';
-            sessionConfig.allowed_countries = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
-                'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
-                'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'GB'];
+        // Add shipping options only for physical products that require shipping
+        if (!isDigitalProduct && data.metadata?.requiresShipping) {
+            if (data.shippingRateId) {
+                const shippingRate = validateShippingRate(data.shippingRateId);
+                sessionConfig.shipping_address_collection = {
+                    allowed_countries: shippingRate.countries
+                };
+                sessionConfig.shipping_options = [{
+                    shipping_rate: data.shippingRateId
+                }];
+            }
         }
 
         // Create Stripe checkout session
+        console.log('Final session config:', sessionConfig);
         const session = await stripe.checkout.sessions.create(sessionConfig);
         return {
             statusCode: 200,

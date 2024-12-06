@@ -379,18 +379,20 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             priceId: priceId,
             customerEmail: member.data.auth.email,
             language: language,
+            successUrl: window.location.origin + '/vielen-dank-email',
+            cancelUrl: window.location.origin + '/produkte',
             metadata: {
                 memberstackUserId: member.data.id,
                 productType: productType,
                 type: productConfig.type,
                 language: language,
-                source: window.location.href,
+                source: window.location.pathname,
                 planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
                 requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle'
             }
         };
 
-        // Add shipping rate if provided and required
+        // Add shipping rate if provided and required for physical products
         if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
             if (shippingRateId) {
                 payload.shippingRateId = shippingRateId;
@@ -398,9 +400,6 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
                 if (shippingRate) {
                     payload.metadata.countryCode = shippingRate.countries[0];
                 }
-            } else {
-                // For physical products, shipping is required
-                throw new Error('Shipping rate is required for physical products');
             }
         } else {
             // For digital products, use default country code
@@ -422,10 +421,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             payload.metadata.packagingWeight = weightConfig.packaging.toString();
         }
 
-        console.log('Creating checkout session:', {
-            ...payload,
-            type: productConfig.type
-        });
+        console.log('Creating checkout session:', payload);
 
         try {
             // Create checkout session
