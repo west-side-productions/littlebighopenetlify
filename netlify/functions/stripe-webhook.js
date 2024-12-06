@@ -29,9 +29,14 @@ function createMemberstackHeaders() {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
 
+    const now = new Date();
+    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = amzDate.slice(0, 8);
+
     return {
-        Authorization: apiKey,  // Do not add 'Bearer' prefix - Memberstack expects the raw API key
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'X-Amz-Date': amzDate
     };
 }
 
@@ -43,7 +48,7 @@ async function findOrCreateMember(email) {
         const headers = createMemberstackHeaders();
         console.log('Request headers:', {
             ...headers,
-            'Authorization': headers.Authorization.startsWith('Bearer ') ? 'Bearer [REDACTED]' : 'INVALID FORMAT'
+            'Authorization': '[REDACTED]'
         });
         
         // Search for existing member
