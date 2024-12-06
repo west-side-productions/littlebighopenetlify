@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require('crypto');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
 
@@ -21,6 +22,13 @@ When a Stripe webhook 'customer.subscription.created' is received:
 5. Send order confirmation email
 */
 
+// Helper function to create AWS-style signature
+function getSignature(stringToSign, secretKey) {
+    return crypto.createHmac('sha256', secretKey)
+        .update(stringToSign)
+        .digest('base64');
+}
+
 // Helper function to create Memberstack API headers
 function createMemberstackHeaders() {
     const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
@@ -29,10 +37,34 @@ function createMemberstackHeaders() {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
 
-    // Simple headers as per Memberstack documentation
+    const date = new Date();
+    const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = amzDate.slice(0, 8);
+
+    // Create canonical request elements
+    const signedHeaders = 'content-type;host;x-amz-date';
+    const credential = `${apiKey}/${dateStamp}/memberstack/aws4_request`;
+
+    // Create string to sign
+    const stringToSign = 'AWS4-HMAC-SHA256\n' +
+        amzDate + '\n' +
+        credential + '\n' +
+        signedHeaders;
+
+    // Generate signature
+    const signature = getSignature(stringToSign, apiKey);
+
+    // Construct authorization header
+    const authHeader = 'AWS4-HMAC-SHA256 ' +
+        'Credential=' + credential + ', ' +
+        'SignedHeaders=' + signedHeaders + ', ' +
+        'Signature=' + signature;
+
     return {
-        Authorization: apiKey,
-        'Content-Type': 'application/json'
+        'Authorization': authHeader,
+        'Content-Type': 'application/json',
+        'X-Amz-Date': amzDate,
+        'Host': 'api.memberstack.com'
     };
 }
 
@@ -44,7 +76,7 @@ async function findOrCreateMember(email) {
         const headers = createMemberstackHeaders();
         console.log('Request headers:', {
             ...headers,
-            Authorization: '[REDACTED]'
+            'Authorization': '[REDACTED]'
         });
         
         // Search for existing member
