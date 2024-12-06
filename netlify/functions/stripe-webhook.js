@@ -10,7 +10,7 @@ const emailTemplates = {
 };
 
 // Memberstack API URL
-const MEMBERSTACK_API_V2 = 'https://api.memberstack.com/v2';
+const MEMBERSTACK_API_V1 = 'https://api.memberstack.io/v1';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
@@ -105,161 +105,81 @@ async function storeFailedRequest(data) {
     }
 }
 
-// AWS SigV4 signing
-function getSignatureKey(key, dateStamp, regionName, serviceName) {
-    const kDate = crypto.createHmac('sha256', 'AWS4' + key).update(dateStamp).digest();
-    const kRegion = crypto.createHmac('sha256', kDate).update(regionName).digest();
-    const kService = crypto.createHmac('sha256', kRegion).update(serviceName).digest();
-    const kSigning = crypto.createHmac('sha256', kService).update('aws4_request').digest();
-    return kSigning;
-}
-
-function signRequest(method, path, body, apiKey) {
-    const algorithm = 'AWS4-HMAC-SHA256';
-    const service = 'execute-api';
-    const region = 'us-east-1';
-    const host = 'api.memberstack.com';
-
-    // Create date strings
-    const amzdate = new Date().toISOString().replace(/[:\-]|\.\d{3}/g, '');
-    const datestamp = amzdate.substring(0, 8);
-
-    // Create canonical request
-    const canonical_uri = path;
-    const canonical_querystring = '';
-    const payload_hash = crypto.createHash('sha256').update(JSON.stringify(body) || '').digest('hex');
-
-    const canonical_headers = 
-        'host:' + host + '\n' +
-        'x-amz-date:' + amzdate + '\n';
-    
-    const signed_headers = 'host;x-amz-date';
-
-    const canonical_request = method + '\n' +
-        canonical_uri + '\n' +
-        canonical_querystring + '\n' +
-        canonical_headers + '\n' +
-        signed_headers + '\n' +
-        payload_hash;
-
-    // Create string to sign
-    const credential_scope = datestamp + '/' + region + '/' + service + '/aws4_request';
-    const string_to_sign = algorithm + '\n' +
-        amzdate + '\n' +
-        credential_scope + '\n' +
-        crypto.createHash('sha256').update(canonical_request).digest('hex');
-
-    // Calculate signature
-    const signing_key = getSignatureKey(apiKey, datestamp, region, service);
-    const signature = crypto.createHmac('sha256', signing_key).update(string_to_sign).digest('hex');
-
-    // Create authorization header
-    const authorization_header = algorithm + ' ' +
-        'Credential=' + apiKey + '/' + credential_scope + ', ' +
-        'SignedHeaders=' + signed_headers + ', ' +
-        'Signature=' + signature;
-
-    return {
-        'Authorization': authorization_header,
-        'X-Amz-Date': amzdate
-    };
-}
-
 // Memberstack API client with built-in retries
 async function callMemberstackAPI(endpoint, data, attempt = 1) {
-    const startTime = Date.now();
-    const delay = Math.min(INITIAL_DELAY * Math.pow(1.5, attempt - 1), MAX_DELAY);
-    
+    console.log(`Calling Memberstack API endpoint: ${endpoint}`);
     try {
         const response = await axios({
             method: 'POST',
-            url: `${MEMBERSTACK_API_V2}${endpoint}`,
+            url: `${MEMBERSTACK_API_V1}${endpoint}`,
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
             },
-            data,
-            timeout: 5000
+            data: data,
+            timeout: NETLIFY_TIMEOUT
         });
-        
         return response.data;
     } catch (error) {
-        console.log(`API attempt ${attempt} failed:`, {
-            status: error.response?.status,
-            endpoint,
-            delay,
-            timeElapsed: Date.now() - startTime,
-            error: error.message,
-            response: error.response?.data
-        });
-
-        if (attempt < 4 && (error.response?.status === 403 || error.response?.status === 401)) {
-            console.log(`Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return callMemberstackAPI(endpoint, data, attempt + 1);
+        console.error('Error calling Memberstack API:', error.response?.data || error.message);
+        
+        // Handle specific error cases
+        if (error.response) {
+            const status = error.response.status;
+            if ((status === 401 || status === 403) && attempt < MAX_RETRIES) {
+                const delay = Math.min(INITIAL_DELAY * Math.pow(2, attempt - 1), MAX_DELAY);
+                console.log(`Auth error (${status}), retry attempt ${attempt} after ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return callMemberstackAPI(endpoint, data, attempt + 1);
+            }
         }
-
-        if (Date.now() - startTime > NETLIFY_TIMEOUT) {
-            console.log('Approaching Netlify timeout, storing request for later retry');
-            await storeFailedRequest({
-                type: 'memberstack',
-                data: {
-                    endpoint,
-                    payload: data,
-                    error: error.message,
-                    status: error.response?.status,
-                    response: error.response?.data
-                }
-            });
-            throw new Error('Netlify timeout approaching');
-        }
-
         throw error;
     }
 }
 
 exports.handler = async (event) => {
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 200, headers };
+    }
+
     try {
-        console.log('Webhook endpoint hit:', {
-            method: event.httpMethod,
-            path: event.path,
-            headers: Object.keys(event.headers)
-        });
-
-        // Handle preflight request
-        if (event.httpMethod === 'OPTIONS') {
-            return {
-                statusCode: 200,
-                headers
-            };
-        }
-
-        // Log environment check
-        console.log('Environment check:', {
-            stripeKey: !!process.env.STRIPE_SECRET_KEY,
-            webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-            memberstackKey: !!process.env.MEMBERSTACK_SECRET_KEY,
-            webhookSecretPrefix: process.env.STRIPE_WEBHOOK_SECRET?.substring(0, 8)
-        });
-
-        // Parse and verify the webhook payload
-        console.log('Raw webhook body:', event.body);
+        const sig = event.headers['stripe-signature'];
         const stripeEvent = Stripe.webhooks.constructEvent(
             event.body,
-            event.headers['stripe-signature'],
+            sig,
             process.env.STRIPE_WEBHOOK_SECRET
         );
 
-        console.log('Stripe event constructed:', {
-            type: stripeEvent.type,
-            id: stripeEvent.id
-        });
+        console.log('Processing Stripe event:', stripeEvent.type);
 
-        // Handle the checkout.session.completed event
         if (stripeEvent.type === 'checkout.session.completed') {
-            console.log('Processing checkout.session.completed event');
             const session = stripeEvent.data.object;
+            console.log('Checkout session completed:', session.id);
+
+            // Get the Memberstack member ID from metadata
+            const memberstackMemberId = session.metadata?.memberstackUserId;
+            if (!memberstackMemberId) {
+                throw new Error('No Memberstack member ID found in session metadata');
+            }
+
+            // Get the plan ID from metadata
+            const planId = session.metadata?.planId;
+            if (!planId) {
+                throw new Error('No plan ID found in session metadata');
+            }
+
+            // Update member's plan in Memberstack
+            try {
+                await callMemberstackAPI(`/members/${memberstackMemberId}/plans`, {
+                    planId: planId,
+                    status: 'ACTIVE'
+                });
+                console.log('Successfully updated member plan in Memberstack');
+            } catch (error) {
+                console.error('Failed to update Memberstack:', error);
+                throw error;
+            }
 
             // Extract relevant data
             console.log('Checkout session details:', {
@@ -287,8 +207,6 @@ exports.handler = async (event) => {
             });
 
             // Prepare data for Memberstack update
-            const memberId = session.metadata.memberstackUserId;
-            const planId = session.metadata.planId;
             const customFields = {
                 shippingCountry: countryCode,
                 shippingRate: calculatedRate.price,
@@ -301,8 +219,7 @@ exports.handler = async (event) => {
             };
 
             console.log('Preparing MemberStack update:', {
-                memberId,
-                planId,
+                memberId: memberstackMemberId,
                 customFields
             });
 
@@ -361,22 +278,16 @@ exports.handler = async (event) => {
             }
 
             // Update Memberstack member
-            console.log('Attempting MemberStack plan update:', {
-                memberId,
-                planId
+            console.log('Attempting MemberStack update:', {
+                memberId: memberstackMemberId,
+                customFields
             });
 
             try {
-                // First try to add the plan
-                await callMemberstackAPI(`/members/${memberId}/plans`, {
-                    planId: planId
-                });
-
-                // Then update custom fields
-                await callMemberstackAPI(`/members/${memberId}`, {
+                // Update custom fields
+                await callMemberstackAPI(`/members/${memberstackMemberId}`, {
                     data: customFields
                 });
-
             } catch (error) {
                 console.error('Failed to update MemberStack:', error);
                 // The error is already logged and stored for retry by callMemberstackAPI
