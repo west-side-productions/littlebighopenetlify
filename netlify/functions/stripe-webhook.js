@@ -22,13 +22,6 @@ When a Stripe webhook 'customer.subscription.created' is received:
 5. Send order confirmation email
 */
 
-// Helper function to create AWS-style signature
-function getSignature(stringToSign, secretKey) {
-    return crypto.createHmac('sha256', secretKey)
-        .update(stringToSign)
-        .digest('base64');
-}
-
 // Helper function to create Memberstack API headers
 function createMemberstackHeaders() {
     const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
@@ -37,36 +30,10 @@ function createMemberstackHeaders() {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
 
-    const date = new Date();
-    const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const dateStamp = amzDate.slice(0, 8);
-
-    // Create canonical request elements
-    const signedHeaders = 'content-type;host;x-amz-date';
-    const region = 'us-east-1'; 
-    const service = 'execute-api';  
-    const credential = `${apiKey}/${dateStamp}/${region}/${service}/aws4_request`;
-
-    // Create string to sign
-    const stringToSign = 'AWS4-HMAC-SHA256\n' +
-        amzDate + '\n' +
-        credential + '\n' +
-        signedHeaders;
-
-    // Generate signature
-    const signature = getSignature(stringToSign, apiKey);
-
-    // Construct authorization header
-    const authHeader = 'AWS4-HMAC-SHA256 ' +
-        'Credential=' + credential + ', ' +
-        'SignedHeaders=' + signedHeaders + ', ' +
-        'Signature=' + signature;
-
+    // Simple authentication with just the API key
     return {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
-        'X-Amz-Date': amzDate,
-        'Host': 'api.memberstack.com'
+        'Authorization': apiKey,
+        'Content-Type': 'application/json'
     };
 }
 
@@ -76,9 +43,11 @@ async function findOrCreateMember(email) {
         console.log('Finding or creating member for email:', email);
         
         const headers = createMemberstackHeaders();
+        
+        // Log headers safely
         console.log('Request headers:', {
-            ...headers,
-            'Authorization': '[REDACTED]'
+            'Content-Type': headers['Content-Type'],
+            'Authorization': 'REDACTED'
         });
         
         // Search for existing member
@@ -111,7 +80,7 @@ async function findOrCreateMember(email) {
             data: error.response?.data,
             headers: error.config?.headers ? {
                 ...error.config.headers,
-                Authorization: '[REDACTED]'
+                Authorization: 'REDACTED'
             } : null
         });
         throw error;
@@ -123,8 +92,8 @@ async function addLifetimePlan(memberId) {
     try {
         const headers = createMemberstackHeaders();
         console.log('Adding plan with headers:', {
-            ...headers,
-            Authorization: '[REDACTED]'
+            'Content-Type': headers['Content-Type'],
+            'Authorization': 'REDACTED'
         });
         
         await axios.post(
