@@ -114,7 +114,8 @@ async function callMemberstackAPI(query, variables = null) {
             url: MEMBERSTACK_API_BASE,
             headers: {
                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             data: {
                 query,
@@ -122,18 +123,35 @@ async function callMemberstackAPI(query, variables = null) {
             }
         };
 
+        console.log('Making request with config:', {
+            url: config.url,
+            headers: { ...config.headers, Authorization: '[REDACTED]' }
+        });
+
         const response = await axios(config);
         
+        console.log('Received response:', {
+            status: response.status,
+            statusText: response.statusText,
+            data: response.data
+        });
+
         if (response.data.errors) {
-            throw new Error(response.data.errors[0].message);
+            throw new Error(JSON.stringify(response.data.errors));
         }
         
         return response.data.data;
     } catch (error) {
         console.error('Error calling Memberstack API:', {
             status: error.response?.status,
+            statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message
+            message: error.message,
+            config: error.config ? {
+                url: error.config.url,
+                method: error.config.method,
+                headers: { ...error.config.headers, Authorization: '[REDACTED]' }
+            } : null
         });
         throw error;
     }
@@ -141,66 +159,99 @@ async function callMemberstackAPI(query, variables = null) {
 
 // Function to find member by email
 async function findMemberByEmail(email) {
-    const query = `
-        query FindMemberByEmail($email: String!) {
-            member(email: $email) {
-                id
-                email
-                connected
-                planConnections {
-                    id
-                    planId
-                    status
+    console.log(`Finding member by email: ${email}`);
+    
+    try {
+        const response = await axios.get(
+            `https://api.memberstack.com/v2/members/search?email=${encodeURIComponent(email)}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
+                    'Content-Type': 'application/json'
                 }
             }
+        );
+
+        console.log('Member search response:', response.data);
+        
+        if (response.data && response.data.data && response.data.data.length > 0) {
+            return response.data.data[0];
         }
-    `;
-    
-    const variables = { email };
-    const result = await callMemberstackAPI(query, variables);
-    return result.member;
+        
+        return null;
+    } catch (error) {
+        console.error('Error finding member by email:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message
+        });
+        throw error;
+    }
 }
 
 // Function to create a new member
 async function createMember(email) {
-    const query = `
-        mutation CreateMember($email: String!) {
-            createMember(email: $email) {
-                id
-                email
-                connected
+    console.log(`Creating new member with email: ${email}`);
+    
+    try {
+        const response = await axios.post(
+            'https://api.memberstack.com/v2/members',
+            {
+                email: email,
+                status: "ACTIVE"
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
+                    'Content-Type': 'application/json'
+                }
             }
-        }
-    `;
-    
-    const variables = {
-        email,
-        metaData: { signupDate: new Date().toISOString() }
-    };
-    
-    const result = await callMemberstackAPI(query, variables);
-    return result.createMember;
+        );
+
+        console.log('Successfully created member:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Error creating member:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message
+        });
+        throw error;
+    }
 }
 
 // Function to add a lifetime plan to a member
 async function addLifetimePlanToMember(memberId, planId) {
-    const query = `
-        mutation AddPlanConnection($memberId: ID!, $planId: ID!) {
-            addPlanConnection(memberId: $memberId, planId: $planId) {
-                id
-                status
-                planId
+    console.log(`Adding lifetime plan ${planId} to member ${memberId}`);
+    
+    try {
+        const response = await axios.post(
+            `https://api.memberstack.com/v2/members/${memberId}/plans`,
+            {
+                planId: planId,
+                status: "ACTIVE"
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
+                    'Content-Type': 'application/json'
+                }
             }
-        }
-    `;
-    
-    const variables = {
-        memberId,
-        planId
-    };
-    
-    const result = await callMemberstackAPI(query, variables);
-    return result.addPlanConnection;
+        );
+
+        console.log('Successfully added plan to member:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Error adding plan to member:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message
+        });
+        throw error;
+    }
 }
 
 // Function to send order confirmation email
@@ -223,118 +274,112 @@ async function sendOrderConfirmationEmail(email, data) {
 }
 
 exports.handler = async (event) => {
-    // Handle CORS preflight
-    if (event.httpMethod === 'OPTIONS') {
-        return { statusCode: 200, headers };
-    }
-
     try {
-        // Verify and parse the webhook payload
-        const webhookEvent = JSON.parse(event.body);
-        console.log('Received webhook event:', webhookEvent);
+        // Verify Stripe webhook signature
+        const stripeSignature = event.headers['stripe-signature'];
+        let stripeEvent;
+        
+        try {
+            stripeEvent = Stripe.webhooks.constructEvent(
+                event.body,
+                stripeSignature,
+                process.env.STRIPE_WEBHOOK_SECRET
+            );
+        } catch (err) {
+            console.error('⚠️ Webhook signature verification failed:', err.message);
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Invalid signature' })
+            };
+        }
 
-        // Handle different event types
-        switch (webhookEvent.type) {
-            case 'checkout.session.completed':
-                // Extract session data
-                const session = webhookEvent.data.object;
-                console.log('Processing checkout session:', {
-                    id: session.id,
-                    email: session.customer_email,
-                    amount: session.amount_total,
-                    currency: session.currency,
-                    status: session.payment_status
-                });
+        console.log('Received webhook event:', stripeEvent);
 
-                // Verify payment status
-                if (session.payment_status !== 'paid') {
-                    console.log('Payment not completed:', session.payment_status);
-                    return {
-                        statusCode: 200,
-                        headers,
-                        body: JSON.stringify({ 
-                            message: 'Payment not completed',
-                            status: session.payment_status 
-                        })
-                    };
-                }
+        // Handle the checkout.session.completed event
+        if (stripeEvent.type === 'checkout.session.completed') {
+            const session = stripeEvent.data.object;
+            
+            console.log('Processing checkout session:', {
+                id: session.id,
+                email: session.customer_details?.email,
+                amount: session.amount_total,
+                currency: session.currency,
+                status: session.payment_status
+            });
 
-                try {
-                    // Find or create member
-                    let member = await findMemberByEmail(session.customer_email);
-                    
-                    if (!member) {
-                        console.log('Member not found, creating new member');
-                        member = await createMember(session.customer_email);
-                    }
-
-                    // Use a default plan ID for lifetime access
-                    const lifetimePlanId = process.env.MEMBERSTACK_LIFETIME_PLAN_ID || 'pln_lifetime-access';
-
-                    // Add lifetime plan to member
-                    const updateResult = await addLifetimePlanToMember(member.id, lifetimePlanId);
-                    console.log('Successfully added lifetime plan:', {
-                        memberId: member.id,
-                        email: member.email,
-                        plan: updateResult
-                    });
-
-                    // Send confirmation email
-                    if (process.env.SENDGRID_API_KEY) {
-                        try {
-                            await sendOrderConfirmationEmail(session.customer_email, {
-                                planName: 'Lifetime Access',
-                                purchaseDate: new Date().toLocaleDateString(),
-                                amount: (session.amount_total / 100).toFixed(2),
-                                currency: session.currency.toUpperCase()
-                            });
-                        } catch (error) {
-                            console.error('Failed to send confirmation email:', error);
-                        }
-                    }
-
-                    return {
-                        statusCode: 200,
-                        headers,
-                        body: JSON.stringify({ 
-                            message: 'Lifetime access granted successfully',
-                            member: {
-                                id: member.id,
-                                email: member.email,
-                                planStatus: updateResult.status
-                            }
-                        })
-                    };
-
-                } catch (error) {
-                    console.error('Error processing checkout:', error);
-                    return {
-                        statusCode: 500,
-                        headers,
-                        body: JSON.stringify({ 
-                            error: 'Failed to process checkout',
-                            message: error.message 
-                        })
-                    };
-                }
-
-            default:
-                console.log('Unhandled event type:', webhookEvent.type);
+            // Only process if payment is successful
+            if (session.payment_status !== 'paid') {
+                console.log('Skipping session - payment not completed');
                 return {
                     statusCode: 200,
-                    headers,
+                    body: JSON.stringify({ received: true })
+                };
+            }
+
+            try {
+                // Find or create member
+                const email = session.customer_details?.email;
+                if (!email) {
+                    throw new Error('No email found in session');
+                }
+
+                let member = await findMemberByEmail(email);
+                
+                if (!member) {
+                    console.log('Member not found, creating new member');
+                    member = await createMember(email);
+                }
+
+                // Add lifetime plan
+                const planId = process.env.MEMBERSTACK_LIFETIME_PLAN_ID;
+                if (!planId) {
+                    throw new Error('MEMBERSTACK_LIFETIME_PLAN_ID not set');
+                }
+
+                await addLifetimePlanToMember(member.id, planId);
+
+                // Send confirmation email
+                await sendOrderConfirmationEmail(email, {
+                    amount: session.amount_total,
+                    currency: session.currency,
+                    shipping: session.shipping_details
+                });
+
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ received: true })
+                };
+            } catch (error) {
+                console.error('Error processing checkout:', error);
+                
+                // Store failed request for retry
+                await storeFailedRequest({
+                    type: 'checkout.session.completed',
+                    data: stripeEvent.data,
+                    error: error.message
+                });
+
+                // Return 200 to acknowledge receipt
+                return {
+                    statusCode: 200,
                     body: JSON.stringify({ 
-                        message: 'Unhandled event type',
-                        type: webhookEvent.type 
+                        received: true,
+                        warning: 'Processed with errors, queued for retry'
                     })
                 };
+            }
         }
+
+        // Return 200 for other events
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ received: true })
+        };
     } catch (error) {
-        console.error('Webhook error:', error);
+        console.error('Webhook error:', error.message);
         return {
             statusCode: 500,
-            headers,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ error: 'Webhook handler failed' })
         };
     }
 };
