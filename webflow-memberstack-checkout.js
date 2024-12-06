@@ -44,18 +44,12 @@ const PRODUCT_CONFIG = {
     book: {
         id: 'prc_cookbook_physical',
         type: 'physical',
+        requiresShipping: true,
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        },
-        shipping: {
-            weight: {
-                product: 1005,
-                packaging: 152,
-                total: 1157
-            }
+            de: 'price_1QX7gkJRMXFic4sWZq6zQxqR',
+            en: 'price_1QX7gkJRMXFic4sWZq6zQxqR',
+            fr: 'price_1QX7gkJRMXFic4sWZq6zQxqR',
+            it: 'price_1QX7gkJRMXFic4sWZq6zQxqR'
         },
         memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
@@ -75,8 +69,11 @@ const PRODUCT_CONFIG = {
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
+    defaultShippingRate: 'shr_1QScOlJRMXFic4sW8MHW0kq7', // EU shipping rate
     memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
-    defaultShippingRate: 'shr_1QScKFJRMXFic4sW9e80ABBp'
+    defaultLanguage: 'de',
+    defaultCountry: 'DE',
+    allowedCountries: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'GB', 'SG']
 };
 
 const getCountriesForShippingRate = (shippingRateId) => {
@@ -235,22 +232,30 @@ async function handleCheckout(event) {
         const productElement = document.querySelector('[data-product-type]');
         let productType = null;
         let productConfig = null;
+        let shippingRateId = null;  // Initialize shipping rate ID
         
         // Special handling for membershome path
         if (window.location.pathname.includes('/membershome')) {
             console.log('Setting product type for membershome');
-            // If no forced product type is set, default to book for physical product
             productType = 'book';
             productConfig = PRODUCT_CONFIG[productType];
             
-            // Set default shipping rate for physical products if none provided
-            let shippingRateId = null;
-            if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
+            // Set default shipping rate for physical products
+            if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
                 shippingRateId = CONFIG.defaultShippingRate;
             }
         } else {
             productType = productElement?.dataset.productType || 'course';
             productConfig = PRODUCT_CONFIG[productType];
+            
+            // Get shipping rate from select element for physical products
+            if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
+                const shippingSelect = document.querySelector('#shipping-rate-select');
+                if (!shippingSelect?.value) {
+                    throw new Error('Please select a shipping option');
+                }
+                shippingRateId = shippingSelect.value;
+            }
         }
 
         if (!productConfig) {
@@ -263,15 +268,6 @@ async function handleCheckout(event) {
             shippingRequired: productConfig.type === 'physical' || productConfig.type === 'bundle',
             shippingRate: shippingRateId
         });
-
-        // Only require shipping rate for physical products
-        if ((productConfig.type === 'physical' || productConfig.type === 'bundle')) {
-            const shippingSelect = document.querySelector('#shipping-rate-select');
-            if (!shippingSelect?.value) {
-                throw new Error('Please select a shipping option');
-            }
-            shippingRateId = shippingSelect.value;
-        }
 
         // Get the language and corresponding price ID
         const language = getPreferredLanguage();
@@ -312,8 +308,8 @@ function getPreferredLanguage() {
     }
     
     // If no Stripe price found for the language, fall back to default
-    console.warn(`No Stripe price found for language: ${language}, falling back to ${LANGUAGE_CONFIG.default}`);
-    return LANGUAGE_CONFIG.default;
+    console.warn(`No Stripe price found for language: ${language}, falling back to ${CONFIG.defaultLanguage}`);
+    return CONFIG.defaultLanguage;
 }
 
 // Function to start checkout process
@@ -425,7 +421,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             }
         } else {
             // For digital products, use default country code
-            payload.metadata.countryCode = 'DE';
+            payload.metadata.countryCode = CONFIG.defaultCountry;
         }
 
         // Add product-specific metadata
@@ -494,7 +490,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
 // Get shipping country from shipping rate ID
 function getShippingCountry(shippingRateId) {
     const shipping = SHIPPING_RATES[shippingRateId];
-    return shipping ? shipping.countries[0] : 'AT'; // Default to Austria if not found
+    return shipping ? shipping.countries[0] : CONFIG.defaultCountry; // Default to Austria if not found
 }
 
 // Update price display
