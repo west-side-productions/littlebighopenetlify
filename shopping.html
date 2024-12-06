@@ -125,41 +125,43 @@
         <div class="product" data-product-type="book" data-base-price="29.99">
             <h2>Cookbook</h2>
             <p>Price: €29.99</p>
-            
-            <!-- Quantity Selector (only for book) -->
-            <div class="quantity-section">
-                <label for="book-quantity">Quantity:</label>
-                <select id="book-quantity">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                </select>
-            </div>
         </div>
-
+    
+        <!-- Shipping Country Selection -->
+        <div class="shipping-selection" style="margin-bottom: 15px;">
+            <label for="shipping-rate-select">Shipping Country:</label>
+            <select id="shipping-rate-select" name="Versand-nach" style="margin-left: 10px; padding: 5px;">
+                <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
+                <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
+                <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
+                <option value="shr_1QScOlJRMXFic4sW8MHW0kq7">European Union</option>
+            </select>
+        </div>
+    
         <!-- Price Summary -->
         <div class="price-summary">
             <div class="price-display">
                 <span>Subtotal: €</span>
                 <span id="subtotal-price">29.99</span>
             </div>
+            <div class="price-display">
+                <span>Shipping: €</span>
+                <span id="shipping-price">0.00</span>
+            </div>
             <div class="price-display total">
                 <span>Total: €</span>
                 <span id="total-price">29.99</span>
             </div>
-            <p class="shipping-note">Shipping costs will be calculated at checkout based on your delivery address.</p>
+            <p class="shipping-note">Shipping costs are calculated based on your selected country.</p>
         </div>
-
+    
         <!-- Checkout Button -->
         <button 
             class="checkout-button" 
             data-memberstack-content="checkout"
             data-memberstack-bypass="true"
             data-checkout-button
-            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;"
-        >
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
             Proceed to Checkout (€29.99)
         </button>
     </div>

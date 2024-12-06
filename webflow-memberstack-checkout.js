@@ -22,9 +22,9 @@ const SHIPPING_RATES = {
         price: 20.36, 
         label: 'European Union', 
         countries: [
-            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
-            'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
-            'SI', 'SK', 'FI', 'SE'
+            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 
+            'HR', 'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 
+            'PT', 'RO', 'SK', 'SI', 'FI', 'SE'
         ]
     }
 };
@@ -44,10 +44,10 @@ const PRODUCT_CONFIG = {
         id: 'prc_cookbook_physical',
         type: 'physical',
         prices: {
-            de: 'price_de_book',
-            en: 'price_en_book',
-            fr: 'price_fr_book',
-            it: 'price_it_book'
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         },
         shipping: {
             weight: {
