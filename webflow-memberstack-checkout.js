@@ -384,18 +384,21 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         const payload = {
             priceId: priceId,
             customerEmail: member.data.auth.email,
+            language: language,
             metadata: {
                 memberstackUserId: member.data.id,
+                productType: productType,
+                type: productConfig.type,
                 language: language,
                 source: window.location.href,
                 planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
             }
         };
 
-        // Add shipping rate if product requires shipping
+        // Add shipping rate only for physical products
         if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
             if (!shippingRateId) {
-                throw new Error('Shipping rate is required for this product');
+                throw new Error('Please select a shipping option');
             }
             payload.shippingRateId = shippingRateId;
         }
@@ -417,8 +420,12 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             payload.metadata.packagingWeight = weightConfig.packaging.toString();
             payload.metadata.requiresShipping = true;
         } else {
+            // Digital product
             payload.metadata.planId = productConfig.id;
             payload.metadata.requiresShipping = false;
+            payload.metadata.totalWeight = '0';
+            payload.metadata.productWeight = '0';
+            payload.metadata.packagingWeight = '0';
         }
 
         console.log('Creating checkout session:', {
@@ -426,42 +433,41 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             type: productConfig.type
         });
 
-        // Create checkout session
-        const baseUrl = 'https://lillebighopefunctions.netlify.app';
-        const response = await fetch(`${baseUrl}/.netlify/functions/create-checkout-session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
+        try {
+            // Create checkout session
+            const response = await fetch(`${getBaseUrl()}/.netlify/functions/create-checkout-session`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
 
-        const responseData = await response.json();
-        console.log('Server response:', responseData);
-        
-        if (!response.ok) {
-            throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
-        }
+            const data = await response.json();
+            console.log('Server response:', data);
 
-        if (!responseData.sessionId) {
-            throw new Error('No session ID received from server');
-        }
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to create checkout session');
+            }
 
-        // Initialize Stripe and redirect to checkout
-        const stripe = await loadStripe();
-        if (!stripe) {
-            throw new Error('Failed to initialize Stripe');
-        }
+            // Redirect to Stripe checkout
+            const stripe = await loadStripe();
+            const { error } = await stripe.redirectToCheckout({
+                sessionId: data.sessionId
+            });
 
-        console.log('Redirecting to Stripe checkout with session ID:', responseData.sessionId);
-        const { error } = await stripe.redirectToCheckout({
-            sessionId: responseData.sessionId
-        });
-
-        if (error) {
+            if (error) {
+                throw error;
+            }
+        } catch (error) {
+            console.error('Error creating checkout session:', error);
+            if (button) {
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+            alert(error.message || 'An error occurred during checkout. Please try again.');
             throw error;
         }
-
     } catch (error) {
         console.error('Checkout error:', error);
         if (button) {

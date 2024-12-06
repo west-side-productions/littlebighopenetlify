@@ -90,8 +90,7 @@ exports.handler = async function(event, context) {
         }
 
         // Determine product type from metadata
-        const productType = data.metadata?.productType || 'physical';
-        const isDigitalProduct = productType === 'course' || productType === 'digital';
+        const isDigitalProduct = data.metadata?.type === 'digital' || data.metadata?.productType === 'course';
         
         // Only require shipping rate for physical products
         let shippingRate = null;
@@ -99,7 +98,7 @@ exports.handler = async function(event, context) {
 
         if (!isDigitalProduct) {
             if (!data.shippingRateId) {
-                throw new Error('Missing required field: shippingRateId');
+                throw new Error('Please select a shipping option');
             }
             // Validate shipping rate for physical products
             shippingRate = validateShippingRate(data.shippingRateId);
@@ -110,13 +109,8 @@ exports.handler = async function(event, context) {
         const metadata = {
             ...data.metadata,
             source: 'checkout',
-            totalWeight: data.metadata?.totalWeight || '1000',
-            productWeight: data.metadata?.productWeight || '900',
-            packagingWeight: data.metadata?.packagingWeight || '100',
-            planId: data.metadata?.planId || 'pln_kostenloser-zugang-84l80t3u',
             countryCode: countryCode,
-            language: data.language || 'de',
-            productType: productType
+            language: data.language || 'de'
         };
 
         console.log('Creating checkout session with metadata:', metadata);
