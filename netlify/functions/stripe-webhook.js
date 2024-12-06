@@ -209,61 +209,134 @@ exports.handler = async (event) => {
         // Handle different event types
         switch (webhookEvent.type) {
             case 'checkout.session.completed':
-                // Extract customer email and metadata from the session
+                // Extract session data
                 const session = webhookEvent.data.object;
-                const customerEmail = session.customer_details.email;
-                const metadata = session.metadata || {};
-                
-                // Get the member ID and plan ID from metadata
-                const memberId = metadata.memberId;
-                const planId = metadata.planId;
-
-                if (!memberId || !planId) {
-                    throw new Error('Missing required metadata: memberId or planId');
-                }
-
-                // Update member's lifetime plan in Memberstack
-                const member = await addLifetimePlanToMember(memberId, planId);
-                console.log('Successfully added lifetime plan:', {
-                    memberId: member.id,
-                    email: member.email,
-                    planConnections: member.planConnections
+                console.log('Processing checkout session:', {
+                    id: session.id,
+                    email: session.customer_email,
+                    amount: session.amount_total,
+                    currency: session.currency,
+                    status: session.payment_status
                 });
 
-                // Send confirmation email if needed
-                if (process.env.SENDGRID_API_KEY) {
-                    try {
-                        await sendOrderConfirmationEmail(customerEmail, {
-                            planName: metadata.planName || 'Lifetime Access',
-                            purchaseDate: new Date().toLocaleDateString()
-                        });
-                    } catch (error) {
-                        console.error('Failed to send confirmation email:', error);
-                        // Continue processing as email sending is not critical
-                    }
+                // Verify payment status
+                if (session.payment_status !== 'paid') {
+                    console.log('Payment not completed:', session.payment_status);
+                    return {
+                        statusCode: 200,
+                        headers,
+                        body: JSON.stringify({ 
+                            message: 'Payment not completed',
+                            status: session.payment_status 
+                        })
+                    };
                 }
 
-                return {
-                    statusCode: 200,
-                    headers,
-                    body: JSON.stringify({ 
-                        message: 'Lifetime plan activated successfully',
-                        member: {
-                            id: member.id,
-                            email: member.email,
-                            activePlans: member.planConnections
-                                .filter(conn => conn.status === "ACTIVE")
-                                .map(conn => conn.planId)
+                try {
+                    // Query Memberstack to find or create member by email
+                    const findMemberQuery = `
+                        query FindMemberByEmail($email: String!) {
+                            members(email: $email) {
+                                id
+                                email
+                                planConnections {
+                                    planId
+                                    status
+                                }
+                            }
                         }
-                    })
-                };
+                    `;
+
+                    const memberResult = await callMemberstackAPI(findMemberQuery, {
+                        email: session.customer_email
+                    });
+
+                    let memberId;
+                    let member = memberResult.data?.members?.[0];
+
+                    if (!member) {
+                        // Create new member if not found
+                        const createMemberMutation = `
+                            mutation CreateMember($email: String!) {
+                                createMember(email: $email) {
+                                    id
+                                    email
+                                }
+                            }
+                        `;
+
+                        const newMemberResult = await callMemberstackAPI(createMemberMutation, {
+                            email: session.customer_email
+                        });
+                        member = newMemberResult.data?.createMember;
+                        if (!member) {
+                            throw new Error('Failed to create member');
+                        }
+                    }
+
+                    memberId = member.id;
+
+                    // Use a default plan ID for lifetime access
+                    const lifetimePlanId = process.env.MEMBERSTACK_LIFETIME_PLAN_ID || 'pln_lifetime_access';
+
+                    // Add lifetime plan to member
+                    const updateResult = await addLifetimePlanToMember(memberId, lifetimePlanId);
+                    console.log('Successfully added lifetime plan:', {
+                        memberId: updateResult.id,
+                        email: updateResult.email,
+                        planConnections: updateResult.planConnections
+                    });
+
+                    // Send confirmation email
+                    if (process.env.SENDGRID_API_KEY) {
+                        try {
+                            await sendOrderConfirmationEmail(session.customer_email, {
+                                planName: 'Lifetime Access',
+                                purchaseDate: new Date().toLocaleDateString(),
+                                amount: (session.amount_total / 100).toFixed(2),
+                                currency: session.currency.toUpperCase()
+                            });
+                        } catch (error) {
+                            console.error('Failed to send confirmation email:', error);
+                        }
+                    }
+
+                    return {
+                        statusCode: 200,
+                        headers,
+                        body: JSON.stringify({ 
+                            message: 'Lifetime access granted successfully',
+                            member: {
+                                id: updateResult.id,
+                                email: updateResult.email,
+                                activePlans: updateResult.planConnections
+                                    .filter(conn => conn.status === "ACTIVE")
+                                    .map(conn => conn.planId)
+                            }
+                        })
+                    };
+
+                } catch (error) {
+                    console.error('Error processing checkout:', error);
+                    return {
+                        statusCode: 500,
+                        headers,
+                        body: JSON.stringify({ 
+                            error: 'Failed to process checkout',
+                            message: error.message 
+                        })
+                    };
+                }
 
             default:
                 console.log('Unhandled event type:', webhookEvent.type);
                 return {
                     statusCode: 200,
                     headers,
-                    body: JSON.stringify({ message: 'Event type not handled' })
+                    body: JSON.stringify({ 
+                        message: 'Unhandled event type',
+                        type: webhookEvent.type 
+                    })
                 };
         }
     } catch (error) {
