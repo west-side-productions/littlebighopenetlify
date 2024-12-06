@@ -179,6 +179,25 @@ async function addLifetimePlanToMember(memberId, planId) {
     }
 }
 
+// Function to send order confirmation email
+async function sendOrderConfirmationEmail(email, data) {
+    try {
+        const msg = {
+            to: email,
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: 'Order Confirmation',
+            text: emailTemplates.de.orderConfirmation(data),
+            html: emailTemplates.de.orderConfirmationHtml(data),
+        };
+
+        await sgMail.send(msg);
+        console.log('Order confirmation email sent to:', email);
+    } catch (error) {
+        console.error('Failed to send order confirmation email:', error);
+        throw error;
+    }
+}
+
 exports.handler = async (event) => {
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
