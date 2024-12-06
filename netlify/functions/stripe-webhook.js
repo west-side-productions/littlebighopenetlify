@@ -17,7 +17,7 @@ const headers = {
 };
 
 // Memberstack API configuration
-const MEMBERSTACK_API_BASE = 'https://api.memberstack.com/v1';
+const MEMBERSTACK_API_BASE = 'https://api.memberstack.com/v2/graphql';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
@@ -105,25 +105,30 @@ async function storeFailedRequest(data) {
 }
 
 // Helper function to call Memberstack API
-async function callMemberstackAPI(endpoint, method = 'GET', data = null) {
-    console.log(`Calling Memberstack API ${method} ${endpoint}`, data ? { data } : '');
+async function callMemberstackAPI(query, variables = null) {
+    console.log(`Calling Memberstack GraphQL API with query:`, query, variables ? { variables } : '');
     
     try {
         const config = {
-            method,
-            url: `${MEMBERSTACK_API_BASE}${endpoint}`,
+            method: 'POST',
+            url: MEMBERSTACK_API_BASE,
             headers: {
                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
                 'Content-Type': 'application/json'
+            },
+            data: {
+                query,
+                variables
             }
         };
 
-        if (data) {
-            config.data = data;
-        }
-
         const response = await axios(config);
-        return response.data;
+        
+        if (response.data.errors) {
+            throw new Error(response.data.errors[0].message);
+        }
+        
+        return response.data.data;
     } catch (error) {
         console.error('Error calling Memberstack API:', {
             status: error.response?.status,
@@ -136,47 +141,66 @@ async function callMemberstackAPI(endpoint, method = 'GET', data = null) {
 
 // Function to find member by email
 async function findMemberByEmail(email) {
-    try {
-        const response = await callMemberstackAPI(`/members?email=${encodeURIComponent(email)}`);
-        return response.data?.[0];
-    } catch (error) {
-        console.error('Error finding member:', error);
-        return null;
-    }
+    const query = `
+        query FindMemberByEmail($email: String!) {
+            member(email: $email) {
+                id
+                email
+                connected
+                planConnections {
+                    id
+                    planId
+                    status
+                }
+            }
+        }
+    `;
+    
+    const variables = { email };
+    const result = await callMemberstackAPI(query, variables);
+    return result.member;
 }
 
 // Function to create a new member
 async function createMember(email) {
-    try {
-        const response = await callMemberstackAPI('/members', 'POST', {
-            email,
-            metaData: {
-                signupDate: new Date().toISOString()
+    const query = `
+        mutation CreateMember($email: String!) {
+            createMember(email: $email) {
+                id
+                email
+                connected
             }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('Error creating member:', error);
-        throw error;
-    }
+        }
+    `;
+    
+    const variables = {
+        email,
+        metaData: { signupDate: new Date().toISOString() }
+    };
+    
+    const result = await callMemberstackAPI(query, variables);
+    return result.createMember;
 }
 
 // Function to add a lifetime plan to a member
 async function addLifetimePlanToMember(memberId, planId) {
-    try {
-        const response = await callMemberstackAPI(`/members/${memberId}/plans`, 'POST', {
-            planId,
-            status: "ACTIVE",
-            metadata: {
-                isLifetime: true,
-                purchasedAt: new Date().toISOString()
+    const query = `
+        mutation AddPlanConnection($memberId: ID!, $planId: ID!) {
+            addPlanConnection(memberId: $memberId, planId: $planId) {
+                id
+                status
+                planId
             }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('Error adding plan to member:', error);
-        throw error;
-    }
+        }
+    `;
+    
+    const variables = {
+        memberId,
+        planId
+    };
+    
+    const result = await callMemberstackAPI(query, variables);
+    return result.addPlanConnection;
 }
 
 // Function to send order confirmation email
