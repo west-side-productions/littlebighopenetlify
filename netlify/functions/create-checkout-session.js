@@ -90,13 +90,14 @@ exports.handler = async function(event, context) {
         }
 
         // Determine product type from metadata
-        const isDigitalProduct = data.metadata?.type === 'digital' || data.metadata?.productType === 'course';
+        const isDigitalProduct = data.metadata?.type === 'digital';
+        const requiresShipping = data.metadata?.requiresShipping === true;
         
-        // Only require shipping rate for physical products
+        // Only require shipping rate for physical products that require shipping
         let shippingRate = null;
         let countryCode = 'DE'; // Default for digital products
 
-        if (!isDigitalProduct && data.metadata?.requiresShipping) {
+        if (requiresShipping) {
             if (!data.shippingRateId) {
                 throw new Error('Please select a shipping option');
             }
@@ -135,21 +136,18 @@ exports.handler = async function(event, context) {
             locale: data.language || 'de'
         };
 
-        // Add shipping options only for physical products that require shipping
-        if (!isDigitalProduct && data.metadata?.requiresShipping) {
-            if (data.shippingRateId) {
-                const shippingRate = validateShippingRate(data.shippingRateId);
-                sessionConfig.shipping_address_collection = {
-                    allowed_countries: shippingRate.countries
-                };
-                sessionConfig.shipping_options = [{
-                    shipping_rate: data.shippingRateId
-                }];
-            }
+        // Add shipping options only for products that require shipping
+        if (requiresShipping && data.shippingRateId) {
+            const shippingRate = validateShippingRate(data.shippingRateId);
+            sessionConfig.shipping_address_collection = {
+                allowed_countries: shippingRate.countries
+            };
+            sessionConfig.shipping_options = [{
+                shipping_rate: data.shippingRateId
+            }];
         }
 
-        // Create Stripe checkout session
-        console.log('Final session config:', sessionConfig);
+        console.log('Creating Stripe session with config:', sessionConfig);
         const session = await stripe.checkout.sessions.create(sessionConfig);
         return {
             statusCode: 200,

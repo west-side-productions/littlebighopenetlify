@@ -239,12 +239,15 @@ async function handleCheckout(event) {
         // Special handling for membershome path
         if (window.location.pathname.includes('/membershome')) {
             console.log('Setting product type for membershome');
-            productType = 'course';
-            // Force product config type to be digital for membershome
-            productConfig = {
-                ...PRODUCT_CONFIG[productType],
-                type: 'digital'  // Ensure it's treated as digital product
-            };
+            // If no forced product type is set, default to book for physical product
+            productType = 'book';
+            productConfig = PRODUCT_CONFIG[productType];
+            
+            // Set default shipping rate for physical products if none provided
+            let shippingRateId = null;
+            if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
+                shippingRateId = CONFIG.defaultShippingRate;
+            }
         } else {
             productType = productElement?.dataset.productType || 'course';
             productConfig = PRODUCT_CONFIG[productType];
@@ -254,8 +257,14 @@ async function handleCheckout(event) {
             throw new Error(`Invalid product type: ${productType}`);
         }
 
+        console.log('Using product configuration:', {
+            type: productType,
+            config: productConfig,
+            shippingRequired: productConfig.type === 'physical' || productConfig.type === 'bundle',
+            shippingRate: shippingRateId
+        });
+
         // Only require shipping rate for physical products
-        let shippingRateId = null;
         if ((productConfig.type === 'physical' || productConfig.type === 'bundle')) {
             const shippingSelect = document.querySelector('#shipping-rate-select');
             if (!shippingSelect?.value) {
@@ -355,8 +364,14 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         // Special handling for membershome path
         if (window.location.pathname.includes('/membershome')) {
             console.log('Setting product type for membershome');
-            productType = 'course';
+            // If no forced product type is set, default to book for physical product
+            productType = forcedProductType || 'book';
             productConfig = PRODUCT_CONFIG[productType];
+            
+            // Set default shipping rate for physical products if none provided
+            if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
+                shippingRateId = CONFIG.defaultShippingRate;
+            }
         } else {
             productType = productType || productElement?.dataset.productType || 'course';
             productConfig = PRODUCT_CONFIG[productType];
@@ -365,6 +380,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
         }
+
+        console.log('Using product configuration:', {
+            type: productType,
+            config: productConfig,
+            shippingRequired: productConfig.type === 'physical' || productConfig.type === 'bundle',
+            shippingRate: shippingRateId
+        });
 
         // Get the language and corresponding price ID
         const language = getPreferredLanguage();
