@@ -82,9 +82,19 @@ exports.handler = async (event, context) => {
 
         const { countryCode, memberId, sessionId } = requestData;
         
+        // If no country code is provided, return success without processing
+        // This handles member.created events where shipping isn't needed yet
         if (!countryCode) {
-            console.error('Missing country code in request:', requestData);
-            throw new Error('Country code is required');
+            console.log('No country code provided, skipping shipping calculation');
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                    message: 'Shipping calculation skipped - no country code provided',
+                    memberId,
+                    sessionId
+                })
+            };
         }
 
         // Calculate shipping rate

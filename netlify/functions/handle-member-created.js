@@ -21,10 +21,8 @@ exports.handler = async (event, context) => {
     console.log('Processing webhook type:', payload.event);
     console.log('Handling member created with full data:', payload.payload);
 
-    // Generate verification token (you might want to use a more secure method)
+    // Generate verification token
     const verificationToken = Buffer.from(`${id}:${Date.now()}`).toString('base64');
-    
-    // Construct verification link to main site
     const verificationLink = `https://littlebighope.com/verify?token=${verificationToken}`;
 
     // Send verification email
@@ -48,18 +46,23 @@ exports.handler = async (event, context) => {
       throw new Error('Failed to send verification email');
     }
 
+    // Note: We no longer call process-shipping here since we don't have country data yet
+    // Shipping will be handled during checkout when we have the country code
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
-        message: 'Verification email sent successfully',
+      body: JSON.stringify({
+        message: 'Member created successfully',
         memberId: id
       })
     };
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Error processing member creation:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Internal server error', error: error.message })
+      body: JSON.stringify({
+        error: error.message
+      })
     };
   }
 };
