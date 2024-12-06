@@ -229,14 +229,32 @@ async function handleCheckout(event) {
         const member = await window.$memberstackDom.getCurrentMember();
         console.log('Current member:', member?.data?.id || 'Not found');
 
-        // Get product type
+        // Get product type and configuration
         const productElement = document.querySelector('[data-product-type]');
-        const productType = productElement?.dataset.productType || 'course';
-        const productConfig = PRODUCT_CONFIG[productType];
+        let productType = null;
+        let productConfig = null;
+        
+        // Special handling for membershome path
+        if (window.location.pathname.includes('/membershome')) {
+            console.log('Setting product type for membershome');
+            productType = 'course';
+            // Force product config type to be digital for membershome
+            productConfig = {
+                ...PRODUCT_CONFIG[productType],
+                type: 'digital'  // Ensure it's treated as digital product
+            };
+        } else {
+            productType = productElement?.dataset.productType || 'course';
+            productConfig = PRODUCT_CONFIG[productType];
+        }
 
-        // Get shipping rate if needed
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${productType}`);
+        }
+
+        // Only require shipping rate for physical products
         let shippingRateId = null;
-        if (productConfig?.type === 'physical' || productConfig?.type === 'bundle') {
+        if ((productConfig.type === 'physical' || productConfig.type === 'bundle')) {
             const shippingSelect = document.querySelector('#shipping-rate-select');
             if (!shippingSelect?.value) {
                 throw new Error('Please select a shipping option');
@@ -244,6 +262,15 @@ async function handleCheckout(event) {
             shippingRateId = shippingSelect.value;
         }
 
+        // Get the language and corresponding price ID
+        const language = getPreferredLanguage();
+        console.log('Creating checkout session:', {
+            productType,
+            productConfig,
+            language,
+            memberEmail: member.data.auth.email
+        });
+        
         // Start checkout process
         await startCheckout(shippingRateId, productType);
 
@@ -293,15 +320,40 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         // Get current member
         const member = await window.$memberstackDom.getCurrentMember();
         if (!member?.data?.auth?.email) {
-            localStorage.setItem('checkoutRedirectUrl', window.location.pathname);
+            // Store current URL for redirect after registration
+            const currentPath = window.location.pathname;
+            const queryParams = window.location.search;
+            localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
+            
+            // Special handling for membershome path
+            if (currentPath.includes('/membershome')) {
+                // Redirect to registration with return URL
+                window.location.href = `/registrieren?returnUrl=${encodeURIComponent(currentPath + queryParams)}`;
+                return;
+            }
+            
             window.location.href = '/registrieren';
             return;
         }
 
         // Get the product type and corresponding configuration
         const productElement = document.querySelector('[data-product-type]');
-        const productType = forcedProductType || productElement?.dataset.productType || 'course';
-        const productConfig = PRODUCT_CONFIG[productType];
+        let productType = forcedProductType;
+        let productConfig = null;
+        
+        // Special handling for membershome path
+        if (window.location.pathname.includes('/membershome')) {
+            console.log('Setting product type for membershome');
+            productType = 'course';
+            // Force product config type to be digital for membershome
+            productConfig = {
+                ...PRODUCT_CONFIG[productType],
+                type: 'digital'  // Ensure it's treated as digital product
+            };
+        } else {
+            productType = productType || productElement?.dataset.productType || 'course';
+            productConfig = PRODUCT_CONFIG[productType];
+        }
 
         if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
@@ -309,58 +361,64 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
 
         // Only require shipping rate for physical products
         if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
-            throw new Error('Missing required field: shippingRateId');
+            throw new Error('Please select a shipping option');
         }
 
         // Get the language and corresponding price ID
         const language = getPreferredLanguage();
         const priceId = productConfig.prices[language];
+        
         if (!priceId) {
             throw new Error(`No price found for language: ${language}`);
         }
 
-        // Prepare metadata based on product type
-        const baseMetadata = {
-            memberstackUserId: member.data.id,
-            language: language,
-            source: window.location.href,
-            planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
-        };
-
-        // Add product-specific metadata
-        if (productConfig.type === 'bundle') {
-            baseMetadata.products = productConfig.products;
-            baseMetadata.planIds = productConfig.products.map(prod => PRODUCT_CONFIG[prod].id);
-            const bookConfig = PRODUCT_CONFIG.book.shipping.weight;
-            baseMetadata.totalWeight = bookConfig.total.toString();
-            baseMetadata.productWeight = bookConfig.product.toString();
-            baseMetadata.packagingWeight = bookConfig.packaging.toString();
-            baseMetadata.requiresShipping = true;
-        } else if (productConfig.type === 'physical') {
-            baseMetadata.planId = productConfig.id;
-            const weightConfig = productConfig.shipping.weight;
-            baseMetadata.totalWeight = weightConfig.total.toString();
-            baseMetadata.productWeight = weightConfig.product.toString();
-            baseMetadata.packagingWeight = weightConfig.packaging.toString();
-            baseMetadata.requiresShipping = true;
-        } else {
-            baseMetadata.planId = productConfig.id;
-            baseMetadata.requiresShipping = false;
-        }
-
+        console.log('Creating checkout session:', {
+            productType,
+            productConfig,
+            language,
+            priceId,
+            memberEmail: member.data.auth.email
+        });
+        
         // Create checkout session payload
         const payload = {
             priceId: priceId,
             customerEmail: member.data.auth.email,
-            metadata: baseMetadata
+            metadata: {
+                memberstackUserId: member.data.id,
+                language: language,
+                source: window.location.href,
+                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
+            }
         };
 
         // Add shipping rate if product requires shipping
-        if (baseMetadata.requiresShipping) {
+        if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
             if (!shippingRateId) {
                 throw new Error('Shipping rate is required for this product');
             }
             payload.shippingRateId = shippingRateId;
+        }
+
+        // Add product-specific metadata
+        if (productConfig.type === 'bundle') {
+            payload.metadata.products = productConfig.products;
+            payload.metadata.planIds = productConfig.products.map(prod => PRODUCT_CONFIG[prod].id);
+            const bookConfig = PRODUCT_CONFIG.book.shipping.weight;
+            payload.metadata.totalWeight = bookConfig.total.toString();
+            payload.metadata.productWeight = bookConfig.product.toString();
+            payload.metadata.packagingWeight = bookConfig.packaging.toString();
+            payload.metadata.requiresShipping = true;
+        } else if (productConfig.type === 'physical') {
+            payload.metadata.planId = productConfig.id;
+            const weightConfig = productConfig.shipping.weight;
+            payload.metadata.totalWeight = weightConfig.total.toString();
+            payload.metadata.productWeight = weightConfig.product.toString();
+            payload.metadata.packagingWeight = weightConfig.packaging.toString();
+            payload.metadata.requiresShipping = true;
+        } else {
+            payload.metadata.planId = productConfig.id;
+            payload.metadata.requiresShipping = false;
         }
 
         console.log('Creating checkout session:', {
