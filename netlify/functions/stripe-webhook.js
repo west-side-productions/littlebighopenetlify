@@ -29,11 +29,10 @@ function createMemberstackHeaders() {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
 
+    // Simple headers as per Memberstack documentation
     return {
-        'Authorization': `Bearer ${apiKey}`,  // Update authorization format
-        'Content-Type': 'application/json',
-        'Date': new Date().toUTCString(),  // Add standard Date header
-        'X-Amz-Date': new Date().toISOString()  // Add AWS style date header
+        Authorization: apiKey,
+        'Content-Type': 'application/json'
     };
 }
 
@@ -45,7 +44,7 @@ async function findOrCreateMember(email) {
         const headers = createMemberstackHeaders();
         console.log('Request headers:', {
             ...headers,
-            'Authorization': '[REDACTED]'
+            Authorization: '[REDACTED]'
         });
         
         // Search for existing member
