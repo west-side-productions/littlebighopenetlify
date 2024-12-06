@@ -136,14 +136,21 @@ exports.handler = async function(event, context) {
             automatic_tax: { enabled: true }
         };
 
-        // Add shipping options only for physical products
-        if (!isDigitalProduct && shippingRate) {
+        // Add shipping options if shipping rate is provided
+        if (data.shippingRateId) {
+            const shippingRate = validateShippingRate(data.shippingRateId);
             sessionConfig.shipping_address_collection = {
                 allowed_countries: shippingRate.countries
             };
             sessionConfig.shipping_options = [{
                 shipping_rate: data.shippingRateId
             }];
+        } else {
+            // For digital products, still collect billing address but limit to supported countries
+            sessionConfig.billing_address_collection = 'required';
+            sessionConfig.allowed_countries = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+                'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+                'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'GB'];
         }
 
         // Create Stripe checkout session

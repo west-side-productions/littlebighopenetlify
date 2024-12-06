@@ -206,10 +206,10 @@ function getBaseUrl() {
     console.log('Current hostname:', hostname);
     
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:8888/.netlify';
+        return 'http://localhost:8888';
     } else {
         // For production, use the Netlify Functions URL
-        return 'https://lillebighopefunctions.netlify.app/.netlify';
+        return 'https://lillebighopefunctions.netlify.app';
     }
 }
 
@@ -345,11 +345,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         if (window.location.pathname.includes('/membershome')) {
             console.log('Setting product type for membershome');
             productType = 'course';
-            // Force product config type to be digital for membershome
-            productConfig = {
-                ...PRODUCT_CONFIG[productType],
-                type: 'digital'  // Ensure it's treated as digital product
-            };
+            productConfig = PRODUCT_CONFIG[productType];
         } else {
             productType = productType || productElement?.dataset.productType || 'course';
             productConfig = PRODUCT_CONFIG[productType];
@@ -357,11 +353,6 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
 
         if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
-        }
-
-        // Only require shipping rate for physical products
-        if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
-            throw new Error('Please select a shipping option');
         }
 
         // Get the language and corresponding price ID
@@ -372,14 +363,6 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             throw new Error(`No price found for language: ${language}`);
         }
 
-        console.log('Creating checkout session:', {
-            productType,
-            productConfig,
-            language,
-            priceId,
-            memberEmail: member.data.auth.email
-        });
-        
         // Create checkout session payload
         const payload = {
             priceId: priceId,
@@ -391,16 +374,22 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
                 type: productConfig.type,
                 language: language,
                 source: window.location.href,
-                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
+                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
+                requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle'
             }
         };
 
-        // Add shipping rate only for physical products
-        if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
-            if (!shippingRateId) {
-                throw new Error('Please select a shipping option');
-            }
+        // Add shipping rate if provided (optional for digital products)
+        if (shippingRateId) {
             payload.shippingRateId = shippingRateId;
+            // Get shipping rate details
+            const shippingRate = SHIPPING_RATES[shippingRateId];
+            if (shippingRate) {
+                payload.metadata.countryCode = shippingRate.countries[0];
+            }
+        } else {
+            // Default country code for digital products
+            payload.metadata.countryCode = 'DE';
         }
 
         // Add product-specific metadata
@@ -411,18 +400,15 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             payload.metadata.totalWeight = bookConfig.total.toString();
             payload.metadata.productWeight = bookConfig.product.toString();
             payload.metadata.packagingWeight = bookConfig.packaging.toString();
-            payload.metadata.requiresShipping = true;
         } else if (productConfig.type === 'physical') {
             payload.metadata.planId = productConfig.id;
             const weightConfig = productConfig.shipping.weight;
             payload.metadata.totalWeight = weightConfig.total.toString();
             payload.metadata.productWeight = weightConfig.product.toString();
             payload.metadata.packagingWeight = weightConfig.packaging.toString();
-            payload.metadata.requiresShipping = true;
         } else {
             // Digital product
             payload.metadata.planId = productConfig.id;
-            payload.metadata.requiresShipping = false;
             payload.metadata.totalWeight = '0';
             payload.metadata.productWeight = '0';
             payload.metadata.packagingWeight = '0';
@@ -723,13 +709,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const member = params.get('member');
                 const verified = member ? JSON.parse(decodeURIComponent(member)).verified : false;
                 
-                if (verified || localStorage.getItem('checkoutRedirectUrl') === 'membershome') {
-                    localStorage.removeItem('checkoutRedirectUrl');
-                    console.log('Starting checkout on membershome...');
+                if (verified) {
+                    console.log('Starting checkout on membershome after verification...');
                     
-                    // On membershome, we start with the course product type
-                    const productType = 'course';
-                    await startCheckout(null, productType).catch(error => {
+                    // Get stored product type and shipping rate
+                    const storedConfig = localStorage.getItem('checkoutConfig');
+                    let productType = 'course';
+                    let shippingRateId = null;
+                    
+                    if (storedConfig) {
+                        try {
+                            const config = JSON.parse(storedConfig);
+                            productType = config.productType || productType;
+                            shippingRateId = config.shippingRateId;
+                            localStorage.removeItem('checkoutConfig');
+                        } catch (e) {
+                            console.error('Error parsing stored config:', e);
+                        }
+                    }
+                    
+                    console.log('Starting checkout with config:', { productType, shippingRateId });
+                    await startCheckout(shippingRateId, productType).catch(error => {
                         console.error('Error starting checkout:', error);
                     });
                 }
