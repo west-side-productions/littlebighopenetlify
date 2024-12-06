@@ -9,22 +9,21 @@ const emailTemplates = {
     de: require('./email-templates/de')
 };
 
-// Memberstack API URL
-const MEMBERSTACK_API = 'https://api.memberstack.com/v2/graphql';
+// Constants and configurations
+const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+// Memberstack API configuration
+const MEMBERSTACK_API_BASE = 'https://api.memberstack.com/v1';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
 const INITIAL_DELAY = 1000;
 const MAX_DELAY = 3000;
 const NETLIFY_TIMEOUT = 10000; // Leave 5s buffer from 10s limit
-
-// CORS headers
-const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, stripe-signature',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
-};
 
 // Shipping rate calculation
 function calculateShippingRate(country) {
@@ -106,56 +105,78 @@ async function storeFailedRequest(data) {
 }
 
 // Helper function to call Memberstack API
-async function callMemberstackAPI(query, variables) {
-    console.log('Calling Memberstack GraphQL API with variables:', variables);
+async function callMemberstackAPI(endpoint, method = 'GET', data = null) {
+    console.log(`Calling Memberstack API ${method} ${endpoint}`, data ? { data } : '');
     
     try {
-        const response = await axios.post(MEMBERSTACK_API, {
-            query,
-            variables
-        }, {
+        const config = {
+            method,
+            url: `${MEMBERSTACK_API_BASE}${endpoint}`,
             headers: {
                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
                 'Content-Type': 'application/json'
             }
-        });
+        };
 
-        if (response.data.errors) {
-            console.error('Memberstack API returned errors:', response.data.errors);
-            throw new Error(response.data.errors[0].message);
+        if (data) {
+            config.data = data;
         }
 
+        const response = await axios(config);
         return response.data;
     } catch (error) {
-        console.error('Error calling Memberstack API:', error.response?.data || error.message);
+        console.error('Error calling Memberstack API:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message
+        });
         throw error;
     }
 }
 
-// Simple function to add a lifetime plan to a member
-async function addLifetimePlanToMember(memberId, planId) {
-    const mutation = `
-        mutation UpdateMember($memberId: ID!, $planId: ID!) {
-            updateMember(id: $memberId, data: {
-                planConnections: [{
-                    planId: $planId,
-                    status: "ACTIVE",
-                    isLifetime: true
-                }]
-            }) {
-                id
-                email
-                planConnections {
-                    planId
-                    status
-                }
+// Function to find member by email
+async function findMemberByEmail(email) {
+    try {
+        const response = await callMemberstackAPI(`/members?email=${encodeURIComponent(email)}`);
+        return response.data?.[0];
+    } catch (error) {
+        console.error('Error finding member:', error);
+        return null;
+    }
+}
+
+// Function to create a new member
+async function createMember(email) {
+    try {
+        const response = await callMemberstackAPI('/members', 'POST', {
+            email,
+            metaData: {
+                signupDate: new Date().toISOString()
             }
-        }
-    `;
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error creating member:', error);
+        throw error;
+    }
+}
 
-    console.log('Adding lifetime plan to member:', { memberId, planId });
-
-    return callMemberstackAPI(mutation, { memberId, planId });
+// Function to add a lifetime plan to a member
+async function addLifetimePlanToMember(memberId, planId) {
+    try {
+        const response = await callMemberstackAPI(`/members/${memberId}/plans`, 'POST', {
+            planId,
+            status: "ACTIVE",
+            metadata: {
+                isLifetime: true,
+                purchasedAt: new Date().toISOString()
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error adding plan to member:', error);
+        throw error;
+    }
 }
 
 exports.handler = async (event) => {
@@ -165,7 +186,7 @@ exports.handler = async (event) => {
     }
 
     try {
-        // Parse the incoming webhook event
+        // Verify and parse the webhook payload
         const webhookEvent = JSON.parse(event.body);
         console.log('Received webhook event:', webhookEvent);
 
@@ -196,58 +217,23 @@ exports.handler = async (event) => {
                 }
 
                 try {
-                    // Query Memberstack to find or create member by email
-                    const findMemberQuery = `
-                        query FindMemberByEmail($email: String!) {
-                            members(email: $email) {
-                                id
-                                email
-                                planConnections {
-                                    planId
-                                    status
-                                }
-                            }
-                        }
-                    `;
-
-                    const memberResult = await callMemberstackAPI(findMemberQuery, {
-                        email: session.customer_email
-                    });
-
-                    let memberId;
-                    let member = memberResult.data?.members?.[0];
-
+                    // Find or create member
+                    let member = await findMemberByEmail(session.customer_email);
+                    
                     if (!member) {
-                        // Create new member if not found
-                        const createMemberMutation = `
-                            mutation CreateMember($email: String!) {
-                                createMember(email: $email) {
-                                    id
-                                    email
-                                }
-                            }
-                        `;
-
-                        const newMemberResult = await callMemberstackAPI(createMemberMutation, {
-                            email: session.customer_email
-                        });
-                        member = newMemberResult.data?.createMember;
-                        if (!member) {
-                            throw new Error('Failed to create member');
-                        }
+                        console.log('Member not found, creating new member');
+                        member = await createMember(session.customer_email);
                     }
 
-                    memberId = member.id;
-
                     // Use a default plan ID for lifetime access
-                    const lifetimePlanId = process.env.MEMBERSTACK_LIFETIME_PLAN_ID || 'pln_lifetime_access';
+                    const lifetimePlanId = process.env.MEMBERSTACK_LIFETIME_PLAN_ID || 'pln_lifetime-access';
 
                     // Add lifetime plan to member
-                    const updateResult = await addLifetimePlanToMember(memberId, lifetimePlanId);
+                    const updateResult = await addLifetimePlanToMember(member.id, lifetimePlanId);
                     console.log('Successfully added lifetime plan:', {
-                        memberId: updateResult.id,
-                        email: updateResult.email,
-                        planConnections: updateResult.planConnections
+                        memberId: member.id,
+                        email: member.email,
+                        plan: updateResult
                     });
 
                     // Send confirmation email
@@ -270,11 +256,9 @@ exports.handler = async (event) => {
                         body: JSON.stringify({ 
                             message: 'Lifetime access granted successfully',
                             member: {
-                                id: updateResult.id,
-                                email: updateResult.email,
-                                activePlans: updateResult.planConnections
-                                    .filter(conn => conn.status === "ACTIVE")
-                                    .map(conn => conn.planId)
+                                id: member.id,
+                                email: member.email,
+                                planStatus: updateResult.status
                             }
                         })
                     };
@@ -307,10 +291,7 @@ exports.handler = async (event) => {
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ 
-                error: 'Webhook processing failed',
-                message: error.message 
-            })
+            body: JSON.stringify({ error: error.message })
         };
     }
 };
