@@ -153,71 +153,72 @@ exports.handler = async (event) => {
             object: stripeEvent.data.object
         });
         
-        // Handle both subscription creation and checkout completion
-        if (stripeEvent.type === 'customer.subscription.created' || 
-            stripeEvent.type === 'checkout.session.completed') {
-            
-            const session = stripeEvent.type === 'checkout.session.completed' 
-                ? stripeEvent.data.object 
-                : null;
-            
-            // Get email based on event type
-            const email = stripeEvent.type === 'checkout.session.completed'
-                ? session.customer_details?.email
-                : stripeEvent.data.object.customer_email;
+        // Process the webhook
+        if (stripeEvent.type === 'checkout.session.completed') {
+            const session = stripeEvent.data.object;
+            const email = session.customer_details.email;
             
             console.log('Customer email:', email);
             
-            if (!email) {
-                console.error('No customer email in event:', stripeEvent.data.object);
-                throw new Error('No customer email found in Stripe event');
+            try {
+                // Find or create member
+                const member = await findOrCreateMember(email);
+                
+                // Add lifetime plan
+                if (member && member.id) {
+                    await addLifetimePlan(member.id);
+                }
+                
+                // Send confirmation email for successful payment
+                if (session && session.payment_status === 'paid') {
+                    await sendOrderConfirmationEmail(email, session);
+                }
+                
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ received: true })
+                };
+            } catch (error) {
+                console.error('Error processing webhook:', error);
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ error: error.message })
+                };
             }
+        } else if (stripeEvent.type === 'customer.subscription.created') {
+            const session = stripeEvent.data.object;
+            const email = session.customer_email;
             
-            // Find or create member in Memberstack
-            console.log('Finding or creating member for email:', email);
-            const member = await findOrCreateMember(email);
-            console.log('Member result:', {
-                id: member?.id,
-                email: member?.email,
-                status: member?.status
-            });
+            console.log('Customer email:', email);
             
-            if (!member?.id) {
-                throw new Error('Failed to find or create member');
+            try {
+                // Find or create member
+                const member = await findOrCreateMember(email);
+                
+                // Add lifetime plan
+                if (member && member.id) {
+                    await addLifetimePlan(member.id);
+                }
+                
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ received: true })
+                };
+            } catch (error) {
+                console.error('Error processing webhook:', error);
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ error: error.message })
+                };
             }
-            
-            // Add lifetime plan to member
-            console.log('Adding lifetime plan to member:', member.id);
-            console.log('Using plan ID:', process.env.MEMBERSTACK_LIFETIME_PLAN_ID);
-            
-            await addLifetimePlan(member.id);
-            console.log('Successfully added lifetime plan');
-            
-            // Send confirmation email for checkout completion
-            if (session && session.payment_status === 'paid') {
-                await sendOrderConfirmationEmail(email, {
-                    amount: session.amount_total,
-                    currency: session.currency,
-                    shipping: session.shipping_details
-                });
-            }
-            
-            console.log('Successfully processed event for member:', member.id);
+        } else {
+            // For other events, just acknowledge receipt
+            console.log('Skipping event - not a handled type:', stripeEvent.type);
             return { 
                 statusCode: 200, 
-                body: JSON.stringify({ 
-                    success: true, 
-                    memberId: member.id 
-                }) 
+                body: JSON.stringify({ received: true, processed: false }) 
             };
         }
-        
-        // For other events, just acknowledge receipt
-        console.log('Skipping event - not a handled type:', stripeEvent.type);
-        return { 
-            statusCode: 200, 
-            body: JSON.stringify({ received: true, processed: false }) 
-        };
         
     } catch (error) {
         console.error('Error processing webhook:', {
