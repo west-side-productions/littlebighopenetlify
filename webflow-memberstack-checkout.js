@@ -34,10 +34,10 @@ const PRODUCT_CONFIG = {
         id: 'prc_online-kochkurs-8b540kc2',
         type: 'digital',
         prices: {
-            de: 'price_de_course',
-            en: 'price_en_course',
-            fr: 'price_fr_course',
-            it: 'price_it_course'
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
     book: {
@@ -61,10 +61,10 @@ const PRODUCT_CONFIG = {
         type: 'bundle',
         products: ['course', 'book'],
         prices: {
-            de: 'price_de_bundle',
-            en: 'price_en_bundle',
-            fr: 'price_fr_bundle',
-            it: 'price_it_bundle'
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     }
 };
@@ -268,8 +268,13 @@ function getPreferredLanguage() {
     // Use the global language detection from $lbh
     const language = $lbh.language();
     
+    // Get the product type
+    const productElement = document.querySelector('[data-product-type]');
+    const productType = productElement?.dataset.productType || 'book';
+    const productConfig = PRODUCT_CONFIG[productType];
+    
     // Ensure we have a valid Stripe price for this language
-    if (CONFIG.stripePrices[language]) {
+    if (productConfig?.prices[language]) {
         return language;
     }
     
@@ -443,7 +448,7 @@ function updateTotalPrice(basePrice, shippingRateId) {
 }
 
 // Initialize shipping rate selection
-const basePrice = 49; // Base product price
+const basePrice = 29.99; // Base product price
 
 // Find all shipping select elements
 function initializeShippingSelects() {
