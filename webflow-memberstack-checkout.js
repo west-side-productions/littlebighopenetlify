@@ -1,4 +1,3 @@
-
 // Unified Shipping Calculator and Checkout for Webflow + Stripe
 // Unified Shipping Calculator and Checkout for Webflow + Stripe
 
@@ -54,9 +53,10 @@ const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
     stripePrices: {
-        de: 'price_1Q8g1MJRMXFic4sWWumarOmt',
-        en: 'price_1QSkXZJRMXFic4sWATnFuSzO',
-        it: 'price_1QSkYvJRMXFic4sWeAmPTYAe'
+        de: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
+        en: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
+        it: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
+        fr: 'price_1QSjdDJRMXFic4sWWs0pOYf8'
     },
     memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
     debug: true,
@@ -151,7 +151,7 @@ async function initializeCheckoutButton() {
     console.log('Setting up checkout button...');
     
     // Find all checkout buttons
-    const checkoutButtons = document.querySelectorAll('[data-checkout-button]');
+    const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button]');
     if (checkoutButtons.length === 0) {
         console.error('No checkout buttons found on page');
         return;
@@ -174,182 +174,179 @@ function getBaseUrl() {
     console.log('Current hostname:', hostname);
     
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:8888';
+        return 'http://localhost:8888/.netlify';
     } else {
-        // For production, use the same domain as the website
-        return window.location.origin;
+        // For production, use the Netlify Functions URL
+        return 'https://lillebighopefunctions.netlify.app/.netlify';
     }
 }
 
 async function handleCheckout(event) {
     event.preventDefault();
+    console.log('Checkout button clicked');
+    
+    const button = document.querySelector('[data-checkout-button]');
+    const originalText = button ? button.textContent : '';
     
     try {
+        // Ensure Memberstack is initialized with timeout
+        const memberstack = await Promise.race([
+            waitForMemberstack(),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Memberstack initialization timeout')), 10000)
+            )
+        ]);
+        
         const member = await window.$memberstackDom.getCurrentMember();
-        if (!member) {
-            throw new Error('No member found');
+        console.log('Current member:', member?.data?.id || 'Not found');
+
+        if (!member?.data?.auth?.email) {
+            console.log('No member found or missing email, redirecting to registration');
+            localStorage.setItem('checkoutRedirectUrl', window.location.pathname);
+            window.location.href = '/registrieren';
+            return;
         }
 
-        // Get metadata
-        const metadata = {
-            memberstackUserId: member.data.id,
-            planId: CONFIG.memberstackPlanId,
-            totalWeight: '1000',
-            productWeight: '900',
-            packagingWeight: '100'
-        };
-
-        console.log('Checkout metadata:', metadata);
-
-        // Create checkout session
-        const response = await fetch(`${getBaseUrl()}${CONFIG.functionsUrl}/create-checkout-session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                priceId: CONFIG.stripePriceId,
-                successUrl: `${window.location.origin}/vielen-dank-email`,
-                cancelUrl: `${window.location.origin}/produkte`,
-                metadata: metadata,
-                customerEmail: member.data.auth.email
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to create checkout session: ${errorData.message || response.statusText}`);
+        // Validate shipping selection
+        const shippingSelect = document.querySelector('#shipping-rate-select');
+        if (!shippingSelect?.value) {
+            throw new Error('Please select a shipping option');
         }
 
-        const { sessionId } = await response.json();
-        const stripe = window.Stripe(CONFIG.stripePublicKey);
-        
-        console.log('Redirecting to Stripe with sessionId:', sessionId);
-        
-        // Redirect to Stripe Checkout
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-            throw error;
+        // Start the checkout process with retry logic
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                await startCheckout(shippingSelect.value);
+                break;
+            } catch (error) {
+                retries--;
+                if (retries === 0) throw error;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
+
     } catch (error) {
         console.error('Checkout error:', error);
-        alert('An error occurred during checkout. Please try again.');
+        if (error.message.includes('Memberstack timeout') || error.message.includes('No member found')) {
+            localStorage.setItem('checkoutRedirectUrl', window.location.pathname);
+            window.location.href = '/registrieren';
+        } else {
+            alert(error.message || 'An error occurred during checkout. Please try again.');
+        }
+    } finally {
+        if (button) {
+            button.textContent = originalText;
+            button.disabled = false;
+        }
     }
 }
 
-async function createCheckoutSession(event) {
-    event.preventDefault();
+// Function to get user's preferred language
+function getPreferredLanguage() {
+    // Use the global language detection from $lbh
+    const language = $lbh.language();
+    
+    // Ensure we have a valid Stripe price for this language
+    if (CONFIG.stripePrices[language]) {
+        return language;
+    }
+    
+    // If no Stripe price found for the language, fall back to default
+    console.warn(`No Stripe price found for language: ${language}, falling back to ${LANGUAGE_CONFIG.default}`);
+    return LANGUAGE_CONFIG.default;
+}
+
+// Function to start checkout process
+async function startCheckout(shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') {
+    console.log('Starting checkout process');
+    const button = document.querySelector('[data-checkout-button]');
+    const originalText = button ? button.textContent : '';
     
     try {
-        // Ensure Memberstack is initialized
-        await waitForMemberstack();
-        
-        // Get the language and shipping information
-        const language = window.$lbh.language();
-        const shippingSelect = document.querySelector('[id="shipping-rate-select"]');
-        const shippingRateId = shippingSelect ? shippingSelect.value : 'shr_1QScKFJRMXFic4sW9e80ABBp';
-        const shippingCountry = getShippingCountry(shippingRateId);
-        
-        // Get price ID based on language
+        if (button) {
+            button.textContent = 'Processing...';
+            button.disabled = true;
+        }
+
+        // Get current member
+        const member = await window.$memberstackDom.getCurrentMember();
+        if (!member || !member.data?.auth?.email) {
+            localStorage.setItem('checkoutRedirectUrl', 'membershome');
+            window.location.href = '/registrieren';
+            return;
+        }
+
+        // Get the language and corresponding price ID
+        const language = getPreferredLanguage();
         const priceId = CONFIG.stripePrices[language];
         if (!priceId) {
-            throw new Error(`No price ID found for language: ${language}`);
+            throw new Error(`No price found for language: ${language}`);
         }
 
-        // Get customer email from Memberstack
-        console.log('Getting member data from Memberstack...');
-        const member = await window.$memberstackDom.getCurrentMember();
-        console.log('Member data:', member);
-
-        let customerEmail = member?.data?.auth?.email;
-        console.log('Customer email:', customerEmail);
-
-        if (!customerEmail) {
-            // Try to get member information from cookie
-            try {
-                const memberCookie = await window.$memberstackDom.getMemberCookie();
-                console.log('Member cookie info:', memberCookie);
-                
-                // Parse the JWT token if it exists
-                if (memberCookie) {
-                    try {
-                        const tokenPayload = JSON.parse(atob(memberCookie.split('.')[1]));
-                        if (tokenPayload.email) {
-                            customerEmail = tokenPayload.email;
-                            console.log('Retrieved email from cookie:', customerEmail);
-                        }
-                    } catch (parseError) {
-                        console.error('Error parsing member cookie:', parseError);
-                    }
-                }
-                
-                if (!customerEmail) {
-                    throw new Error('Unable to retrieve customer email. Please ensure your account has a valid email.');
-                }
-            } catch (emailError) {
-                console.error('Error getting member email:', emailError);
-                throw new Error('Unable to retrieve customer email. Please ensure you are logged in with a valid email.');
-            }
-        }
-        
         console.log('Creating checkout session:', {
             language,
             shippingRateId,
-            shippingCountry,
             priceId,
-            customerEmail,
-            memberId: member.data.id
+            email: member.data.auth.email
         });
 
-        const response = await fetch(`${getBaseUrl()}/netlify/functions/create-checkout-session`, {
+        // Create checkout session
+        const baseUrl = 'https://lillebighopefunctions.netlify.app';
+        const response = await fetch(`${baseUrl}/.netlify/functions/create-checkout-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                priceId,
-                customerEmail,
-                shippingRateId,
+                priceId: priceId,
+                customerEmail: member.data.auth.email,
+                shippingRateId: shippingRateId,
                 metadata: {
                     memberstackUserId: member.data.id,
-                    source: 'checkout',
-                    language,
-                    planId: CONFIG.memberstackPlanId,
+                    planId: 'prc_online-kochkurs-8b540kc2',
                     totalWeight: '1000',
                     productWeight: '900',
                     packagingWeight: '100',
-                    countryCode: shippingCountry
+                    language: language,
+                    source: window.location.href
                 }
             })
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`HTTP error! status: ${response.status}${errorData.error ? ` - ${errorData.error}` : ''}`);
-        }
-
-        const session = await response.json();
+        const responseData = await response.json();
+        console.log('Server response:', responseData);
         
-        if (session.error) {
-            throw new Error(session.error);
+        if (!response.ok) {
+            throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
         }
 
-        // Redirect to Stripe checkout
+        if (!responseData.sessionId) {
+            throw new Error('No session ID received from server');
+        }
+
+        // Initialize Stripe and redirect to checkout
         const stripe = await loadStripe();
-        const result = await stripe.redirectToCheckout({
-            sessionId: session.id
+        if (!stripe) {
+            throw new Error('Failed to initialize Stripe');
+        }
+
+        console.log('Redirecting to Stripe checkout with session ID:', responseData.sessionId);
+        const { error } = await stripe.redirectToCheckout({
+            sessionId: responseData.sessionId
         });
 
-        if (result.error) {
-            throw result.error;
+        if (error) {
+            throw error;
         }
+
     } catch (error) {
         console.error('Checkout error:', error);
-        if (error.message.includes('log in') || error.message.includes('email')) {
-            alert(error.message);
-        } else {
-            alert('An error occurred during checkout. Please try again.');
+        if (button) {
+            button.textContent = originalText;
+            button.disabled = false;
         }
+        throw error; // Re-throw to be handled by the caller
     }
 }
 
@@ -391,11 +388,22 @@ const basePrice = 49; // Base product price
 
 // Find all shipping select elements
 function initializeShippingSelects() {
-    const shippingSelects = document.querySelectorAll('[id="shipping-rate-select"]');
+    // Look for both ID and name-based selectors
+    const shippingSelects = document.querySelectorAll('#shipping-rate-select, select[name="Versand-nach"]');
+    console.log('Found shipping selects:', shippingSelects.length);
+    
     shippingSelects.forEach(shippingSelect => {
         if (shippingSelect) {
+            // Ensure the select has both id and name
+            shippingSelect.id = 'shipping-rate-select';
+            shippingSelect.name = 'Versand-nach';
+            
+            // Remove required attribute if it exists
+            shippingSelect.removeAttribute('required');
+            
             // Add change event listener
             shippingSelect.addEventListener('change', (e) => {
+                console.log('Shipping rate changed:', e.target.value);
                 updateTotalPrice(basePrice, e.target.value);
             });
 
@@ -405,6 +413,28 @@ function initializeShippingSelects() {
             updateTotalPrice(basePrice, initialShippingRate);
         }
     });
+
+    // Initialize language selects
+    const languageSelects = document.querySelectorAll('.language-selector, select[name="Sprache"]');
+    console.log('Found language selects:', languageSelects.length);
+    
+    languageSelects.forEach(langSelect => {
+        if (langSelect) {
+            // Ensure the select has both class and name
+            langSelect.classList.add('language-selector');
+            langSelect.name = 'Sprache';
+            
+            // Remove required attribute if it exists
+            langSelect.removeAttribute('required');
+            
+            // Set initial value based on detected language
+            const currentLang = getPreferredLanguage();
+            if (currentLang && langSelect.querySelector(`option[value="${currentLang}"]`)) {
+                langSelect.value = currentLang;
+            }
+        }
+    });
+
     return shippingSelects.length > 0;
 }
 
@@ -415,11 +445,34 @@ function waitForMemberstack(timeout = 5000) {
 
         function checkMemberstack() {
             if (window.$memberstackDom) {
+                // On membershome, wait a bit longer to ensure verification is complete
+                if (window.location.pathname === '/membershome') {
+                    window.$memberstackDom.getCurrentMember()
+                        .then(member => {
+                            if (member) {
+                                resolve(window.$memberstackDom);
+                            } else {
+                                if (Date.now() - startTime > timeout) {
+                                    reject(new Error('Memberstack verification timeout'));
+                                } else {
+                                    setTimeout(checkMemberstack, 100);
+                                }
+                            }
+                        })
+                        .catch(() => setTimeout(checkMemberstack, 100));
+                    return;
+                }
                 resolve(window.$memberstackDom);
                 return;
             }
 
             if (Date.now() - startTime > timeout) {
+                // Instead of rejecting, redirect to registration if not on membershome
+                if (window.location.pathname !== '/membershome') {
+                    localStorage.setItem('checkoutRedirectUrl', 'membershome');
+                    window.location.href = '/registrieren';
+                    return;
+                }
                 reject(new Error('Memberstack timeout'));
                 return;
             }
@@ -435,10 +488,11 @@ function waitForMemberstack(timeout = 5000) {
 function loadStripe() {
     return new Promise((resolve, reject) => {
         try {
+            const stripePublicKey = 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8';
+            
             if (window.Stripe) {
                 console.log('Using existing Stripe instance');
-                const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG');
-                resolve(stripe);
+                resolve(window.Stripe(stripePublicKey));
                 return;
             }
 
@@ -448,7 +502,7 @@ function loadStripe() {
             script.onload = () => {
                 console.log('Stripe script loaded, initializing...');
                 try {
-                    const stripe = window.Stripe('pk_test_51NxsqFJRMXFic4sWqoKfwlsqGhZXVTRXBKWsZpLWCVXHJEPvFGZGYPTQZIzZqPRqHPDlkRFEAcNvkjVIQIrLVPNh00CqUxcRKG');
+                    const stripe = window.Stripe(stripePublicKey);
                     console.log('Stripe initialized successfully');
                     resolve(stripe);
                 } catch (error) {
@@ -468,187 +522,85 @@ function loadStripe() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    try {
-        // Initialize all language selectors
-        const languageSelectors = document.querySelectorAll('.language-selector');
-        const currentLanguage = window.$lbh.language();
-        
-        languageSelectors.forEach(selector => {
-            if (selector) {
-                selector.value = currentLanguage;
-                
-                // Add change listener to sync all selectors
-                selector.addEventListener('change', function(e) {
-                    const newLang = e.target.value;
-                    languageSelectors.forEach(sel => {
-                        if (sel !== e.target) {
-                            sel.value = newLang;
-                        }
-                    });
-                });
-            }
-        });
-        
-        console.log('Initialized with language:', currentLanguage);
-    } catch (error) {
-        console.error('Error initializing language selectors:', error);
-    }
-});
-
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Initializing checkout system...');
     
     try {
-        // Check if we're on membershome
-        const isOnMembershome = window.location.pathname.includes('/memberbereich');
+        // First check if we're on membershome and need to start checkout
+        const isOnMembershome = window.location.pathname === '/membershome';
         console.log('Is on membershome:', isOnMembershome);
-
-        // Initialize shipping selects
-        const hasShippingSelects = initializeShippingSelects();
         
-        // Initialize checkout button
-        const checkoutButton = document.querySelector('[data-checkout-button]');
-        
-        console.log('Found elements:', {
-            checkoutButton: !!checkoutButton,
-            shippingSelect: hasShippingSelects
-        });
-
-        if (!checkoutButton) {
-            console.log('Required elements not found, skipping initialization');
-            return;
-        }
-
-        // Handle shipping selection change
-        if (hasShippingSelects) {
-            const shippingSelects = document.querySelectorAll('[id^="shipping-rate-select"]');
-            shippingSelects.forEach(shippingSelect => {
-                shippingSelect.addEventListener('change', (e) => {
-                    console.log('Shipping selection changed:', e.target.value);
-                    updateTotalPrice(basePrice, e.target.value);
-                });
-            });
-        }
-
-        // Handle checkout button click
-        checkoutButton.addEventListener('click', async (e) => {
-            e.preventDefault();
-            await createCheckoutSession(e);
-        });
-
-        // Wait for both Memberstack and Stripe to be ready
-        console.log('Loading Memberstack and Stripe...');
-        const [memberstack, stripe] = await Promise.all([
-            waitForMemberstack(),
-            loadStripe()
-        ]);
-        console.log('Memberstack and Stripe loaded successfully');
-
-        // Function to start checkout process
-        const startCheckout = async (shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') => {
-            console.log('Starting checkout process');
-            const button = document.querySelector('#checkout-button');
-            const originalText = button ? button.textContent : '';
-            
-            try {
-                if (button) {
-                    button.textContent = 'Processing...';
-                    button.disabled = true;
-                }
-
-                console.log('Getting current member...');
-                const member = await memberstack.getCurrentMember();
-                console.log('Current member:', member);
-
-                if (!member) {
-                    console.log('No member found, redirecting to registration');
-                    window.location.href = '/registrieren';
-                    return;
-                }
-
-                // Verify member data exists
-                if (!member.data?.auth?.email) {
-                    console.error('Member data incomplete:', member);
-                    window.location.href = '/registrieren';
-                    return;
-                }
-
-                // Get the language and corresponding price ID
-                const language = window.$lbh.language() || 'de';
-                const priceId = CONFIG.stripePrices[language];
-                if (!priceId) {
-                    throw new Error(`No price found for language: ${language}`);
-                }
-                console.log(`Using price ID for language ${language}:`, priceId);
-
-                console.log('Creating checkout session with shipping rate:', shippingRateId);
+        // Initialize language selectors if they exist
+        try {
+            const languageSelectors = document.querySelectorAll('.language-selector, select[name="Sprache"]');
+            if (languageSelectors.length > 0) {
+                const currentLanguage = getPreferredLanguage();
                 
-                // Get the correct base URL and construct the endpoint URL
-                const baseUrl = 'https://lillebighopefunctions.netlify.app';
-                const checkoutUrl = `${baseUrl}/.netlify/functions/create-checkout-session`;
-                console.log('Using checkout URL:', checkoutUrl);
-                
-                const response = await fetch(checkoutUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Origin': window.location.origin
-                    },
-                    body: JSON.stringify({
-                        priceId: priceId,
-                        customerEmail: member.data.auth.email,
-                        shippingRateId: shippingRateId,
-                        metadata: {
-                            memberstackUserId: member.data.id,
-                            planId: 'prc_online-kochkurs-8b540kc2',
-                            totalWeight: '1000',
-                            productWeight: '900',
-                            packagingWeight: '100',
-                            language: language,
-                            source: window.location.href
-                        }
-                    })
+                languageSelectors.forEach(selector => {
+                    if (selector) {
+                        selector.value = currentLanguage;
+                        
+                        // Add change listener to sync all selectors
+                        selector.addEventListener('change', function(e) {
+                            const newLang = e.target.value;
+                            languageSelectors.forEach(sel => {
+                                if (sel !== e.target) {
+                                    sel.value = newLang;
+                                }
+                            });
+                        });
+                    }
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error('Checkout session creation failed:', errorData);
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                }
-
-                const { sessionId } = await response.json();
-                console.log('Session created successfully:', sessionId);
-
-                // Initialize Stripe and redirect to checkout
-                const stripe = await loadStripe(CONFIG.stripePublicKey);
-                if (!stripe) {
-                    throw new Error('Failed to initialize Stripe');
-                }
-
-                const { error } = await stripe.redirectToCheckout({ sessionId });
-                if (error) {
-                    throw error;
-                }
-
-            } catch (error) {
-                console.error('Checkout error:', error);
-                if (button) {
-                    button.textContent = originalText;
-                    button.disabled = false;
-                }
-                alert(`Checkout failed: ${error.message}`);
+                
+                console.log('Initialized with language:', currentLanguage);
             }
-        };
-
-        // Start checkout automatically if on membershome
-        if (isOnMembershome) {
-            console.log('On membershome page, starting checkout automatically');
-            await startCheckout();
+        } catch (error) {
+            console.error('Error initializing language selectors:', error);
         }
 
-        console.log('Checkout system initialized successfully');
+        // Find required elements for checkout
+        const elements = {
+            checkoutButtons: document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button]'),
+            shippingSelects: document.querySelectorAll('#shipping-rate-select, select[name="Versand-nach"]'),
+            priceElements: document.querySelectorAll('[data-price-display]')
+        };
+        console.log('Found elements:', elements);
+
+        // Check if we have the necessary elements or if we're on membershome
+        if (Object.values(elements).some(el => el.length > 0) || isOnMembershome) {
+            console.log('Loading Memberstack and Stripe...');
+            
+            // Initialize dependencies
+            const { stripe } = await initializeDependencies();
+            window.$lbh = window.$lbh || {};
+            window.$lbh.stripe = stripe;
+            
+            console.log('Memberstack and Stripe loaded successfully');
+            
+            // Initialize shipping selects if they exist
+            if (elements.shippingSelects.length > 0) {
+                initializeShippingSelects();
+            }
+            
+            // Initialize checkout buttons if they exist
+            if (elements.checkoutButtons.length > 0) {
+                await initializeCheckoutButton();
+            }
+
+            // Check if we need to start checkout on membershome
+            const checkoutRedirectUrl = localStorage.getItem('checkoutRedirectUrl');
+            if (checkoutRedirectUrl === 'membershome' && isOnMembershome) {
+                localStorage.removeItem('checkoutRedirectUrl');
+                console.log('Starting checkout on membershome...');
+                await startCheckout().catch(error => {
+                    console.error('Error starting checkout:', error);
+                });
+            }
+
+            console.log('Checkout system initialized successfully');
+        } else {
+            console.log('Required elements not found, skipping initialization');
+        }
     } catch (error) {
         console.error('Initialization error:', error);
         if (error.message === 'Memberstack timeout') {

@@ -2,7 +2,7 @@
 document.addEventListener("DOMContentLoaded", (async () => {
     // Make sure $lbh is available
     if (typeof $lbh === 'undefined') {
-        console.error('$lbh utilities not found! Make sure utils.js is loaded in the global head.');
+        console.error('$lbh utilities not found! Make sure the global head code is properly loaded.');
         return;
     }
 
