@@ -1,11 +1,13 @@
 const axios = require('axios');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
-const Memberstack = require('@memberstack/admin');
+const Memberstack = require('@memberstack/admin'); // Import Memberstack
 
-// Initialize clients
+// Initialize SendGrid client
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-const memberstack = new Memberstack({
+
+// Initialize Memberstack client
+const memberstack = Memberstack({
     apiKey: process.env.MEMBERSTACK_SECRET_KEY
 });
 
@@ -14,6 +16,7 @@ const emailTemplates = {
     de: require('./email-templates/de')
 };
 
+// Function to add plan to member
 async function addPlanToMember(memberId) {
     try {
         // Add plan using Memberstack client
@@ -64,7 +67,7 @@ exports.handler = async (event) => {
         if (stripeEvent.type === 'checkout.session.completed') {
             const session = stripeEvent.data.object;
             
-            // Only proceed if payment is successful and we have a memberstack ID
+            // Only proceed if payment is successful and we have a Memberstack ID
             if (session.payment_status === 'paid' && session.metadata?.memberstackUserId) {
                 console.log('Processing successful payment for member:', session.metadata.memberstackUserId);
                 
