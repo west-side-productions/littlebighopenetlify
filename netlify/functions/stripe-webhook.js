@@ -1,52 +1,33 @@
 const axios = require('axios');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
-const Memberstack = require('@memberstack/admin'); // Import Memberstack
 
-// Initialize clients
+// Initialize SendGrid client
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-// Initialize Memberstack client
-const memberstack = Memberstack; // Adjusted initialization
 
 // Load email templates
 const emailTemplates = {
     de: require('./email-templates/de')
 };
 
+// Function to add plan to member
 async function addPlanToMember(memberId) {
     try {
-        // Add plan using Memberstack client
-        await memberstack.addPlanToMember({
-            memberId,
-            planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
-            status: 'ACTIVE'
-        });
-        
-        console.log(`Successfully added plan to member ${memberId}`);
+        const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
+        const data = {
+            planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID
+        };
+        const headers = {
+            "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY // Use your Memberstack secret key
+        };
+
+        // Make the API call to add the plan
+        const response = await axios.post(url, data, { headers });
+        console.log(`Successfully added plan to member ${memberId}`, response.data);
     } catch (error) {
-        // Improved error handling
         const errorMessage = error.response?.data || error.message || 'Unknown error';
         console.error('Error adding plan to member:', errorMessage);
         throw new Error(`Failed to add plan to member: ${errorMessage}`);
-    }
-}
-
-// Function to send order confirmation email
-async function sendOrderConfirmationEmail(email, data) {
-    try {
-        const msg = {
-            to: email,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: 'Order Confirmation',
-            text: emailTemplates.de.orderConfirmation(data),
-            html: emailTemplates.de.orderConfirmationHtml(data),
-        };
-
-        await sgMail.send(msg);
-        console.log('Order confirmation email sent successfully');
-    } catch (error) {
-        console.error('Failed to send order confirmation email:', error);
     }
 }
 
@@ -70,11 +51,6 @@ exports.handler = async (event) => {
                 
                 // Add plan to existing member
                 await addPlanToMember(session.metadata.memberstackUserId);
-                
-                // Send confirmation email
-                if (session.customer_details?.email) {
-                    await sendOrderConfirmationEmail(session.customer_details.email, session);
-                }
             }
         }
 
