@@ -262,17 +262,53 @@ exports.handler = async (event) => {
             console.log('Sending order notification email...');
             try {
                 const template = emailTemplates[session.metadata.language || 'de'];
+                const orderDetails = {
+                    orderNumber: session.id,
+                    customerEmail: session.customer_details.email,
+                    shippingAddress: {
+                        name: session.customer_details.name,
+                        line1: session.customer_details.address.line1,
+                        line2: session.customer_details.address.line2,
+                        city: session.customer_details.address.city,
+                        state: session.customer_details.address.state,
+                        postal_code: session.customer_details.address.postal_code,
+                        country: session.customer_details.address.country
+                    },
+                    weights: {
+                        productWeight: parseInt(session.metadata.productWeight),
+                        packagingWeight: parseInt(session.metadata.packagingWeight),
+                        totalWeight: parseInt(session.metadata.totalWeight)
+                    },
+                    items: [{
+                        name: 'Little Big Hope Kochbuch',
+                        price: (session.amount_subtotal / 100).toFixed(2),
+                        currency: session.currency.toUpperCase()
+                    }],
+                    shipping: {
+                        method: 'Standard Versand',
+                        cost: (session.shipping_cost.amount_total / 100).toFixed(2),
+                        currency: session.currency.toUpperCase()
+                    },
+                    total: {
+                        subtotal: (session.amount_subtotal / 100).toFixed(2),
+                        shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
+                        tax: (session.total_details.amount_tax / 100).toFixed(2),
+                        total: (session.amount_total / 100).toFixed(2),
+                        currency: session.currency.toUpperCase()
+                    }
+                };
+
                 const msg = {
                     to: session.customer_email,
-                    from: template.from,
-                    subject: template.subject,
-                    text: template.text,
-                    html: template.html,
+                    from: process.env.SENDGRID_FROM_EMAIL,
+                    subject: template.order_notification.subject,
+                    html: template.order_notification.html({ orderDetails })
                 };
+
                 const emailResponse = await sgMail.send(msg);
                 console.log('Order notification email sent successfully:', emailResponse[0].statusCode);
             } catch (error) {
-                console.error('Failed to send order notification email:', error);
+                console.error('Failed to send order notification email:', error.response?.body || error);
                 // Continue processing even if email fails
             }
 
