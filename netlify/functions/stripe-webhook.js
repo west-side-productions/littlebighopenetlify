@@ -15,7 +15,6 @@ const emailTemplates = {
     de: require('./email-templates/de')
 };
 
-// Function to add plan to member
 async function addPlanToMember(memberId) {
     try {
         // Add plan using Memberstack client
@@ -27,8 +26,10 @@ async function addPlanToMember(memberId) {
         
         console.log(`Successfully added plan to member ${memberId}`);
     } catch (error) {
-        console.error('Error adding plan to member:', error.response?.data || error.message);
-        throw error;
+        // Improved error handling
+        const errorMessage = error.response?.data || error.message || 'Unknown error';
+        console.error('Error adding plan to member:', errorMessage);
+        throw new Error(`Failed to add plan to member: ${errorMessage}`);
     }
 }
 
