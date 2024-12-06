@@ -100,6 +100,20 @@ exports.handler = async function(event, context) {
             shippingRate = validateShippingRate(data.shippingRateId);
         }
 
+        // Create metadata object with all necessary information
+        const metadata = {
+            ...data.metadata,
+            source: 'checkout',
+            totalWeight: data.metadata?.totalWeight || '1000',
+            productWeight: data.metadata?.productWeight || '900',
+            packagingWeight: data.metadata?.packagingWeight || '100',
+            planId: data.metadata?.planId || 'pln_kostenloser-zugang-84l80t3u',
+            countryCode: shippingRate?.countries[0] || 'DE', // Default to DE for digital products
+            language: data.language || 'de'
+        };
+
+        console.log('Sending metadata to Stripe:', metadata);
+
         // Prepare line items
         const lineItems = [{
             price: data.priceId,
@@ -108,15 +122,20 @@ exports.handler = async function(event, context) {
 
         // Prepare session data
         const sessionData = {
+            payment_method_types: ['card'],
             customer_email: data.customerEmail,
             line_items: lineItems,
             mode: 'payment',
-            success_url: `${data.successUrl || 'https://www.littlebighope.com/success'}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/cancel',
-            metadata: data.metadata || {},
+            success_url: `${data.successUrl || 'https://www.littlebighope.com/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
+            metadata: metadata,
+            payment_intent_data: {
+                metadata: metadata  // Add metadata to payment intent as well
+            },
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            locale: data.language || 'de'
+            locale: data.language || 'de',
+            automatic_tax: { enabled: true }
         };
 
         // Add shipping options only for physical products
