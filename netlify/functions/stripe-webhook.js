@@ -105,22 +105,84 @@ async function storeFailedRequest(data) {
     }
 }
 
+// AWS SigV4 signing
+function getSignatureKey(key, dateStamp, regionName, serviceName) {
+    const kDate = crypto.createHmac('sha256', 'AWS4' + key).update(dateStamp).digest();
+    const kRegion = crypto.createHmac('sha256', kDate).update(regionName).digest();
+    const kService = crypto.createHmac('sha256', kRegion).update(serviceName).digest();
+    const kSigning = crypto.createHmac('sha256', kService).update('aws4_request').digest();
+    return kSigning;
+}
+
+function signRequest(method, path, body, apiKey) {
+    const algorithm = 'AWS4-HMAC-SHA256';
+    const service = 'execute-api';
+    const region = 'us-east-1';
+    const host = 'api.memberstack.com';
+
+    // Create date strings
+    const amzdate = new Date().toISOString().replace(/[:\-]|\.\d{3}/g, '');
+    const datestamp = amzdate.substring(0, 8);
+
+    // Create canonical request
+    const canonical_uri = path;
+    const canonical_querystring = '';
+    const payload_hash = crypto.createHash('sha256').update(JSON.stringify(body) || '').digest('hex');
+
+    const canonical_headers = 
+        'host:' + host + '\n' +
+        'x-amz-date:' + amzdate + '\n';
+    
+    const signed_headers = 'host;x-amz-date';
+
+    const canonical_request = method + '\n' +
+        canonical_uri + '\n' +
+        canonical_querystring + '\n' +
+        canonical_headers + '\n' +
+        signed_headers + '\n' +
+        payload_hash;
+
+    // Create string to sign
+    const credential_scope = datestamp + '/' + region + '/' + service + '/aws4_request';
+    const string_to_sign = algorithm + '\n' +
+        amzdate + '\n' +
+        credential_scope + '\n' +
+        crypto.createHash('sha256').update(canonical_request).digest('hex');
+
+    // Calculate signature
+    const signing_key = getSignatureKey(apiKey, datestamp, region, service);
+    const signature = crypto.createHmac('sha256', signing_key).update(string_to_sign).digest('hex');
+
+    // Create authorization header
+    const authorization_header = algorithm + ' ' +
+        'Credential=' + apiKey + '/' + credential_scope + ', ' +
+        'SignedHeaders=' + signed_headers + ', ' +
+        'Signature=' + signature;
+
+    return {
+        'Authorization': authorization_header,
+        'X-Amz-Date': amzdate
+    };
+}
+
 // Memberstack API client with built-in retries
 async function callMemberstackAPI(endpoint, data, attempt = 1) {
     const startTime = Date.now();
     const delay = Math.min(INITIAL_DELAY * Math.pow(1.5, attempt - 1), MAX_DELAY);
     
     try {
+        const headers = signRequest('POST', endpoint, data, process.env.MEMBERSTACK_SECRET_KEY);
+        
         const response = await axios({
             method: 'POST',
             url: `${MEMBERSTACK_API_V2}${endpoint}`,
             headers: {
+                ...headers,
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': process.env.MEMBERSTACK_SECRET_KEY
+                'Accept': 'application/json'
             },
             data,
-            timeout: 5000 // 5 second timeout per request
+            timeout: 5000
         });
         
         return response.data;
