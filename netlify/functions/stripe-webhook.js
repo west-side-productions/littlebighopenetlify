@@ -1,13 +1,12 @@
 const axios = require('axios');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
-const Memberstack = require('@memberstack/admin');
+const { Memberstack } = require('@memberstack/admin');
 
 // Initialize clients
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-const memberstack = new Memberstack({ 
-    apiKey: process.env.MEMBERSTACK_SECRET_KEY,
-    mode: 'test'  // or 'production' based on your environment
+const memberstack = Memberstack.init({ 
+    secret_key: process.env.MEMBERSTACK_SECRET_KEY
 });
 
 // Load email templates
