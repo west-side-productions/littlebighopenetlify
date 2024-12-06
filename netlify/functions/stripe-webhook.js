@@ -1,6 +1,7 @@
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const sgMail = require('@sendgrid/mail');
+const crypto = require('crypto');
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Load email templates
@@ -15,7 +16,7 @@ const MEMBERSTACK_API_V2 = 'https://api.memberstack.com/v2';
 const MAX_RETRIES = 4;
 const INITIAL_DELAY = 1000;
 const MAX_DELAY = 3000;
-const NETLIFY_TIMEOUT = 25000; // Leave 5s buffer from 30s limit
+const NETLIFY_TIMEOUT = 10000; // Leave 5s buffer from 10s limit
 
 // CORS headers
 const headers = {
@@ -104,10 +105,51 @@ async function storeFailedRequest(data) {
     }
 }
 
+// Helper function to sign AWS requests
+function signRequest(method, path, data, timestamp, secretKey) {
+    const canonicalRequest = [
+        method,
+        path,
+        '',  // Query string (empty in our case)
+        `host:api.memberstack.com\n` +
+        `x-amz-date:${timestamp}`,
+        '',  // Empty line after headers
+        'host;x-amz-date',  // Signed headers
+        data ? crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex') : 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' // empty string hash
+    ].join('\n');
+
+    const stringToSign = [
+        'AWS4-HMAC-SHA256',
+        timestamp,
+        timestamp.substring(0, 8) + '/us-east-1/execute-api/aws4_request',
+        crypto.createHash('sha256').update(canonicalRequest).digest('hex')
+    ].join('\n');
+
+    const kDate = crypto.createHmac('sha256', 'AWS4' + secretKey)
+        .update(timestamp.substring(0, 8))
+        .digest();
+    const kRegion = crypto.createHmac('sha256', kDate)
+        .update('us-east-1')
+        .digest();
+    const kService = crypto.createHmac('sha256', kRegion)
+        .update('execute-api')
+        .digest();
+    const kSigning = crypto.createHmac('sha256', kService)
+        .update('aws4_request')
+        .digest();
+    
+    const signature = crypto.createHmac('sha256', kSigning)
+        .update(stringToSign)
+        .digest('hex');
+
+    return `AWS4-HMAC-SHA256 Credential=${secretKey}/${timestamp.substring(0, 8)}/us-east-1/execute-api/aws4_request, SignedHeaders=host;x-amz-date, Signature=${signature}`;
+}
+
 // Memberstack API client with built-in retries
 async function callMemberstackAPI(endpoint, data, attempt = 1) {
     const startTime = Date.now();
     const delay = Math.min(INITIAL_DELAY * Math.pow(1.5, attempt - 1), MAX_DELAY);
+    const timestamp = new Date().toISOString().split('.')[0].replace(/[-:]/g, '') + 'Z';
     
     try {
         const response = await axios({
@@ -116,8 +158,8 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
-                'X-Amz-Date': new Date().toISOString().split('.')[0].replace(/[-:]/g, '') + 'Z'
+                'Authorization': signRequest('POST', endpoint, data, timestamp, process.env.MEMBERSTACK_SECRET_KEY),
+                'X-Amz-Date': timestamp
             },
             data,
             timeout: 5000 // 5 second timeout per request
@@ -134,6 +176,12 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             response: error.response?.data
         });
 
+        if (attempt < 4 && error.response?.status === 403) {
+            console.log(`Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return callMemberstackAPI(endpoint, data, attempt + 1);
+        }
+
         if (Date.now() - startTime > NETLIFY_TIMEOUT) {
             console.log('Approaching Netlify timeout, storing request for later retry');
             await storeFailedRequest({
@@ -148,24 +196,6 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             });
             throw new Error('Netlify timeout approaching');
         }
-
-        if (attempt < MAX_RETRIES) {
-            console.log(`Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return callMemberstackAPI(endpoint, data, attempt + 1);
-        }
-
-        // Store failed request after max retries
-        await storeFailedRequest({
-            type: 'memberstack',
-            data: {
-                endpoint,
-                payload: data,
-                error: error.message,
-                status: error.response?.status,
-                response: error.response?.data
-            }
-        });
 
         throw error;
     }
