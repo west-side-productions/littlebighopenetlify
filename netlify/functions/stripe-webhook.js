@@ -145,8 +145,8 @@ async function callMemberstackAPI(query, variables, attempt = 1) {
     }
 }
 
-// Simple function to add a plan to a member
-async function addPlanToMember(memberId, planId) {
+// Simple function to add a lifetime plan to a member
+async function addLifetimePlanToMember(memberId, planId) {
     const mutation = `
         mutation UpdateMember($memberId: String!, $data: JSON!) {
             updateMember(id: $memberId, data: $data) {
@@ -155,22 +155,23 @@ async function addPlanToMember(memberId, planId) {
                 planConnections {
                     planId
                     status
-                    startedAt
-                    renewalAt
+                    purchasedAt
                 }
                 customFields
             }
         }
     `;
 
-    console.log('Adding plan to member:', { memberId, planId });
+    console.log('Adding lifetime plan to member:', { memberId, planId });
 
     const variables = {
         memberId,
         data: {
             planConnections: [{
                 planId,
-                status: "ACTIVE"
+                status: "ACTIVE",
+                isLifetime: true,
+                purchasedAt: new Date().toISOString()
             }]
         }
     };
@@ -188,7 +189,7 @@ async function addPlanToMember(memberId, planId) {
     );
 
     if (!activePlan) {
-        throw new Error('Plan was not successfully activated');
+        throw new Error('Lifetime plan was not successfully activated');
     }
 
     return member;
@@ -207,28 +208,46 @@ exports.handler = async (event) => {
 
         // Handle different event types
         switch (webhookEvent.type) {
-            case 'subscription.created':
-                // Extract member and plan IDs from the webhook payload
-                const memberId = webhookEvent.data.memberId;
-                const planId = webhookEvent.data.planId;
+            case 'checkout.session.completed':
+                // Extract customer email and metadata from the session
+                const session = webhookEvent.data.object;
+                const customerEmail = session.customer_details.email;
+                const metadata = session.metadata || {};
+                
+                // Get the member ID and plan ID from metadata
+                const memberId = metadata.memberId;
+                const planId = metadata.planId;
 
                 if (!memberId || !planId) {
-                    throw new Error('Missing required fields: memberId or planId');
+                    throw new Error('Missing required metadata: memberId or planId');
                 }
 
-                // Update member's plan in Memberstack
-                const member = await addPlanToMember(memberId, planId);
-                console.log('Successfully updated member plan:', {
+                // Update member's lifetime plan in Memberstack
+                const member = await addLifetimePlanToMember(memberId, planId);
+                console.log('Successfully added lifetime plan:', {
                     memberId: member.id,
                     email: member.email,
                     planConnections: member.planConnections
                 });
 
+                // Send confirmation email if needed
+                if (process.env.SENDGRID_API_KEY) {
+                    try {
+                        await sendOrderConfirmationEmail(customerEmail, {
+                            planName: metadata.planName || 'Lifetime Access',
+                            purchaseDate: new Date().toLocaleDateString()
+                        });
+                    } catch (error) {
+                        console.error('Failed to send confirmation email:', error);
+                        // Continue processing as email sending is not critical
+                    }
+                }
+
                 return {
                     statusCode: 200,
                     headers,
                     body: JSON.stringify({ 
-                        message: 'Plan updated successfully',
+                        message: 'Lifetime plan activated successfully',
                         member: {
                             id: member.id,
                             email: member.email,
@@ -237,138 +256,6 @@ exports.handler = async (event) => {
                                 .map(conn => conn.planId)
                         }
                     })
-                };
-
-            case 'checkout.session.completed':
-                const session = webhookEvent.data.object;
-                console.log('Checkout session completed:', session.id);
-
-                // Get the Memberstack member ID from metadata
-                const memberstackMemberId = session.metadata?.memberstackUserId;
-                if (!memberstackMemberId) {
-                    throw new Error('No Memberstack member ID found in session metadata');
-                }
-
-                // Get the plan ID from metadata
-                const checkoutPlanId = session.metadata?.planId;
-                if (!checkoutPlanId) {
-                    throw new Error('No plan ID found in session metadata');
-                }
-
-                // Update member's plan in Memberstack
-                try {
-                    const checkoutResult = await addPlanToMember(memberstackMemberId, checkoutPlanId);
-                    console.log('Successfully updated member plan in Memberstack:', checkoutResult);
-                } catch (error) {
-                    console.error('Failed to update Memberstack:', error);
-                    throw error;
-                }
-
-                // Extract relevant data
-                console.log('Checkout session details:', {
-                    id: session.id,
-                    customerId: session.customer,
-                    customerEmail: session.customer_details.email,
-                    customerName: session.customer_details.name,
-                    customerAddress: session.customer_details.address,
-                    customerPhone: session.customer_details.phone,
-                    amount: session.amount_total,
-                    currency: session.currency,
-                    metadata: session.metadata,
-                    countryCode: session.metadata.countryCode
-                });
-
-                // Get country code from metadata
-                const countryCode = session.metadata.countryCode;
-                console.log('Using country code from metadata:', countryCode);
-
-                // Calculate shipping rate
-                console.log('Calculating shipping for country:', countryCode);
-                const calculatedRate = calculateShippingRate(countryCode);
-                console.log('Shipping calculation:', {
-                    country: countryCode,
-                    calculatedRate,
-                    totalWeight: session.metadata.totalWeight,
-                    productWeight: session.metadata.productWeight,
-                    packagingWeight: session.metadata.packagingWeight,
-                    source: session.metadata.source
-                });
-
-                // Prepare data for Memberstack update
-                const customFields = {
-                    shippingCountry: countryCode,
-                    shippingRate: calculatedRate.price,
-                    shippingLabel: calculatedRate.label,
-                    orderTotal: session.amount_total,
-                    orderCurrency: session.currency,
-                    customerName: session.customer_details.name,
-                    customerEmail: session.customer_details.email,
-                    customerPhone: session.customer_details.phone,
-                    customerAddress: session.customer_details.address
-                };
-
-                console.log('Preparing MemberStack update:', {
-                    memberId: memberstackMemberId,
-                    customFields
-                });
-
-                // Send order confirmation email
-                try {
-                    const emailTemplate = emailTemplates.de;
-                    const msg = {
-                        to: session.customer_details.email,
-                        from: 'info@lieblingsbrot.at',
-                        templateId: emailTemplate.confirmationTemplateId,
-                        dynamicTemplateData: {
-                            customerName: session.customer_details.name,
-                            orderTotal: (session.amount_total / 100).toFixed(2),
-                            currency: session.currency.toUpperCase(),
-                            shippingAddress: {
-                                name: session.customer_details.name,
-                                line1: session.customer_details.address.line1,
-                                line2: session.customer_details.address.line2,
-                                city: session.customer_details.address.city,
-                                postal_code: session.customer_details.address.postal_code,
-                                country: session.customer_details.address.country
-                            }
-                        }
-                    };
-
-                    await sgMail.send(msg);
-                    console.log('Order confirmation email sent');
-                } catch (error) {
-                    console.error('Failed to send order confirmation email:', error);
-                    // Don't throw here, continue with other operations
-                }
-
-                try {
-                    // Update custom fields
-                    const updateCustomFieldsMutation = `
-                        mutation UpdateMember($memberId: String!, $data: JSON!) {
-                            updateMember(id: $memberId, data: $data) {
-                                id
-                                customFields
-                            }
-                        }
-                    `;
-
-                    const result = await callMemberstackAPI(updateCustomFieldsMutation, {
-                        memberId: memberstackMemberId,
-                        data: {
-                            customFields
-                        }
-                    });
-
-                    console.log('Successfully updated Memberstack member:', result);
-                } catch (error) {
-                    console.error('Failed to update MemberStack:', error);
-                    // The error is already logged and stored for retry by callMemberstackAPI
-                }
-
-                return {
-                    statusCode: 200,
-                    headers,
-                    body: JSON.stringify({ received: true })
                 };
 
             default:
