@@ -1,5 +1,5 @@
-const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
+const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
 
 // Initialize SendGrid
@@ -25,19 +25,12 @@ When a Stripe webhook 'customer.subscription.created' is received:
 function createMemberstackHeaders() {
     const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
     
-    // Log API key details (safely)
-    console.log('Using API Key:', {
-        present: !!apiKey,
-        length: apiKey?.length || 0,
-        prefix: apiKey?.substring(0, 5) || 'none',
-        value: apiKey  // Temporary for debugging
-    });
-    
     if (!apiKey) {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
+
     return {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: apiKey,  // Do not add 'Bearer' prefix - Memberstack expects the raw API key
         'Content-Type': 'application/json'
     };
 }
@@ -45,19 +38,9 @@ function createMemberstackHeaders() {
 // Function to find or create member in Memberstack
 async function findOrCreateMember(email) {
     try {
-        const apiKey = process.env.MEMBERSTACK_SECRET_KEY; // Get raw API key
-        console.log('API Key check:', {
-            present: !!apiKey,
-            length: apiKey?.length || 0,
-            prefix: apiKey?.substring(0, 5) || 'none'
-        });
-
-        // Create headers exactly as shown in the example
-        const headers = {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        };
-
+        console.log('Finding or creating member for email:', email);
+        
+        const headers = createMemberstackHeaders();
         console.log('Request headers:', {
             ...headers,
             'Authorization': headers.Authorization.startsWith('Bearer ') ? 'Bearer [REDACTED]' : 'INVALID FORMAT'
@@ -93,7 +76,7 @@ async function findOrCreateMember(email) {
             data: error.response?.data,
             headers: error.config?.headers ? {
                 ...error.config.headers,
-                'Authorization': 'Bearer [REDACTED]'
+                Authorization: '[REDACTED]'
             } : null
         });
         throw error;
@@ -103,15 +86,10 @@ async function findOrCreateMember(email) {
 // Function to add lifetime plan to member
 async function addLifetimePlan(memberId) {
     try {
-        const apiKey = process.env.MEMBERSTACK_SECRET_KEY;
-        const headers = {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        };
-        
+        const headers = createMemberstackHeaders();
         console.log('Adding plan with headers:', {
             ...headers,
-            'Authorization': 'Bearer [REDACTED]'
+            Authorization: '[REDACTED]'
         });
         
         await axios.post(
