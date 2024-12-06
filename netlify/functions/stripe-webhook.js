@@ -109,11 +109,16 @@ async function callMemberstackAPI(query, variables = null) {
     console.log(`Calling Memberstack GraphQL API with query:`, query, variables ? { variables } : '');
     
     try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
+        if (!apiKey) {
+            throw new Error('MEMBERSTACK_SECRET_KEY is not set');
+        }
+
         const config = {
             method: 'POST',
             url: MEMBERSTACK_API_BASE,
             headers: {
-                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
@@ -162,14 +167,25 @@ async function findMemberByEmail(email) {
     console.log(`Finding member by email: ${email}`);
     
     try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
+        if (!apiKey) {
+            throw new Error('MEMBERSTACK_SECRET_KEY is not set');
+        }
+
+        // Ensure proper formatting of Authorization header
+        const headers = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        };
+
+        console.log('Making request with headers:', {
+            ...headers,
+            'Authorization': 'Bearer [REDACTED]'
+        });
+
         const response = await axios.get(
             `https://api.memberstack.com/v2/members/search?email=${encodeURIComponent(email)}`,
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+            { headers }
         );
 
         console.log('Member search response:', response.data);
@@ -184,7 +200,11 @@ async function findMemberByEmail(email) {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message
+            message: error.message,
+            headers: error.config?.headers ? {
+                ...error.config.headers,
+                'Authorization': 'Bearer [REDACTED]'
+            } : null
         });
         throw error;
     }
@@ -195,18 +215,29 @@ async function createMember(email) {
     console.log(`Creating new member with email: ${email}`);
     
     try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
+        if (!apiKey) {
+            throw new Error('MEMBERSTACK_SECRET_KEY is not set');
+        }
+
+        // Ensure proper formatting of Authorization header
+        const headers = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        };
+
+        console.log('Making request with headers:', {
+            ...headers,
+            'Authorization': 'Bearer [REDACTED]'
+        });
+
         const response = await axios.post(
             'https://api.memberstack.com/v2/members',
             {
                 email: email,
                 status: "ACTIVE"
             },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+            { headers }
         );
 
         console.log('Successfully created member:', response.data);
@@ -216,7 +247,11 @@ async function createMember(email) {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message
+            message: error.message,
+            headers: error.config?.headers ? {
+                ...error.config.headers,
+                'Authorization': 'Bearer [REDACTED]'
+            } : null
         });
         throw error;
     }
@@ -227,18 +262,29 @@ async function addLifetimePlanToMember(memberId, planId) {
     console.log(`Adding lifetime plan ${planId} to member ${memberId}`);
     
     try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
+        if (!apiKey) {
+            throw new Error('MEMBERSTACK_SECRET_KEY is not set');
+        }
+
+        // Ensure proper formatting of Authorization header
+        const headers = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        };
+
+        console.log('Making request with headers:', {
+            ...headers,
+            'Authorization': 'Bearer [REDACTED]'
+        });
+
         const response = await axios.post(
             `https://api.memberstack.com/v2/members/${memberId}/plans`,
             {
                 planId: planId,
                 status: "ACTIVE"
             },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+            { headers }
         );
 
         console.log('Successfully added plan to member:', response.data);
@@ -248,7 +294,11 @@ async function addLifetimePlanToMember(memberId, planId) {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message
+            message: error.message,
+            headers: error.config?.headers ? {
+                ...error.config.headers,
+                'Authorization': 'Bearer [REDACTED]'
+            } : null
         });
         throw error;
     }
