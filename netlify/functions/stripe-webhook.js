@@ -3,20 +3,17 @@ const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
 const Memberstack = require('@memberstack/admin'); // Import Memberstack
 
-// Initialize SendGrid client
+// Initialize clients
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Initialize Memberstack client
-const memberstack = new Memberstack({
-    apiKey: process.env.MEMBERSTACK_SECRET_KEY
-});
+const memberstack = Memberstack; // Adjusted initialization
 
 // Load email templates
 const emailTemplates = {
     de: require('./email-templates/de')
 };
 
-// Function to add plan to member
 async function addPlanToMember(memberId) {
     try {
         // Add plan using Memberstack client
@@ -57,7 +54,7 @@ async function sendOrderConfirmationEmail(email, data) {
 exports.handler = async (event) => {
     try {
         // Verify Stripe webhook signature
-        const stripeEvent = await Stripe.webhooks.constructEvent(
+        const stripeEvent = Stripe.webhooks.constructEvent(
             event.body,
             event.headers['stripe-signature'],
             process.env.STRIPE_WEBHOOK_SECRET
