@@ -29,6 +29,59 @@ const SHIPPING_RATES = {
     }
 };
 
+const PRODUCT_CONFIG = {
+    course: {
+        id: 'prc_online-kochkurs-8b540kc2',
+        type: 'digital',
+        prices: {
+            de: 'price_de_course',
+            en: 'price_en_course',
+            fr: 'price_fr_course',
+            it: 'price_it_course'
+        }
+    },
+    book: {
+        id: 'prc_cookbook_physical',
+        type: 'physical',
+        prices: {
+            de: 'price_de_book',
+            en: 'price_en_book',
+            fr: 'price_fr_book',
+            it: 'price_it_book'
+        },
+        shipping: {
+            weight: {
+                product: 1005,
+                packaging: 152,
+                total: 1157
+            }
+        }
+    },
+    bundle: {
+        type: 'bundle',
+        products: ['course', 'book'],
+        prices: {
+            de: 'price_de_bundle',
+            en: 'price_en_bundle',
+            fr: 'price_fr_bundle',
+            it: 'price_it_bundle'
+        }
+    }
+};
+
+const CONFIG = {
+    functionsUrl: '/.netlify/functions',
+    stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
+    stripePrices: {
+        de: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
+        en: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
+        it: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
+        fr: 'price_1QSjdDJRMXFic4sWWs0pOYf8'
+    },
+    memberstackPlanId: 'prc_online-kochkurs-8b540kc2', // Default plan ID for course
+    defaultShippingRate: 'shr_1QScKFJRMXFic4sW9e80ABBp' // Default to Austria shipping
+};
+
 const getCountriesForShippingRate = (shippingRateId) => {
     return SHIPPING_RATES[shippingRateId]?.countries || [];
 };
@@ -47,22 +100,6 @@ const EU_COUNTRIES = [
     'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
     'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
 ];
-
-// Configuration object
-const CONFIG = {
-    functionsUrl: '/.netlify/functions',
-    stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
-    stripePrices: {
-        de: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
-        en: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
-        it: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
-        fr: 'price_1QSjdDJRMXFic4sWWs0pOYf8'
-    },
-    memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
-    debug: true,
-    baseUrl: window.location.hostname === 'localhost' ? 'http://localhost:8888' : '',
-    isLocalDev: window.location.hostname === 'localhost' || window.location.hostname.includes('192.168.') || window.location.hostname.includes('.local')
-};
 
 // Debug flag
 const DEBUG = true;
@@ -185,9 +222,6 @@ async function handleCheckout(event) {
     event.preventDefault();
     console.log('Checkout button clicked');
     
-    const button = document.querySelector('[data-checkout-button]');
-    const originalText = button ? button.textContent : '';
-    
     try {
         // Ensure Memberstack is initialized with timeout
         const memberstack = await Promise.race([
@@ -200,44 +234,31 @@ async function handleCheckout(event) {
         const member = await window.$memberstackDom.getCurrentMember();
         console.log('Current member:', member?.data?.id || 'Not found');
 
-        if (!member?.data?.auth?.email) {
-            console.log('No member found or missing email, redirecting to registration');
-            localStorage.setItem('checkoutRedirectUrl', window.location.pathname);
-            window.location.href = '/registrieren';
-            return;
-        }
+        // Get product type
+        const productElement = document.querySelector('[data-product-type]');
+        const productType = productElement?.dataset.productType || 'course';
+        const productConfig = PRODUCT_CONFIG[productType];
 
-        // Validate shipping selection
-        const shippingSelect = document.querySelector('#shipping-rate-select');
-        if (!shippingSelect?.value) {
-            throw new Error('Please select a shipping option');
-        }
-
-        // Start the checkout process with retry logic
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                await startCheckout(shippingSelect.value);
-                break;
-            } catch (error) {
-                retries--;
-                if (retries === 0) throw error;
-                await new Promise(resolve => setTimeout(resolve, 1000));
+        // Get shipping rate if needed
+        let shippingRateId = null;
+        if (productConfig?.type === 'physical' || productConfig?.type === 'bundle') {
+            const shippingSelect = document.querySelector('#shipping-rate-select');
+            if (!shippingSelect?.value) {
+                throw new Error('Please select a shipping option');
             }
+            shippingRateId = shippingSelect.value;
         }
+
+        // Start checkout process
+        await startCheckout(shippingRateId);
 
     } catch (error) {
         console.error('Checkout error:', error);
-        if (error.message.includes('Memberstack timeout') || error.message.includes('No member found')) {
+        if (error.message.includes('Memberstack timeout')) {
             localStorage.setItem('checkoutRedirectUrl', window.location.pathname);
             window.location.href = '/registrieren';
         } else {
             alert(error.message || 'An error occurred during checkout. Please try again.');
-        }
-    } finally {
-        if (button) {
-            button.textContent = originalText;
-            button.disabled = false;
         }
     }
 }
@@ -258,7 +279,7 @@ function getPreferredLanguage() {
 }
 
 // Function to start checkout process
-async function startCheckout(shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') {
+async function startCheckout(shippingRateId = CONFIG.defaultShippingRate) {
     console.log('Starting checkout process');
     const button = document.querySelector('[data-checkout-button]');
     const originalText = button ? button.textContent : '';
@@ -271,24 +292,74 @@ async function startCheckout(shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') {
 
         // Get current member
         const member = await window.$memberstackDom.getCurrentMember();
-        if (!member || !member.data?.auth?.email) {
-            localStorage.setItem('checkoutRedirectUrl', 'membershome');
+        if (!member?.data?.auth?.email) {
+            localStorage.setItem('checkoutRedirectUrl', window.location.pathname);
             window.location.href = '/registrieren';
             return;
         }
 
+        // Get the product type and corresponding configuration
+        const productElement = document.querySelector('[data-product-type]');
+        const productType = productElement?.dataset.productType || 'course';
+        const productConfig = PRODUCT_CONFIG[productType];
+
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${productType}`);
+        }
+
         // Get the language and corresponding price ID
         const language = getPreferredLanguage();
-        const priceId = CONFIG.stripePrices[language];
+        const priceId = productConfig.prices[language];
         if (!priceId) {
             throw new Error(`No price found for language: ${language}`);
         }
 
+        // Prepare metadata based on product type
+        const baseMetadata = {
+            memberstackUserId: member.data.id,
+            language: language,
+            source: window.location.href
+        };
+
+        // Add product-specific metadata
+        if (productConfig.type === 'bundle') {
+            baseMetadata.products = productConfig.products;
+            baseMetadata.planIds = productConfig.products.map(prod => PRODUCT_CONFIG[prod].id);
+            const bookConfig = PRODUCT_CONFIG.book.shipping.weight;
+            baseMetadata.totalWeight = bookConfig.total.toString();
+            baseMetadata.productWeight = bookConfig.product.toString();
+            baseMetadata.packagingWeight = bookConfig.packaging.toString();
+            baseMetadata.requiresShipping = true;
+        } else if (productConfig.type === 'physical') {
+            baseMetadata.planId = productConfig.id;
+            const weightConfig = productConfig.shipping.weight;
+            baseMetadata.totalWeight = weightConfig.total.toString();
+            baseMetadata.productWeight = weightConfig.product.toString();
+            baseMetadata.packagingWeight = weightConfig.packaging.toString();
+            baseMetadata.requiresShipping = true;
+        } else {
+            baseMetadata.planId = productConfig.id;
+            baseMetadata.requiresShipping = false;
+        }
+
+        // Create checkout session payload
+        const payload = {
+            priceId: priceId,
+            customerEmail: member.data.auth.email,
+            metadata: baseMetadata
+        };
+
+        // Add shipping rate if product requires shipping
+        if (baseMetadata.requiresShipping) {
+            if (!shippingRateId) {
+                throw new Error('Shipping rate is required for this product');
+            }
+            payload.shippingRateId = shippingRateId;
+        }
+
         console.log('Creating checkout session:', {
-            language,
-            shippingRateId,
-            priceId,
-            email: member.data.auth.email
+            ...payload,
+            type: productConfig.type
         });
 
         // Create checkout session
@@ -298,20 +369,7 @@ async function startCheckout(shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                priceId: priceId,
-                customerEmail: member.data.auth.email,
-                shippingRateId: shippingRateId,
-                metadata: {
-                    memberstackUserId: member.data.id,
-                    planId: 'prc_online-kochkurs-8b540kc2',
-                    totalWeight: '1000',
-                    productWeight: '900',
-                    packagingWeight: '100',
-                    language: language,
-                    source: window.location.href
-                }
-            })
+            body: JSON.stringify(payload)
         });
 
         const responseData = await response.json();
@@ -346,7 +404,8 @@ async function startCheckout(shippingRateId = 'shr_1QScKFJRMXFic4sW9e80ABBp') {
             button.textContent = originalText;
             button.disabled = false;
         }
-        throw error; // Re-throw to be handled by the caller
+        alert(error.message || 'An error occurred during checkout. Please try again.');
+        throw error;
     }
 }
 
