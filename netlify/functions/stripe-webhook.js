@@ -44,7 +44,8 @@ function createMemberstackHeaders() {
     // Create canonical request elements
     const signedHeaders = 'content-type;host;x-amz-date';
     const region = 'us-east-1'; 
-    const credential = `${apiKey}/${dateStamp}/${region}/memberstack/aws4_request`;
+    const service = 'execute-api';  
+    const credential = `${apiKey}/${dateStamp}/${region}/${service}/aws4_request`;
 
     // Create string to sign
     const stringToSign = 'AWS4-HMAC-SHA256\n' +
