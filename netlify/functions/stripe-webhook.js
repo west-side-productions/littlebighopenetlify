@@ -117,7 +117,7 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
-                'X-Amz-Date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
+                'X-Amz-Date': new Date().toISOString().split('.')[0].replace(/[-:]/g, '') + 'Z'
             },
             data,
             timeout: 5000 // 5 second timeout per request
