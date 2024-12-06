@@ -9,7 +9,7 @@ const emailTemplates = {
 };
 
 // Memberstack API URL
-const MEMBERSTACK_API_V1 = 'https://api.memberstack.com/v1';
+const MEMBERSTACK_API_V2 = 'https://api.memberstack.com/v2';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
@@ -112,15 +112,13 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
     try {
         const response = await axios({
             method: 'POST',
-            url: `${MEMBERSTACK_API_V1}${endpoint}`,
+            url: `${MEMBERSTACK_API_V2}${endpoint}`,
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
             },
-            data: {
-                secretKey: process.env.MEMBERSTACK_SECRET_KEY,
-                ...data
-            },
+            data,
             timeout: 5000 // 5 second timeout per request
         });
         
@@ -132,31 +130,31 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             delay,
             timeElapsed: Date.now() - startTime,
             error: error.message,
-            response: error.response?.data // Add response data for better debugging
+            response: error.response?.data
         });
 
-        // Check if we're approaching the Netlify timeout
         if (Date.now() - startTime > NETLIFY_TIMEOUT) {
             console.log('Approaching Netlify timeout, storing request for later retry');
             await storeFailedRequest({
-                type: 'memberstack_timeout',
+                type: 'memberstack',
                 data: {
                     endpoint,
                     payload: data,
-                    error: 'Netlify timeout approaching',
-                    attempts: attempt
+                    error: error.message,
+                    status: error.response?.status,
+                    response: error.response?.data
                 }
             });
             throw new Error('Netlify timeout approaching');
         }
 
-        // If we have retries left and time remaining, retry on specific errors
-        if (attempt < MAX_RETRIES && (error.response?.status === 502 || error.response?.status === 400)) {
+        if (attempt < MAX_RETRIES) {
+            console.log(`Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return callMemberstackAPI(endpoint, data, attempt + 1);
         }
 
-        // Store failed request if we've exhausted retries
+        // Store failed request after max retries
         await storeFailedRequest({
             type: 'memberstack',
             data: {
@@ -164,432 +162,155 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
                 payload: data,
                 error: error.message,
                 status: error.response?.status,
-                response: error.response?.data // Add response data for debugging
+                response: error.response?.data
             }
         });
+
         throw error;
     }
 }
 
 exports.handler = async (event) => {
-    console.log('Webhook endpoint hit:', {
-        method: event.httpMethod,
-        path: event.path,
-        headers: Object.keys(event.headers)
-    });
-
-    // Add comprehensive validation
-    if (!event.body) {
-        console.error('Missing request body');
-        return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({
-                error: 'Invalid request',
-                details: 'Request body is required'
-            })
-        };
-    }
-
-    // Handle preflight requests
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 204,
-            headers
-        };
-    }
-
-    if (event.httpMethod !== 'POST') {
-        return { 
-            statusCode: 405, 
-            headers,
-            body: JSON.stringify({ error: 'Method Not Allowed' })
-        };
-    }
-
     try {
-        console.log('Raw webhook body:', event.body);
-        
-        const sig = event.headers['stripe-signature'];
-        console.log('Stripe signature:', sig ? sig.substring(0, 20) + '...' : 'missing');
-        
-        const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        console.log('Webhook endpoint hit:', {
+            method: event.httpMethod,
+            path: event.path,
+            headers: Object.keys(event.headers)
+        });
+
+        // Handle preflight request
+        if (event.httpMethod === 'OPTIONS') {
+            return {
+                statusCode: 200,
+                headers
+            };
+        }
+
+        // Log environment check
         console.log('Environment check:', {
             stripeKey: !!process.env.STRIPE_SECRET_KEY,
             webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
             memberstackKey: !!process.env.MEMBERSTACK_SECRET_KEY,
-            webhookSecretPrefix: endpointSecret ? endpointSecret.substring(0, 8) : 'missing'
+            webhookSecretPrefix: process.env.STRIPE_WEBHOOK_SECRET?.substring(0, 8)
         });
 
-        let stripeEvent;
-        try {
-            stripeEvent = Stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
-            console.log('Stripe event constructed:', {
-                type: stripeEvent.type,
-                id: stripeEvent.id
+        // Parse and verify the webhook payload
+        console.log('Raw webhook body:', event.body);
+        const stripeEvent = Stripe.webhooks.constructEvent(
+            event.body,
+            event.headers['stripe-signature'],
+            process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        console.log('Stripe event constructed:', {
+            type: stripeEvent.type,
+            id: stripeEvent.id
+        });
+
+        // Handle the checkout.session.completed event
+        if (stripeEvent.type === 'checkout.session.completed') {
+            console.log('Processing checkout.session.completed event');
+            const session = stripeEvent.data.object;
+
+            // Extract relevant data
+            console.log('Checkout session details:', {
+                id: session.id,
+                customer: session.customer,
+                customerEmail: session.customer_email,
+                shipping: session.shipping,
+                metadata: session.metadata
             });
-        } catch (err) {
-            console.error('Error constructing webhook event:', err);
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: `Webhook Error: ${err.message}` })
+
+            // Get country code from metadata
+            const countryCode = session.metadata.countryCode;
+            console.log('Using country code from metadata:', countryCode);
+
+            // Calculate shipping rate
+            console.log('Calculating shipping for country:', countryCode);
+            const calculatedRate = calculateShippingRate(countryCode);
+            console.log('Shipping calculation:', {
+                country: countryCode,
+                calculatedRate,
+                totalWeight: session.metadata.totalWeight,
+                productWeight: session.metadata.productWeight,
+                packagingWeight: session.metadata.packagingWeight,
+                source: session.metadata.source
+            });
+
+            // Prepare data for Memberstack update
+            const memberId = session.metadata.memberstackUserId;
+            const planId = session.metadata.planId;
+            const customFields = {
+                shippingCountry: countryCode,
+                shippingRate: calculatedRate.price,
+                totalWeight: parseInt(session.metadata.totalWeight),
+                productWeight: parseInt(session.metadata.productWeight),
+                packagingWeight: parseInt(session.metadata.packagingWeight),
+                checkoutSessionId: session.id,
+                source: session.metadata.source,
+                orderDate: new Date().toISOString()
             };
-        }
 
-        // Handle the event
-        switch (stripeEvent.type) {
-            case 'checkout.session.completed':
-                console.log('Processing checkout.session.completed event');
-                const session = stripeEvent.data.object;
-                
-                // Log complete session data
-                console.log('Checkout session details:', {
-                    id: session.id,
-                    customer: session.customer,
-                    customerEmail: session.customer_email,
-                    shipping: session.shipping,
-                    metadata: session.metadata
-                });
+            console.log('Preparing MemberStack update:', {
+                memberId,
+                planId,
+                customFields
+            });
 
-                // Validate required metadata
-                const requiredMetadata = [
-                    'memberstackUserId', 
-                    'planId', 
-                    'countryCode', 
-                    'totalWeight',
-                    'productWeight',
-                    'packagingWeight'
-                ];
-                const missingMetadata = requiredMetadata.filter(field => !session.metadata?.[field]);
-                
-                if (missingMetadata.length > 0) {
-                    console.error('Missing required metadata:', missingMetadata);
-                    return {
-                        statusCode: 400,
-                        headers,
-                        body: JSON.stringify({
-                            error: 'Invalid metadata',
-                            details: `Missing required fields: ${missingMetadata.join(', ')}`
-                        })
-                    };
-                }
-
-                // Validate weight values are numeric
-                const weightFields = ['totalWeight', 'productWeight', 'packagingWeight'];
-                const invalidWeights = weightFields.filter(field => 
-                    isNaN(Number(session.metadata[field]))
-                );
-
-                if (invalidWeights.length > 0) {
-                    console.error('Invalid weight values:', invalidWeights);
-                    return {
-                        statusCode: 400,
-                        headers,
-                        body: JSON.stringify({
-                            error: 'Invalid weight values',
-                            details: `Non-numeric weight fields: ${invalidWeights.join(', ')}`
-                        })
-                    };
-                }
-
-                // Validate total weight matches sum of product and packaging
-                const totalWeight = Number(session.metadata.totalWeight);
-                const productWeight = Number(session.metadata.productWeight);
-                const packagingWeight = Number(session.metadata.packagingWeight);
-
-                if (totalWeight !== (productWeight + packagingWeight)) {
-                    console.error('Weight mismatch:', {
-                        total: totalWeight,
-                        sum: productWeight + packagingWeight,
-                        product: productWeight,
-                        packaging: packagingWeight
-                    });
-                    return {
-                        statusCode: 400,
-                        headers,
-                        body: JSON.stringify({
-                            error: 'Weight mismatch',
-                            details: 'Total weight does not match sum of product and packaging weights'
-                        })
-                    };
-                }
-
-                // Validate shipping information
-                let shippingCountry;
-                if (session.shipping?.address?.country) {
-                    shippingCountry = session.shipping.address.country;
-                } else if (session.metadata?.countryCode) {
-                    shippingCountry = session.metadata.countryCode;
-                    console.log('Using country code from metadata:', shippingCountry);
-                } else {
-                    console.error('Missing shipping country');
-                    return {
-                        statusCode: 400,
-                        headers,
-                        body: JSON.stringify({
-                            error: 'Invalid shipping',
-                            details: 'Shipping country is required'
-                        })
-                    };
-                }
-
-                try {
-                    // Calculate shipping rate for the country
-                    const shippingRate = calculateShippingRate(shippingCountry);
-                    console.log('Shipping calculation:', {
-                        country: shippingCountry,
-                        calculatedRate: shippingRate,
-                        totalWeight: session.metadata.totalWeight,
-                        productWeight: session.metadata.productWeight,
-                        packagingWeight: session.metadata.packagingWeight,
-                        source: session.metadata.source
-                    });
-
-                    // Prepare data for MemberStack
-                    const memberStackData = {
-                        memberId: session.metadata.memberstackUserId,
-                        planId: session.metadata.planId,
-                        customFields: {
-                            shippingCountry: shippingCountry,
-                            shippingRate: shippingRate.price,
-                            totalWeight: Number(session.metadata.totalWeight),
-                            productWeight: Number(session.metadata.productWeight),
-                            packagingWeight: Number(session.metadata.packagingWeight),
-                            checkoutSessionId: session.id,
-                            source: session.metadata.source,
-                            orderDate: new Date().toISOString()
-                        }
-                    };
-
-                    console.log('Preparing MemberStack update:', memberStackData);
-
-                    // Send order notification email first
-                    try {
-                        console.log('Sending order notification email...');
-                        const template = emailTemplates['de'];
-                        const emailData = {
-                            orderDetails: {
-                                orderNumber: session.id,
-                                customerEmail: session.customer_details.email,
-                                shippingAddress: {
-                                    name: session.customer_details.name,
-                                    line1: session.customer_details.address.line1,
-                                    line2: session.customer_details.address.line2,
-                                    city: session.customer_details.address.city,
-                                    state: session.customer_details.address.state,
-                                    postal_code: session.customer_details.address.postal_code,
-                                    country: session.customer_details.address.country
-                                },
-                                weights: {
-                                    productWeight: session.metadata.productWeight,
-                                    packagingWeight: session.metadata.packagingWeight,
-                                    totalWeight: session.metadata.totalWeight
-                                },
-                                items: [{
-                                    name: 'Little Big Hope Kochbuch',
-                                    price: (session.amount_subtotal / 100).toFixed(2),
-                                    currency: session.currency.toUpperCase()
-                                }],
-                                shipping: {
-                                    method: 'Standard Versand',
-                                    cost: (session.shipping_cost.amount_total / 100).toFixed(2),
-                                    currency: session.currency.toUpperCase()
-                                },
-                                total: {
-                                    subtotal: (session.amount_subtotal / 100).toFixed(2),
-                                    shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
-                                    tax: (session.total_details.amount_tax / 100).toFixed(2),
-                                    total: (session.amount_total / 100).toFixed(2),
-                                    currency: session.currency.toUpperCase()
-                                }
-                            }
-                        };
-
-                        const msg = {
-                            to: 'office@west-side-productions.at',
-                            from: process.env.SENDGRID_FROM_EMAIL,
-                            subject: template.order_notification.subject,
-                            html: template.order_notification.html(emailData)
-                        };
-
-                        await retryWithBackoff(async () => {
-                            const response = await sgMail.send(msg);
-                            console.log('Order notification email sent successfully:', response[0].statusCode);
-                            return response;
-                        }, 3, 1000);
-                    } catch (emailError) {
-                        console.error('Failed to send order notification email:', {
-                            error: emailError.message,
-                            response: emailError.response?.data,
-                            stack: emailError.stack
-                        });
-                        // Store failed email request for retry
-                        await storeFailedRequest({
-                            type: 'email',
-                            data: {
-                                sessionId: session.id,
-                                customerEmail: session.customer_details.email,
-                                error: emailError.message
-                            }
-                        });
-                    }
-
-                    // Now try to add the Memberstack plan
-                    console.log('Attempting MemberStack plan update:', {
-                        memberId: memberStackData.memberId,
-                        planId: session.metadata.planId
-                    });
-
-                    try {
-                        // Try to add the plan first
-                        try {
-                            const planResponse = await callMemberstackAPI('/members/add-plan', {
-                                memberId: memberStackData.memberId,
-                                planId: session.metadata.planId
-                            });
-                            console.log('Plan addition complete:', planResponse);
-                            
-                            // If plan addition succeeds, update custom fields
-                            try {
-                                const updateResponse = await callMemberstackAPI('/members/update', {
-                                    id: memberStackData.memberId,
-                                    customFields: memberStackData.customFields
-                                });
-                                console.log('Member custom fields update response:', updateResponse);
-                            } catch (updateError) {
-                                // Store the custom fields update for retry but don't block
-                                await storeFailedRequest({
-                                    type: 'memberstack_update',
-                                    data: {
-                                        memberId: memberStackData.memberId,
-                                        customFields: memberStackData.customFields,
-                                        error: updateError.message
-                                    }
-                                });
-                                console.log('Custom fields update stored for retry:', updateError.message);
-                            }
-                        } catch (planError) {
-                            // Store the plan addition for retry but don't block the webhook
-                            await storeFailedRequest({
-                                type: 'memberstack_plan',
-                                data: {
-                                    memberId: memberStackData.memberId,
-                                    planId: session.metadata.planId,
-                                    error: planError.message
-                                }
-                            });
-                            console.log('Plan addition stored for retry:', planError.message);
-                        }
-                    } catch (error) {
-                        console.error('MemberStack API error:', {
-                            message: error.message,
-                            memberId: memberStackData.memberId,
-                            response: error.response?.data
-                        });
-                        
-                        // Store the error but don't throw - let the webhook complete
-                        await storeFailedRequest({
-                            type: 'memberstack_update',
-                            data: {
-                                sessionId: session.id,
-                                memberId: memberStackData.memberId,
-                                planId: session.metadata.planId,
-                                customFields: memberStackData.customFields,
-                                error: error.message
-                            }
-                        });
-                    }
-
-                    // Process shipping if needed
-                    if (memberStackData.customFields.shippingCountry) {
-                        try {
-                            const shippingResponse = await axios({
-                                method: 'POST',
-                                url: `${process.env.URL}/.netlify/functions/process-shipping`,
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                data: {
-                                    countryCode: shippingCountry,
-                                    memberId: memberStackData.memberId,
-                                    productWeight: memberStackData.customFields.productWeight,
-                                    packagingWeight: memberStackData.customFields.packagingWeight
-                                }
-                            });
-
-                            console.log('Shipping process response:', shippingResponse.data);
-                        } catch (shippingError) {
-                            console.error('Shipping process error:', {
-                                message: shippingError.message,
-                                response: shippingError.response?.data
-                            });
-                            // Store failed shipping request for retry
-                            await storeFailedRequest({
-                                type: 'shipping',
-                                data: {
-                                    countryCode: shippingCountry,
-                                    memberId: memberStackData.memberId,
-                                    productWeight: memberStackData.customFields.productWeight,
-                                    packagingWeight: memberStackData.customFields.packagingWeight,
-                                    error: shippingError.message
-                                }
-                            });
-                        }
-                    }
-
-                    return {
-                        statusCode: 200,
-                        headers,
-                        body: JSON.stringify({
-                            received: true,
-                            memberstackUserId: memberStackData.memberId,
-                            memberstackPlanId: memberStackData.planId,
-                            countryCode: shippingCountry,
-                            totalWeight: memberStackData.customFields.totalWeight,
-                            productWeight: memberStackData.customFields.productWeight,
-                            packagingWeight: memberStackData.customFields.packagingWeight
-                        })
-                    };
-                } catch (error) {
-                    console.error('MemberStack API error:', {
-                        message: error.message,
-                        response: error.response?.data,
-                        status: error.response?.status
-                    });
-                    throw error; // Re-throw to be caught by outer try-catch
-                }
-                break;  
-            
-            case 'payment_intent.payment_failed':
-                const paymentIntent = stripeEvent.data.object;
-                console.error('Payment failed:', {
-                    customer: paymentIntent.customer,
-                    error: paymentIntent.last_payment_error
-                });
-                break;
-            default:
-                console.log(`Unhandled event type: ${stripeEvent.type}`);
-                return {
-                    statusCode: 200,
-                    headers,
-                    body: JSON.stringify({ 
-                        received: true, 
-                        type: stripeEvent.type 
-                    })
+            // Send order notification email
+            console.log('Sending order notification email...');
+            try {
+                const template = emailTemplates[session.metadata.language || 'de'];
+                const msg = {
+                    to: session.customer_email,
+                    from: template.from,
+                    subject: template.subject,
+                    text: template.text,
+                    html: template.html,
                 };
+                const emailResponse = await sgMail.send(msg);
+                console.log('Order notification email sent successfully:', emailResponse[0].statusCode);
+            } catch (error) {
+                console.error('Failed to send order notification email:', error);
+                // Continue processing even if email fails
+            }
+
+            // Update Memberstack member
+            console.log('Attempting MemberStack plan update:', {
+                memberId,
+                planId
+            });
+
+            try {
+                // First try to add the plan
+                await callMemberstackAPI(`/members/${memberId}/plans`, {
+                    planId: planId
+                });
+
+                // Then update custom fields
+                await callMemberstackAPI(`/members/${memberId}`, {
+                    data: customFields
+                });
+
+            } catch (error) {
+                console.error('Failed to update MemberStack:', error);
+                // The error is already logged and stored for retry by callMemberstackAPI
+            }
         }
-    } catch (error) {
-        console.error('Webhook handler error:', {
-            message: error.message,
-            stack: error.stack
-        });
+
         return {
-            statusCode: 500,
+            statusCode: 200,
             headers,
-            body: JSON.stringify({ 
-                error: error.message,
-                details: error.stack
+            body: JSON.stringify({ received: true })
+        };
+
+    } catch (error) {
+        console.error('Webhook error:', error.message);
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({
+                error: error.message
             })
         };
     }
