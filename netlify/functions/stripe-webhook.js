@@ -17,7 +17,7 @@ const headers = {
 };
 
 // Memberstack API configuration
-const MEMBERSTACK_API_BASE = 'https://api.memberstack.com/v2/graphql';
+const MEMBERSTACK_API_BASE = 'https://auth.memberstack.com/api/v1';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
@@ -104,109 +104,48 @@ async function storeFailedRequest(data) {
     }
 }
 
-// Helper function to create headers
+// Helper function to create headers with correct Memberstack authentication
 function createHeaders(apiKey) {
     if (!apiKey?.trim()) {
         throw new Error('API key is required');
     }
     
-    // Ensure the key is properly formatted and clean
     const key = apiKey.trim().replace(/\s+/g, '');
     if (!key.startsWith('sk_')) {
         throw new Error('Invalid API key format');
     }
 
-    // Create headers object with explicit string concatenation
-    const authHeader = 'Bearer ' + key;
     return {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Authorization': key, // Memberstack expects the raw API key, not Bearer token
+        'Content-Type': 'application/json'
     };
 }
 
-// Helper function to call Memberstack API
-async function callMemberstackAPI(query, variables = null) {
-    console.log(`Calling Memberstack GraphQL API with query:`, query, variables ? { variables } : '');
-    
-    try {
-        const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
-        if (!apiKey) {
-            throw new Error('MEMBERSTACK_SECRET_KEY is not set');
-        }
-
-        const headers = createHeaders(apiKey);
-
-        console.log('Making request with headers:', {
-            ...headers,
-            'Authorization': 'Bearer [REDACTED]'
-        });
-
-        const config = {
-            method: 'POST',
-            url: MEMBERSTACK_API_BASE,
-            headers,
-            data: {
-                query,
-                variables
-            }
-        };
-
-        const response = await axios(config);
-        
-        console.log('Received response:', {
-            status: response.status,
-            statusText: response.statusText,
-            data: response.data
-        });
-
-        if (response.data.errors) {
-            throw new Error(JSON.stringify(response.data.errors));
-        }
-        
-        return response.data.data;
-    } catch (error) {
-        console.error('Error calling Memberstack API:', {
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data,
-            message: error.message,
-            config: error.config ? {
-                url: error.config.url,
-                method: error.config.method,
-                headers: { ...error.config.headers, Authorization: '[REDACTED]' }
-            } : null
-        });
-        throw error;
-    }
-}
-
-// Function to find member by email
+// Function to find member by email using Memberstack API v1
 async function findMemberByEmail(email) {
     console.log(`Finding member by email: ${email}`);
     
     try {
         const headers = createHeaders(process.env.MEMBERSTACK_SECRET_KEY);
         const encodedEmail = encodeURIComponent(email);
-        const url = `https://api.memberstack.com/v2/members/search?email=${encodedEmail}`;
+        const url = `https://auth.memberstack.com/api/v1/members/search?email=${encodedEmail}`;
         
         console.log('Making request to:', url);
-        console.log('With headers:', {
+        console.log('Request headers:', {
             ...headers,
-            'Authorization': 'Bearer [REDACTED]'
+            'Authorization': '[REDACTED]'
         });
 
         const response = await axios({
             method: 'get',
             url: url,
-            headers: headers,
-            maxRedirects: 5
+            headers: headers
         });
 
-        console.log('Member search response:', response.data);
+        console.log('Member search response status:', response.status);
         
-        if (response.data && response.data.data && response.data.data.length > 0) {
-            return response.data.data[0];
+        if (response.data && Array.isArray(response.data)) {
+            return response.data[0] || null;
         }
         
         return null;
@@ -215,12 +154,7 @@ async function findMemberByEmail(email) {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message,
-            headers: error.config?.headers ? {
-                ...error.config.headers,
-                'Authorization': 'Bearer [REDACTED]'
-            } : null,
-            url: error.config?.url
+            message: error.message
         });
         throw error;
     }
@@ -235,11 +169,11 @@ async function createMember(email) {
 
         console.log('Making request with headers:', {
             ...headers,
-            'Authorization': 'Bearer [REDACTED]'
+            'Authorization': '[REDACTED]'
         });
 
         const response = await axios.post(
-            'https://api.memberstack.com/v2/members',
+            'https://auth.memberstack.com/api/v1/members',
             {
                 email: email,
                 status: "ACTIVE"
@@ -254,11 +188,7 @@ async function createMember(email) {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message,
-            headers: error.config?.headers ? {
-                ...error.config.headers,
-                'Authorization': 'Bearer [REDACTED]'
-            } : null
+            message: error.message
         });
         throw error;
     }
@@ -273,11 +203,11 @@ async function addLifetimePlanToMember(memberId, planId) {
 
         console.log('Making request with headers:', {
             ...headers,
-            'Authorization': 'Bearer [REDACTED]'
+            'Authorization': '[REDACTED]'
         });
 
         const response = await axios.post(
-            `https://api.memberstack.com/v2/members/${memberId}/plans`,
+            `https://auth.memberstack.com/api/v1/members/${memberId}/plans`,
             {
                 planId: planId,
                 status: "ACTIVE"
@@ -292,11 +222,7 @@ async function addLifetimePlanToMember(memberId, planId) {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message,
-            headers: error.config?.headers ? {
-                ...error.config.headers,
-                'Authorization': 'Bearer [REDACTED]'
-            } : null
+            message: error.message
         });
         throw error;
     }
@@ -340,7 +266,7 @@ async function testMemberstackAPI() {
         // Try a simple API call to verify the key
         const headers = createHeaders(apiKey);
         const response = await axios.get(
-            'https://api.memberstack.com/v2/members',
+            'https://auth.memberstack.com/api/v1/members',
             { headers }
         );
 
@@ -361,8 +287,71 @@ async function testMemberstackAPI() {
     }
 }
 
-exports.handler = async (event) => {
+// Test function to verify Memberstack API configuration
+async function testMemberstackConfiguration() {
     try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY;
+        
+        // Log API key presence (safely)
+        console.log('API Key present:', !!apiKey);
+        console.log('API Key length:', apiKey?.length);
+        console.log('API Key starts with:', apiKey?.substring(0, 5));
+        
+        // Test headers creation
+        const headers = createHeaders(apiKey);
+        console.log('Generated headers:', {
+            ...headers,
+            'Authorization': '[REDACTED]'
+        });
+        
+        // Test API with a simple request
+        const testEmail = 'test@example.com';
+        const encodedEmail = encodeURIComponent(testEmail);
+        const url = `https://auth.memberstack.com/api/v1/members/search?email=${encodedEmail}`;
+        
+        console.log('Making test request to:', url);
+        
+        const response = await axios({
+            method: 'get',
+            url: url,
+            headers: headers,
+            validateStatus: false // Allow any status code for testing
+        });
+        
+        console.log('Test response status:', response.status);
+        console.log('Test response data type:', typeof response.data);
+        console.log('Test response is array:', Array.isArray(response.data));
+        
+        return {
+            success: response.status === 200,
+            status: response.status,
+            message: 'API test completed'
+        };
+    } catch (error) {
+        console.error('API test error:', {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data
+        });
+        return {
+            success: false,
+            error: error.message,
+            status: error.response?.status
+        };
+    }
+}
+
+exports.handler = async (event, context) => {
+    try {
+        // Test Memberstack configuration first
+        console.log('Testing Memberstack API configuration...');
+        const testResult = await testMemberstackConfiguration();
+        console.log('Memberstack API test result:', testResult);
+        
+        if (!testResult.success) {
+            console.error('Memberstack API configuration test failed:', testResult);
+        }
+
         // Test Memberstack API connection first
         const apiTest = await testMemberstackAPI();
         if (!apiTest) {
