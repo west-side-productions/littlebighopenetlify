@@ -55,7 +55,8 @@ const PRODUCT_CONFIG = {
                 packaging: 152,
                 total: 1157
             }
-        }
+        },
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
     bundle: {
         type: 'bundle',
@@ -323,7 +324,8 @@ async function startCheckout(shippingRateId = CONFIG.defaultShippingRate) {
         const baseMetadata = {
             memberstackUserId: member.data.id,
             language: language,
-            source: window.location.href
+            source: window.location.href,
+            planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
         };
 
         // Add product-specific metadata

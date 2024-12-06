@@ -364,8 +364,7 @@ exports.handler = async (event) => {
                     console.log('Attempting MemberStack plan addition:', {
                         url: `${MEMBERSTACK_API_V1}/members/add-plan`,
                         memberId: memberStackData.memberId,
-                        planId: memberStackData.planId,
-                        planIdValue: 'pln_kostenloser-zugang-84l80t3u' // Log the expected plan ID
+                        planId: session.metadata.planId
                     });
 
                     const v1Response = await retryWithBackoff(async () => {
@@ -377,7 +376,7 @@ exports.handler = async (event) => {
                                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
                             },
                             data: {
-                                planId: 'pln_kostenloser-zugang-84l80t3u', // Use the specific plan ID
+                                planId: session.metadata.planId,
                                 memberId: memberStackData.memberId
                             }
                         });
