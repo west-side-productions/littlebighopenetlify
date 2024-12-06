@@ -442,21 +442,33 @@ exports.handler = async (event) => {
                     });
 
                     try {
-                        // First try to update custom fields only
-                        const updateUrl = `/members/${memberStackData.memberId}`;
-                        const updateResponse = await callMemberstackAPI(updateUrl, {
-                            customFields: memberStackData.customFields
-                        });
-
-                        console.log('Member custom fields update response:', updateResponse);
-
-                        // Try to add the plan with a shorter timeout
+                        // Try to add the plan first
                         try {
                             const planResponse = await callMemberstackAPI('/members/add-plan', {
                                 memberId: memberStackData.memberId,
                                 planId: session.metadata.planId
                             });
                             console.log('Plan addition complete:', planResponse);
+                            
+                            // If plan addition succeeds, update custom fields
+                            try {
+                                const updateResponse = await callMemberstackAPI('/members/update', {
+                                    id: memberStackData.memberId,
+                                    customFields: memberStackData.customFields
+                                });
+                                console.log('Member custom fields update response:', updateResponse);
+                            } catch (updateError) {
+                                // Store the custom fields update for retry but don't block
+                                await storeFailedRequest({
+                                    type: 'memberstack_update',
+                                    data: {
+                                        memberId: memberStackData.memberId,
+                                        customFields: memberStackData.customFields,
+                                        error: updateError.message
+                                    }
+                                });
+                                console.log('Custom fields update stored for retry:', updateError.message);
+                            }
                         } catch (planError) {
                             // Store the plan addition for retry but don't block the webhook
                             await storeFailedRequest({
@@ -472,7 +484,8 @@ exports.handler = async (event) => {
                     } catch (error) {
                         console.error('MemberStack API error:', {
                             message: error.message,
-                            memberId: memberStackData.memberId
+                            memberId: memberStackData.memberId,
+                            response: error.response?.data
                         });
                         
                         // Store the error but don't throw - let the webhook complete
