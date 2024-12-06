@@ -38,7 +38,8 @@ const PRODUCT_CONFIG = {
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
             fr: 'price_1QT214JRMXFic4sWr5OXetuw',
             it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
+        },
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
     book: {
         id: 'prc_cookbook_physical',
@@ -66,15 +67,16 @@ const PRODUCT_CONFIG = {
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
             fr: 'price_1QT214JRMXFic4sWr5OXetuw',
             it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
+        },
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     }
 };
 
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
-    memberstackPlanId: 'prc_online-kochkurs-8b540kc2', // Default plan ID for course
-    defaultShippingRate: 'shr_1QScKFJRMXFic4sW9e80ABBp' // Default to Austria shipping
+    memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
+    defaultShippingRate: 'shr_1QScKFJRMXFic4sW9e80ABBp'
 };
 
 const getCountriesForShippingRate = (shippingRateId) => {
@@ -388,39 +390,36 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             }
         };
 
-        // Add shipping rate if provided (optional for digital products)
-        if (shippingRateId) {
-            payload.shippingRateId = shippingRateId;
-            // Get shipping rate details
-            const shippingRate = SHIPPING_RATES[shippingRateId];
-            if (shippingRate) {
-                payload.metadata.countryCode = shippingRate.countries[0];
+        // Add shipping rate if provided and required
+        if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
+            if (shippingRateId) {
+                payload.shippingRateId = shippingRateId;
+                const shippingRate = SHIPPING_RATES[shippingRateId];
+                if (shippingRate) {
+                    payload.metadata.countryCode = shippingRate.countries[0];
+                }
+            } else {
+                // For physical products, shipping is required
+                throw new Error('Shipping rate is required for physical products');
             }
         } else {
-            // Default country code for digital products
+            // For digital products, use default country code
             payload.metadata.countryCode = 'DE';
         }
 
         // Add product-specific metadata
         if (productConfig.type === 'bundle') {
             payload.metadata.products = productConfig.products;
-            payload.metadata.planIds = productConfig.products.map(prod => PRODUCT_CONFIG[prod].id);
+            payload.metadata.planIds = productConfig.products.map(prod => PRODUCT_CONFIG[prod].memberstackPlanId);
             const bookConfig = PRODUCT_CONFIG.book.shipping.weight;
             payload.metadata.totalWeight = bookConfig.total.toString();
             payload.metadata.productWeight = bookConfig.product.toString();
             payload.metadata.packagingWeight = bookConfig.packaging.toString();
         } else if (productConfig.type === 'physical') {
-            payload.metadata.planId = productConfig.id;
             const weightConfig = productConfig.shipping.weight;
             payload.metadata.totalWeight = weightConfig.total.toString();
             payload.metadata.productWeight = weightConfig.product.toString();
             payload.metadata.packagingWeight = weightConfig.packaging.toString();
-        } else {
-            // Digital product
-            payload.metadata.planId = productConfig.id;
-            payload.metadata.totalWeight = '0';
-            payload.metadata.productWeight = '0';
-            payload.metadata.packagingWeight = '0';
         }
 
         console.log('Creating checkout session:', {
