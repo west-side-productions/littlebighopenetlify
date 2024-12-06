@@ -24,6 +24,15 @@ When a Stripe webhook 'customer.subscription.created' is received:
 // Helper function to create Memberstack API headers
 function createMemberstackHeaders() {
     const apiKey = process.env.MEMBERSTACK_SECRET_KEY?.trim();
+    
+    // Log API key details (safely)
+    console.log('Using API Key:', {
+        present: !!apiKey,
+        length: apiKey?.length || 0,
+        prefix: apiKey?.substring(0, 5) || 'none',
+        value: apiKey  // Temporary for debugging
+    });
+    
     if (!apiKey) {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
@@ -35,6 +44,7 @@ function createMemberstackHeaders() {
 
 // Function to find or create member in Memberstack
 async function findOrCreateMember(email) {
+    console.log('Finding/creating member with API key:', process.env.MEMBERSTACK_SECRET_KEY); // Temporary for debugging
     const headers = createMemberstackHeaders();
     
     // 1. Search for existing member
