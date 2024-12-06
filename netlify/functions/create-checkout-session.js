@@ -90,66 +90,66 @@ exports.handler = async function(event, context) {
         }
         
         // Only require shipping rate for physical products
-        if ((data.metadata?.productType === 'physical' || data.metadata?.productType === 'bundle') && !data.shippingRateId) {
+        const isDigitalProduct = data.metadata?.productType === 'course' || data.metadata?.productType === 'digital';
+        if (!isDigitalProduct && !data.shippingRateId) {
             throw new Error('Missing required field: shippingRateId');
         }
 
-        // Validate shipping rate if provided
+        // Validate shipping rate and get country code
+        let countryCode = 'DE'; // Default for digital products
         let shippingRate;
+        
         if (data.shippingRateId) {
             shippingRate = validateShippingRate(data.shippingRateId);
+            countryCode = shippingRate.countries[0]; // Use first country as default
         }
 
-        // Create metadata object with all necessary information
+        // Create metadata object
         const metadata = {
             ...data.metadata,
             source: 'checkout',
             totalWeight: data.metadata?.totalWeight || '1000',
             productWeight: data.metadata?.productWeight || '900',
             packagingWeight: data.metadata?.packagingWeight || '100',
-            planId: data.metadata?.planId || 'pln_kostenloser-zugang-84l80t3u',
-            countryCode: shippingRate?.countries[0] || 'DE', // Default to DE for digital products
-            language: data.language || 'de'
+            planId: 'pln_kostenloser-zugang-84l80t3u', // Ensure this specific plan is always set
+            countryCode: countryCode,
+            language: data.language || 'de' // Default to German if not specified
         };
-
+        
         console.log('Sending metadata to Stripe:', metadata);
 
-        // Prepare line items
-        const lineItems = [{
-            price: data.priceId,
-            quantity: 1
-        }];
-
-        // Prepare session data
-        const sessionData = {
+        // Create Stripe checkout session
+        const sessionConfig = {
             payment_method_types: ['card'],
-            customer_email: data.customerEmail,
-            line_items: lineItems,
             mode: 'payment',
+            locale: metadata.language,
+            allow_promotion_codes: true,
+            billing_address_collection: 'required',
+            line_items: [{
+                price: data.priceId,
+                quantity: 1
+            }],
             success_url: `${data.successUrl || 'https://www.littlebighope.com/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
+            customer_email: data.customerEmail,
             metadata: metadata,
             payment_intent_data: {
                 metadata: metadata  // Add metadata to payment intent as well
             },
-            allow_promotion_codes: true,
-            billing_address_collection: 'required',
-            locale: data.language || 'de',
             automatic_tax: { enabled: true }
         };
 
         // Add shipping options only for physical products
-        if (data.metadata?.productType === 'physical' || data.metadata?.productType === 'bundle') {
-            sessionData.shipping_options = [{
-                shipping_rate: data.shippingRateId
-            }];
-            sessionData.shipping_address_collection = {
+        if (!isDigitalProduct) {
+            sessionConfig.shipping_address_collection = {
                 allowed_countries: shippingRate.countries
             };
+            sessionConfig.shipping_options = [
+                { shipping_rate: data.shippingRateId }
+            ];
         }
 
-        // Create Stripe checkout session
-        const session = await stripe.checkout.sessions.create(sessionData);
+        const session = await stripe.checkout.sessions.create(sessionConfig);
         return {
             statusCode: 200,
             headers,
