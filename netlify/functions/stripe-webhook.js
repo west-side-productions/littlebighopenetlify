@@ -115,12 +115,10 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             url: `${MEMBERSTACK_API_V1}${endpoint}`,
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
             },
-            data: {
-                secretKey: process.env.MEMBERSTACK_SECRET_KEY,
-                ...data
-            },
+            data: data,
             timeout: 5000 // 5 second timeout per request
         });
         
@@ -130,7 +128,8 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             status: error.response?.status,
             endpoint,
             delay,
-            timeElapsed: Date.now() - startTime
+            timeElapsed: Date.now() - startTime,
+            error: error.message
         });
 
         // Check if we're approaching the Netlify timeout
@@ -149,7 +148,7 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
         }
 
         // If we have retries left and time remaining, retry
-        if (attempt < MAX_RETRIES) {
+        if (attempt < MAX_RETRIES && error.response?.status === 502) {
             await new Promise(resolve => setTimeout(resolve, delay));
             return callMemberstackAPI(endpoint, data, attempt + 1);
         }
@@ -487,23 +486,39 @@ exports.handler = async (event) => {
 
                     // Process shipping if needed
                     if (memberStackData.customFields.shippingCountry) {
-                        const shippingResponse = await axios({
-                            method: 'POST',
-                            url: '/.netlify/functions/process-shipping',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            data: {
-                                countryCode: shippingCountry,
-                                memberId: memberStackData.memberId,
-                                sessionId: session.id,
-                                totalWeight: memberStackData.customFields.totalWeight,
-                                productWeight: memberStackData.customFields.productWeight,
-                                packagingWeight: memberStackData.customFields.packagingWeight
-                            }
-                        });
+                        try {
+                            const shippingResponse = await axios({
+                                method: 'POST',
+                                url: `${process.env.URL}/.netlify/functions/process-shipping`,
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                data: {
+                                    countryCode: shippingCountry,
+                                    memberId: memberStackData.memberId,
+                                    productWeight: memberStackData.customFields.productWeight,
+                                    packagingWeight: memberStackData.customFields.packagingWeight
+                                }
+                            });
 
-                        console.log('Shipping process response:', shippingResponse.data);
+                            console.log('Shipping process response:', shippingResponse.data);
+                        } catch (shippingError) {
+                            console.error('Shipping process error:', {
+                                message: shippingError.message,
+                                response: shippingError.response?.data
+                            });
+                            // Store failed shipping request for retry
+                            await storeFailedRequest({
+                                type: 'shipping',
+                                data: {
+                                    countryCode: shippingCountry,
+                                    memberId: memberStackData.memberId,
+                                    productWeight: memberStackData.customFields.productWeight,
+                                    packagingWeight: memberStackData.customFields.packagingWeight,
+                                    error: shippingError.message
+                                }
+                            });
+                        }
                     }
 
                     return {
