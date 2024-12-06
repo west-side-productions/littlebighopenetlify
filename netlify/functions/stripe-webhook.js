@@ -48,6 +48,24 @@ async function sendOrderConfirmationEmail(email, data) {
     }
 }
 
+// Function to send order notification to shipping company
+async function sendOrderNotificationEmail(data) {
+    try {
+        const msg = {
+            to: 'office@west-side-productions.at',
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: 'Neue Bestellung eingegangen',
+            text: emailTemplates.de.orderNotification(data),
+            html: emailTemplates.de.orderNotificationHtml(data),
+        };
+
+        await sgMail.send(msg);
+        console.log('Order notification email sent successfully to shipping company');
+    } catch (error) {
+        console.error('Failed to send order notification email:', error);
+    }
+}
+
 // Main webhook handler
 exports.handler = async (event) => {
     try {
@@ -69,9 +87,14 @@ exports.handler = async (event) => {
                 // Add plan to existing member
                 await addPlanToMember(session.metadata.memberstackUserId);
                 
-                // Send confirmation email
+                // Send confirmation email to customer
                 if (session.customer_details?.email) {
                     await sendOrderConfirmationEmail(session.customer_details.email, session);
+                }
+
+                // Send notification email to shipping company if it's a physical product
+                if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
+                    await sendOrderNotificationEmail(session);
                 }
             }
         }

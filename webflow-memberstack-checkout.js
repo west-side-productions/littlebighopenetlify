@@ -188,10 +188,10 @@ async function initializeDependencies() {
 async function initializeCheckoutButton() {
     console.log('Setting up checkout button...');
     
-    // Find all checkout buttons
-    const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button]');
+    // Find all checkout buttons and email links
+    const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button], [data-email-checkout]');
     if (checkoutButtons.length === 0) {
-        console.error('No checkout buttons found on page');
+        console.log('No checkout buttons found on page');
         return;
     }
     
@@ -199,6 +199,15 @@ async function initializeCheckoutButton() {
     checkoutButtons.forEach(button => {
         button.addEventListener('click', async (event) => {
             console.log('Checkout button clicked');
+            
+            // If this is an email link, set redirect and go to registration
+            if (button.hasAttribute('data-email-checkout')) {
+                event.preventDefault();
+                localStorage.setItem('checkoutRedirectUrl', 'membershome');
+                window.location.href = '/registrieren';
+                return;
+            }
+            
             await handleCheckout(event);
         });
     });
@@ -593,8 +602,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
         // First check if we're on membershome and need to start checkout
-        const isOnMembershome = window.location.pathname === '/membershome';
-        console.log('Is on membershome:', isOnMembershome);
+        const isOnMembershome = window.location.pathname.endsWith('/membershome');
+        console.log('Is on membershome:', isOnMembershome, 'Path:', window.location.pathname);
         
         // Initialize language selectors if they exist
         try {
