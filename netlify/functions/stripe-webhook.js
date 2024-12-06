@@ -422,18 +422,35 @@ exports.handler = async (event) => {
                     }
 
                     // Now try to add the Memberstack plan
-                    console.log('Attempting MemberStack plan addition:', {
+                    console.log('Attempting MemberStack plan update:', {
                         memberId: memberStackData.memberId,
                         planId: session.metadata.planId
                     });
 
                     try {
-                        const result = await callMemberstackAPI('/members/add-plan', {
-                            memberId: memberStackData.memberId,
-                            planId: session.metadata.planId
+                        // First try to update custom fields only, since Memberstack should handle the plan via Stripe webhook
+                        const updateUrl = `/members/${memberStackData.memberId}`;
+                        const updateResponse = await callMemberstackAPI(updateUrl, {
+                            secretKey: process.env.MEMBERSTACK_SECRET_KEY,
+                            customFields: memberStackData.customFields
                         });
 
-                        console.log('MemberStack plan addition complete:', result);
+                        console.log('Member custom fields update response:', updateResponse);
+
+                        // As a backup, try to add the plan directly
+                        try {
+                            const planResponse = await callMemberstackAPI('/members/add-plan', {
+                                memberId: memberStackData.memberId,
+                                planId: session.metadata.planId
+                            });
+                            console.log('Backup plan addition complete:', planResponse);
+                        } catch (planError) {
+                            // Log but don't throw - Memberstack should handle this via their Stripe integration
+                            console.log('Backup plan addition failed (expected if Memberstack handled via Stripe):', {
+                                message: planError.message,
+                                status: planError.response?.status
+                            });
+                        }
                     } catch (error) {
                         console.error('MemberStack API error:', {
                             message: error.message,
@@ -443,23 +460,16 @@ exports.handler = async (event) => {
                         
                         // Store the error but don't throw - let the webhook complete
                         await storeFailedRequest({
-                            type: 'memberstack_plan',
+                            type: 'memberstack_update',
                             data: {
                                 sessionId: session.id,
                                 memberId: memberStackData.memberId,
                                 planId: session.metadata.planId,
+                                customFields: memberStackData.customFields,
                                 error: error.message
                             }
                         });
                     }
-
-                    // Update custom fields separately
-                    const updateUrl = `/members/${memberStackData.memberId}`;
-                    const updateResponse = await callMemberstackAPI(updateUrl, {
-                        customFields: memberStackData.customFields
-                    });
-
-                    console.log('Member custom fields update response:', updateResponse);
 
                     // Process shipping if needed
                     if (memberStackData.customFields.shippingCountry) {
