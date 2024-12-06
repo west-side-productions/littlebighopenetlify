@@ -2,6 +2,14 @@ const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const sgMail = require('@sendgrid/mail');
 
+// Initialize SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// Load email templates
+const emailTemplates = {
+    de: require('./email-templates/de')
+};
+
 /*
 Memberstack Integration with Stripe Webhooks
 
@@ -10,16 +18,7 @@ When a Stripe webhook 'customer.subscription.created' is received:
 2. Search for member in Memberstack by email
 3. If member doesn't exist, create them
 4. Add lifetime plan to the member (new or existing)
-
-Example webhook handling:
-{
-    type: 'customer.subscription.created',
-    data: {
-        object: {
-            customer_email: 'user@example.com'
-        }
-    }
-}
+5. Send order confirmation email
 */
 
 // Helper function to create Memberstack API headers
@@ -76,8 +75,34 @@ async function addLifetimePlan(memberId) {
     );
 }
 
+// Function to send order confirmation email
+async function sendOrderConfirmationEmail(email, data) {
+    try {
+        console.log('Sending order confirmation email to:', email);
+        
+        const msg = {
+            to: email,
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: 'Order Confirmation',
+            text: emailTemplates.de.orderConfirmation(data),
+            html: emailTemplates.de.orderConfirmationHtml(data),
+        };
+
+        await sgMail.send(msg);
+        console.log('Order confirmation email sent successfully');
+    } catch (error) {
+        console.error('Failed to send order confirmation email:', error);
+        // Don't throw the error - we don't want to fail the whole process if email fails
+    }
+}
+
 // Main webhook handler
 exports.handler = async (event) => {
+    console.log('Webhook received:', {
+        headers: event.headers,
+        body: event.body ? JSON.parse(event.body) : null
+    });
+
     try {
         // Verify Stripe webhook signature
         const stripeEvent = await Stripe.webhooks.constructEvent(
@@ -86,43 +111,83 @@ exports.handler = async (event) => {
             process.env.STRIPE_WEBHOOK_SECRET
         );
         
-        // Only process subscription creation events
-        if (stripeEvent.type !== 'customer.subscription.created') {
+        console.log('Stripe event:', {
+            type: stripeEvent.type,
+            object: stripeEvent.data.object
+        });
+        
+        // Handle both subscription creation and checkout completion
+        if (stripeEvent.type === 'customer.subscription.created' || 
+            stripeEvent.type === 'checkout.session.completed') {
+            
+            const session = stripeEvent.type === 'checkout.session.completed' 
+                ? stripeEvent.data.object 
+                : null;
+            
+            // Get email based on event type
+            const email = stripeEvent.type === 'checkout.session.completed'
+                ? session.customer_details?.email
+                : stripeEvent.data.object.customer_email;
+            
+            console.log('Customer email:', email);
+            
+            if (!email) {
+                console.error('No customer email in event:', stripeEvent.data.object);
+                throw new Error('No customer email found in Stripe event');
+            }
+            
+            // Find or create member in Memberstack
+            console.log('Finding or creating member for email:', email);
+            const member = await findOrCreateMember(email);
+            console.log('Member result:', {
+                id: member?.id,
+                email: member?.email,
+                status: member?.status
+            });
+            
+            if (!member?.id) {
+                throw new Error('Failed to find or create member');
+            }
+            
+            // Add lifetime plan to member
+            console.log('Adding lifetime plan to member:', member.id);
+            console.log('Using plan ID:', process.env.MEMBERSTACK_LIFETIME_PLAN_ID);
+            
+            await addLifetimePlan(member.id);
+            console.log('Successfully added lifetime plan');
+            
+            // Send confirmation email for checkout completion
+            if (session && session.payment_status === 'paid') {
+                await sendOrderConfirmationEmail(email, {
+                    amount: session.amount_total,
+                    currency: session.currency,
+                    shipping: session.shipping_details
+                });
+            }
+            
+            console.log('Successfully processed event for member:', member.id);
             return { 
                 statusCode: 200, 
-                body: JSON.stringify({ received: true, processed: false }) 
+                body: JSON.stringify({ 
+                    success: true, 
+                    memberId: member.id 
+                }) 
             };
         }
         
-        // Extract customer email from Stripe event
-        const email = stripeEvent.data.object.customer_email;
-        if (!email) {
-            throw new Error('No customer email found in Stripe event');
-        }
-        
-        // Find or create member in Memberstack
-        const member = await findOrCreateMember(email);
-        if (!member?.id) {
-            throw new Error('Failed to find or create member');
-        }
-        
-        // Add lifetime plan to member
-        await addLifetimePlan(member.id);
-        
-        console.log('Successfully processed subscription for member:', member.id);
+        // For other events, just acknowledge receipt
+        console.log('Skipping event - not a handled type:', stripeEvent.type);
         return { 
             statusCode: 200, 
-            body: JSON.stringify({ 
-                success: true, 
-                memberId: member.id 
-            }) 
+            body: JSON.stringify({ received: true, processed: false }) 
         };
         
     } catch (error) {
         console.error('Error processing webhook:', {
             message: error.message,
             status: error.response?.status,
-            data: error.response?.data
+            data: error.response?.data,
+            stack: error.stack
         });
         
         return { 
