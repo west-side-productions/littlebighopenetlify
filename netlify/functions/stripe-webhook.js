@@ -52,21 +52,37 @@ function calculateShippingRate(country) {
 }
 
 // Add retry helper function at the top level
-async function retryWithBackoff(operation, maxRetries = 3, initialDelay = 1000) {
+async function retryWithBackoff(operation, maxRetries = 5, initialDelay = 2000) {
     let lastError;
     for (let i = 0; i < maxRetries; i++) {
         try {
             return await operation();
         } catch (error) {
             lastError = error;
-            if (error.response?.status === 502) {
+            // Consider more error codes that warrant a retry
+            const retryableStatusCodes = [408, 429, 500, 502, 503, 504];
+            if (retryableStatusCodes.includes(error.response?.status)) {
                 const delay = initialDelay * Math.pow(2, i);
-                console.log(`Attempt ${i + 1} failed, retrying in ${delay}ms...`);
+                console.log(`Attempt ${i + 1} failed with status ${error.response?.status}, retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
             }
-            throw error; // If it's not a 502 error, throw immediately
+            throw error; // If it's not a retryable error, throw immediately
         }
+    }
+    // If we've exhausted all retries, store the failed request before throwing
+    try {
+        await storeFailedRequest({
+            type: 'memberstack_plan',
+            data: lastError.config?.data,
+            error: {
+                message: lastError.message,
+                status: lastError.response?.status,
+                data: lastError.response?.data
+            }
+        });
+    } catch (storeError) {
+        console.error('Failed to store failed request:', storeError);
     }
     throw lastError;
 }
@@ -74,20 +90,16 @@ async function retryWithBackoff(operation, maxRetries = 3, initialDelay = 1000) 
 // Add helper function to store failed requests
 async function storeFailedRequest(data) {
     try {
-        await axios({
-            method: 'POST',
-            url: 'https://api.netlify.com/build_hooks/YOUR_BUILD_HOOK_ID',
-            data: {
-                clear_cache: true
-            }
-        });
-        
-        console.log('Stored failed request for retry:', {
-            memberId: data.memberId,
-            planId: data.planId,
-            sessionId: data.sessionId,
+        // Store the failed request in your database or send to a queue
+        console.log('Storing failed request for retry:', {
+            type: data.type,
+            data: data.data,
+            error: data.error,
             timestamp: new Date().toISOString()
         });
+        
+        // Here you could implement actual storage logic
+        // For example, write to a DynamoDB table or send to an SQS queue
         
         return true;
     } catch (error) {
@@ -367,30 +379,35 @@ exports.handler = async (event) => {
                         planId: session.metadata.planId
                     });
 
-                    const v1Response = await retryWithBackoff(async () => {
-                        const response = await axios({
-                            method: 'POST',
-                            url: `${MEMBERSTACK_API_V1}/members/add-plan`,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-                            },
-                            data: {
-                                planId: session.metadata.planId,
-                                memberId: memberStackData.memberId
-                            }
+                    try {
+                        const v1Response = await retryWithBackoff(async () => {
+                            const response = await axios({
+                                method: 'POST',
+                                url: `${MEMBERSTACK_API_V1}/members/add-plan`,
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                },
+                                data: {
+                                    planId: session.metadata.planId,
+                                    memberId: memberStackData.memberId
+                                }
+                            });
+                            console.log('MemberStack plan addition successful:', response.data);
+                            return response;
+                        }, 5, 2000); // 5 retries, 2 second initial delay
+
+                        console.log('MemberStack plan addition complete:', {
+                            status: v1Response.status,
+                            data: v1Response.data
                         });
-                        console.log('MemberStack plan addition response:', response.data);
-                        return response;
-                    }, 3, 1000); // 3 retries, 1 second initial delay
-
-                    console.log('MemberStack plan addition response:', {
-                        status: v1Response.status,
-                        data: v1Response.data
-                    });
-
-                    if (v1Response.status !== 200) {
-                        throw new Error(`Failed to add plan: ${v1Response.status}`);
+                    } catch (error) {
+                        console.error('MemberStack API error:', {
+                            message: error.message,
+                            response: error.response?.data,
+                            status: error.response?.status
+                        });
+                        throw error; // Re-throw to trigger webhook retry
                     }
 
                     // Update custom fields separately
@@ -407,7 +424,7 @@ exports.handler = async (event) => {
                                 customFields: memberStackData.customFields
                             }
                         });
-                    }, 3, 1000);
+                    }, 5, 2000);
 
                     console.log('Member custom fields update response:', {
                         status: updateResponse.status,
