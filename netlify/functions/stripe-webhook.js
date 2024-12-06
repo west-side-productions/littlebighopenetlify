@@ -115,10 +115,12 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             url: `${MEMBERSTACK_API_V1}${endpoint}`,
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                'Accept': 'application/json'
             },
-            data: data,
+            data: {
+                secretKey: process.env.MEMBERSTACK_SECRET_KEY,
+                ...data
+            },
             timeout: 5000 // 5 second timeout per request
         });
         
@@ -129,7 +131,8 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             endpoint,
             delay,
             timeElapsed: Date.now() - startTime,
-            error: error.message
+            error: error.message,
+            response: error.response?.data // Add response data for better debugging
         });
 
         // Check if we're approaching the Netlify timeout
@@ -147,8 +150,8 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
             throw new Error('Netlify timeout approaching');
         }
 
-        // If we have retries left and time remaining, retry
-        if (attempt < MAX_RETRIES && error.response?.status === 502) {
+        // If we have retries left and time remaining, retry on specific errors
+        if (attempt < MAX_RETRIES && (error.response?.status === 502 || error.response?.status === 400)) {
             await new Promise(resolve => setTimeout(resolve, delay));
             return callMemberstackAPI(endpoint, data, attempt + 1);
         }
@@ -160,7 +163,8 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
                 endpoint,
                 payload: data,
                 error: error.message,
-                status: error.response?.status
+                status: error.response?.status,
+                response: error.response?.data // Add response data for debugging
             }
         });
         throw error;
