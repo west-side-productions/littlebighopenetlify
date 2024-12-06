@@ -1,11 +1,9 @@
 const axios = require('axios');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
-const memberstack = require('@memberstack/admin');
 
-// Initialize clients
+// Initialize SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-const client = memberstack.init(process.env.MEMBERSTACK_SECRET_KEY);
 
 // Load email templates
 const emailTemplates = {
@@ -13,33 +11,25 @@ const emailTemplates = {
 };
 
 // Function to add plan to member
-async function addPlanToMember(email) {
+async function addPlanToMember(memberId) {
     try {
-        // Search for member
-        const members = await client.members.search({ email });
-        let memberId;
-
-        if (members.length > 0) {
-            memberId = members[0].id;
-        } else {
-            // Create new member if not found
-            const newMember = await client.members.create({
-                email,
+        // Simple POST request to add plan
+        await axios.post(
+            `https://api.memberstack.com/v2/members/${memberId}/plans`,
+            {
+                planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
                 status: 'ACTIVE'
-            });
-            memberId = newMember.id;
-        }
-
-        // Add the plan
-        await client.members.addPlan({
-            memberId,
-            planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
-            status: 'ACTIVE'
-        });
-
-        return memberId;
+            },
+            {
+                headers: {
+                    'Authorization': process.env.MEMBERSTACK_SECRET_KEY,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        console.log(`Successfully added plan to member ${memberId}`);
     } catch (error) {
-        console.error('Error adding plan to member:', error);
+        console.error('Error adding plan to member:', error.response?.data || error.message);
         throw error;
     }
 }
@@ -75,14 +65,18 @@ exports.handler = async (event) => {
         // Only handle successful checkouts
         if (stripeEvent.type === 'checkout.session.completed') {
             const session = stripeEvent.data.object;
-            const email = session.customer_details.email;
-
-            if (session.payment_status === 'paid') {
-                // Add plan to member
-                await addPlanToMember(email);
+            
+            // Only proceed if payment is successful and we have a memberstack ID
+            if (session.payment_status === 'paid' && session.metadata?.memberstackUserId) {
+                console.log('Processing successful payment for member:', session.metadata.memberstackUserId);
+                
+                // Add plan to existing member
+                await addPlanToMember(session.metadata.memberstackUserId);
                 
                 // Send confirmation email
-                await sendOrderConfirmationEmail(email, session);
+                if (session.customer_details?.email) {
+                    await sendOrderConfirmationEmail(session.customer_details.email, session);
+                }
             }
         }
 
