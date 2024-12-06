@@ -44,45 +44,92 @@ function createMemberstackHeaders() {
 
 // Function to find or create member in Memberstack
 async function findOrCreateMember(email) {
-    console.log('Finding/creating member with API key:', process.env.MEMBERSTACK_SECRET_KEY); // Temporary for debugging
-    const headers = createMemberstackHeaders();
-    
-    // 1. Search for existing member
-    const searchResponse = await axios.get(
-        `https://api.memberstack.com/v2/members/search?email=${encodeURIComponent(email)}`,
-        { headers }
-    );
-    
-    // 2. Return existing member if found
-    if (searchResponse.data.data.length > 0) {
-        return searchResponse.data.data[0];
+    try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY; // Get raw API key
+        console.log('API Key check:', {
+            present: !!apiKey,
+            length: apiKey?.length || 0,
+            prefix: apiKey?.substring(0, 5) || 'none'
+        });
+
+        // Create headers exactly as shown in the example
+        const headers = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        };
+
+        console.log('Request headers:', {
+            ...headers,
+            'Authorization': headers.Authorization.startsWith('Bearer ') ? 'Bearer [REDACTED]' : 'INVALID FORMAT'
+        });
+        
+        // Search for existing member
+        const searchUrl = `https://api.memberstack.com/v2/members/search?email=${encodeURIComponent(email)}`;
+        console.log('Making request to:', searchUrl);
+        
+        const searchResponse = await axios.get(searchUrl, { headers });
+        
+        // If member exists, return them
+        if (searchResponse.data.data.length > 0) {
+            return searchResponse.data.data[0];
+        }
+        
+        // If no member found, create new one
+        console.log('No existing member found, creating new one');
+        const createResponse = await axios.post(
+            'https://api.memberstack.com/v2/members',
+            { 
+                email: email,
+                status: 'ACTIVE'
+            },
+            { headers }
+        );
+        
+        return createResponse.data;
+    } catch (error) {
+        console.error('Error in findOrCreateMember:', {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data,
+            headers: error.config?.headers ? {
+                ...error.config.headers,
+                'Authorization': 'Bearer [REDACTED]'
+            } : null
+        });
+        throw error;
     }
-    
-    // 3. Create new member if not found
-    const createResponse = await axios.post(
-        'https://api.memberstack.com/v2/members',
-        { 
-            email: email,
-            status: 'ACTIVE'
-        },
-        { headers }
-    );
-    
-    return createResponse.data;
 }
 
 // Function to add lifetime plan to member
 async function addLifetimePlan(memberId) {
-    const headers = createMemberstackHeaders();
-    
-    await axios.post(
-        `https://api.memberstack.com/v2/members/${memberId}/plans`,
-        {
-            planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
-            status: 'ACTIVE'
-        },
-        { headers }
-    );
+    try {
+        const apiKey = process.env.MEMBERSTACK_SECRET_KEY;
+        const headers = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        };
+        
+        console.log('Adding plan with headers:', {
+            ...headers,
+            'Authorization': 'Bearer [REDACTED]'
+        });
+        
+        await axios.post(
+            `https://api.memberstack.com/v2/members/${memberId}/plans`,
+            {
+                planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
+                status: 'ACTIVE'
+            },
+            { headers }
+        );
+    } catch (error) {
+        console.error('Error adding lifetime plan:', {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data
+        });
+        throw error;
+    }
 }
 
 // Function to send order confirmation email
