@@ -171,9 +171,12 @@ exports.handler = async (event) => {
 
             // Update member's plan in Memberstack
             try {
-                await callMemberstackAPI(`/members/${memberstackMemberId}/plans`, {
-                    planId: planId,
-                    status: 'ACTIVE'
+                await callMemberstackAPI(`/member/update`, {
+                    id: memberstackMemberId,
+                    planConnections: [{
+                        planId: planId,
+                        status: "ACTIVE"
+                    }]
                 });
                 console.log('Successfully updated member plan in Memberstack');
             } catch (error) {
