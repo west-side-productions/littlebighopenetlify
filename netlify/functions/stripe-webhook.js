@@ -1,11 +1,11 @@
 const axios = require('axios');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
-const { MemberstackClient } = require('@memberstack/admin');
+const memberstack = require('@memberstack/admin');
 
 // Initialize clients
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-const memberstack = new MemberstackClient(process.env.MEMBERSTACK_SECRET_KEY);
+const client = memberstack.init(process.env.MEMBERSTACK_SECRET_KEY);
 
 // Load email templates
 const emailTemplates = {
@@ -16,14 +16,14 @@ const emailTemplates = {
 async function addPlanToMember(email) {
     try {
         // Search for member
-        const members = await memberstack.members.search({ email });
+        const members = await client.members.search({ email });
         let memberId;
 
         if (members.length > 0) {
             memberId = members[0].id;
         } else {
             // Create new member if not found
-            const newMember = await memberstack.members.create({
+            const newMember = await client.members.create({
                 email,
                 status: 'ACTIVE'
             });
@@ -31,7 +31,7 @@ async function addPlanToMember(email) {
         }
 
         // Add the plan
-        await memberstack.members.addPlan({
+        await client.members.addPlan({
             memberId,
             planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
             status: 'ACTIVE'
