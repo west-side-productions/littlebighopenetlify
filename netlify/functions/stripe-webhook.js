@@ -29,14 +29,9 @@ function createMemberstackHeaders() {
         throw new Error('MEMBERSTACK_SECRET_KEY is not set');
     }
 
-    const now = new Date();
-    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const dateStamp = amzDate.slice(0, 8);
-
     return {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'X-Amz-Date': amzDate
+        'Authorization': apiKey,
+        'Content-Type': 'application/json'
     };
 }
 
