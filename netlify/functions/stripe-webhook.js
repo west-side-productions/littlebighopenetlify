@@ -11,6 +11,11 @@ const emailTemplates = {
 // Memberstack API URL
 const MEMBERSTACK_API_V1 = 'https://api.memberstack.com/v1';
 
+// Constants for API interaction
+const MAX_RETRIES = 5;
+const INITIAL_DELAY = 3000;
+const MAX_DELAY = 15000;
+
 // CORS headers
 const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -95,6 +100,60 @@ async function storeFailedRequest(data) {
     } catch (error) {
         console.error('Failed to store request:', error);
         return false;
+    }
+}
+
+// Memberstack API client with built-in retries
+async function callMemberstackAPI(endpoint, data, attempt = 1) {
+    const delay = Math.min(INITIAL_DELAY * Math.pow(2, attempt - 1), MAX_DELAY);
+    
+    try {
+        const response = await axios({
+            method: 'POST',
+            url: `${MEMBERSTACK_API_V1}${endpoint}`,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            data: {
+                secretKey: process.env.MEMBERSTACK_SECRET_KEY,
+                ...data
+            },
+            timeout: 8000,
+            validateStatus: status => status === 200
+        });
+        
+        return response.data;
+    } catch (error) {
+        console.log(`API attempt ${attempt} failed:`, {
+            status: error.response?.status,
+            endpoint,
+            delay
+        });
+
+        // If we hit Cloudflare 502, wait longer
+        if (error.response?.status === 502 && attempt < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return callMemberstackAPI(endpoint, data, attempt + 1);
+        }
+
+        // If we've exhausted retries, store the failed request and throw
+        if (attempt >= MAX_RETRIES) {
+            await storeFailedRequest({
+                type: 'memberstack',
+                data: {
+                    endpoint,
+                    payload: data,
+                    error: error.message,
+                    status: error.response?.status
+                }
+            });
+            throw new Error(`Failed to call Memberstack API after ${MAX_RETRIES} attempts: ${error.message}`);
+        }
+
+        // For other errors, retry with backoff
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return callMemberstackAPI(endpoint, data, attempt + 1);
     }
 }
 
@@ -364,61 +423,43 @@ exports.handler = async (event) => {
 
                     // Now try to add the Memberstack plan
                     console.log('Attempting MemberStack plan addition:', {
-                        url: `${MEMBERSTACK_API_V1}/members/add-plan`,
                         memberId: memberStackData.memberId,
                         planId: session.metadata.planId
                     });
 
                     try {
-                        const v1Response = await retryWithBackoff(async () => {
-                            const response = await axios({
-                                method: 'POST',
-                                url: `${MEMBERSTACK_API_V1}/members/add-plan`,
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                data: {
-                                    secretKey: process.env.MEMBERSTACK_SECRET_KEY,
-                                    planId: session.metadata.planId,
-                                    memberId: memberStackData.memberId
-                                },
-                                timeout: 10000 // 10 second timeout
-                            });
-                            return response;
-                        }, 3, 2000); // Start with 2 second delay
-
-                        console.log('MemberStack plan addition complete:', {
-                            status: v1Response.status,
-                            data: v1Response.data
+                        const result = await callMemberstackAPI('/members/add-plan', {
+                            memberId: memberStackData.memberId,
+                            planId: session.metadata.planId
                         });
+
+                        console.log('MemberStack plan addition complete:', result);
                     } catch (error) {
                         console.error('MemberStack API error:', {
                             message: error.message,
-                            status: error.response?.status,
-                            data: error.response?.data
+                            memberId: memberStackData.memberId,
+                            planId: session.metadata.planId
                         });
-                        throw error; // Re-throw to trigger webhook retry
+                        
+                        // Store the error but don't throw - let the webhook complete
+                        await storeFailedRequest({
+                            type: 'memberstack_plan',
+                            data: {
+                                sessionId: session.id,
+                                memberId: memberStackData.memberId,
+                                planId: session.metadata.planId,
+                                error: error.message
+                            }
+                        });
                     }
 
                     // Update custom fields separately
-                    const updateUrl = `${MEMBERSTACK_API_V1}/members/${memberStackData.memberId}`;
-                    const updateResponse = await retryWithBackoff(async () => {
-                        return await axios({
-                            method: 'POST',
-                            url: updateUrl,
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            data: {
-                                customFields: memberStackData.customFields
-                            }
-                        });
-                    }, 5, 2000);
-
-                    console.log('Member custom fields update response:', {
-                        status: updateResponse.status,
-                        data: updateResponse.data
+                    const updateUrl = `/members/${memberStackData.memberId}`;
+                    const updateResponse = await callMemberstackAPI(updateUrl, {
+                        customFields: memberStackData.customFields
                     });
+
+                    console.log('Member custom fields update response:', updateResponse);
 
                     // Process shipping if needed
                     if (memberStackData.customFields.shippingCountry) {
