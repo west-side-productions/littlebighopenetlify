@@ -171,15 +171,13 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
     const delay = Math.min(INITIAL_DELAY * Math.pow(1.5, attempt - 1), MAX_DELAY);
     
     try {
-        const headers = signRequest('POST', endpoint, data, process.env.MEMBERSTACK_SECRET_KEY);
-        
         const response = await axios({
             method: 'POST',
             url: `${MEMBERSTACK_API_V2}${endpoint}`,
             headers: {
-                ...headers,
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
             },
             data,
             timeout: 5000
