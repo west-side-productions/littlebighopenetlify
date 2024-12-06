@@ -1,9 +1,14 @@
 const axios = require('axios');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
+const Memberstack = require('@memberstack/admin');
 
-// Initialize SendGrid
+// Initialize clients
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const memberstack = new Memberstack({ 
+    apiKey: process.env.MEMBERSTACK_SECRET_KEY,
+    mode: 'test'  // or 'production' based on your environment
+});
 
 // Load email templates
 const emailTemplates = {
@@ -13,20 +18,13 @@ const emailTemplates = {
 // Function to add plan to member
 async function addPlanToMember(memberId) {
     try {
-        // Simple POST request to add plan
-        await axios.post(
-            `https://api.memberstack.com/v2/members/${memberId}/plans`,
-            {
-                planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
-                status: 'ACTIVE'
-            },
-            {
-                headers: {
-                    'Authorization': process.env.MEMBERSTACK_SECRET_KEY,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+        // Add plan using Memberstack client
+        await memberstack.addPlanToMember({
+            memberId,
+            planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID,
+            status: 'ACTIVE'
+        });
+        
         console.log(`Successfully added plan to member ${memberId}`);
     } catch (error) {
         console.error('Error adding plan to member:', error.response?.data || error.message);
