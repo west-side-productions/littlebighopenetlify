@@ -52,22 +52,26 @@ function calculateShippingRate(country) {
 }
 
 // Add retry helper function at the top level
-async function retryWithBackoff(operation, maxRetries = 3, initialDelay = 1000) {
+async function retryWithBackoff(operation, maxRetries = 3, initialDelay = 2000) {
     let lastError;
-    for (let i = 0; i < maxRetries; i++) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             return await operation();
         } catch (error) {
             lastError = error;
-            // Consider more error codes that warrant a retry
-            const retryableStatusCodes = [408, 429, 500, 502, 503, 504];
-            if (retryableStatusCodes.includes(error.response?.status)) {
-                const delay = Math.min(initialDelay * Math.pow(1.5, i), 5000); // Cap max delay at 5 seconds
-                console.log(`Attempt ${i + 1} failed with status ${error.response?.status}, retrying in ${delay}ms...`);
+            // Special handling for 502 errors
+            if (error.response && error.response.status === 502) {
+                const delay = initialDelay * Math.pow(1.5, attempt - 1); // More aggressive backoff for 502s
+                console.log(`Attempt ${attempt} failed with status 502, retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
             }
-            throw error;
+            // For other errors, use standard backoff
+            if (attempt < maxRetries) {
+                const delay = initialDelay * Math.pow(1.5, attempt - 1);
+                console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
         }
     }
     throw lastError;
@@ -377,10 +381,11 @@ exports.handler = async (event) => {
                                     secretKey: process.env.MEMBERSTACK_SECRET_KEY,
                                     planId: session.metadata.planId,
                                     memberId: memberStackData.memberId
-                                }
+                                },
+                                timeout: 10000 // 10 second timeout
                             });
                             return response;
-                        }, 3, 1000);
+                        }, 3, 2000); // Start with 2 second delay
 
                         console.log('MemberStack plan addition complete:', {
                             status: v1Response.status,
@@ -389,8 +394,8 @@ exports.handler = async (event) => {
                     } catch (error) {
                         console.error('MemberStack API error:', {
                             message: error.message,
-                            response: error.response?.data,
-                            status: error.response?.status
+                            status: error.response?.status,
+                            data: error.response?.data
                         });
                         throw error; // Re-throw to trigger webhook retry
                     }
