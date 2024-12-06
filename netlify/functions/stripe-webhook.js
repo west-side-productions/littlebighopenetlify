@@ -30,8 +30,10 @@ function createMemberstackHeaders() {
     }
 
     return {
-        'Authorization': apiKey,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${apiKey}`,  // Update authorization format
+        'Content-Type': 'application/json',
+        'Date': new Date().toUTCString(),  // Add standard Date header
+        'X-Amz-Date': new Date().toISOString()  // Add AWS style date header
     };
 }
 
