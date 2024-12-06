@@ -145,205 +145,248 @@ async function callMemberstackAPI(query, variables, attempt = 1) {
     }
 }
 
+// Simple function to add a plan to a member
+async function addPlanToMember(memberId, planId) {
+    const mutation = `
+        mutation UpdateMember($memberId: String!, $data: JSON!) {
+            updateMember(id: $memberId, data: $data) {
+                id
+                email
+                planConnections {
+                    planId
+                    status
+                    startedAt
+                    renewalAt
+                }
+                customFields
+            }
+        }
+    `;
+
+    console.log('Adding plan to member:', { memberId, planId });
+
+    const variables = {
+        memberId,
+        data: {
+            planConnections: [{
+                planId,
+                status: "ACTIVE"
+            }]
+        }
+    };
+
+    const result = await callMemberstackAPI(mutation, variables);
+    
+    // Verify the update was successful
+    const member = result.data?.updateMember;
+    if (!member) {
+        throw new Error('Failed to update member: No member data returned');
+    }
+
+    const activePlan = member.planConnections?.find(
+        conn => conn.planId === planId && conn.status === "ACTIVE"
+    );
+
+    if (!activePlan) {
+        throw new Error('Plan was not successfully activated');
+    }
+
+    return member;
+}
+
 exports.handler = async (event) => {
+    // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
 
     try {
-        const sig = event.headers['stripe-signature'];
-        const stripeEvent = Stripe.webhooks.constructEvent(
-            event.body,
-            sig,
-            process.env.STRIPE_WEBHOOK_SECRET
-        );
+        // Parse the incoming webhook event
+        const webhookEvent = JSON.parse(event.body);
+        console.log('Received webhook event:', webhookEvent);
 
-        console.log('Processing Stripe event:', stripeEvent.type);
+        // Handle different event types
+        switch (webhookEvent.type) {
+            case 'subscription.created':
+                // Extract member and plan IDs from the webhook payload
+                const memberId = webhookEvent.data.memberId;
+                const planId = webhookEvent.data.planId;
 
-        if (stripeEvent.type === 'checkout.session.completed') {
-            const session = stripeEvent.data.object;
-            console.log('Checkout session completed:', session.id);
+                if (!memberId || !planId) {
+                    throw new Error('Missing required fields: memberId or planId');
+                }
 
-            // Get the Memberstack member ID from metadata
-            const memberstackMemberId = session.metadata?.memberstackUserId;
-            if (!memberstackMemberId) {
-                throw new Error('No Memberstack member ID found in session metadata');
-            }
+                // Update member's plan in Memberstack
+                const member = await addPlanToMember(memberId, planId);
+                console.log('Successfully updated member plan:', {
+                    memberId: member.id,
+                    email: member.email,
+                    planConnections: member.planConnections
+                });
 
-            // Get the plan ID from metadata
-            const planId = session.metadata?.planId;
-            if (!planId) {
-                throw new Error('No plan ID found in session metadata');
-            }
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({ 
+                        message: 'Plan updated successfully',
+                        member: {
+                            id: member.id,
+                            email: member.email,
+                            activePlans: member.planConnections
+                                .filter(conn => conn.status === "ACTIVE")
+                                .map(conn => conn.planId)
+                        }
+                    })
+                };
 
-            // Update member's plan in Memberstack using GraphQL
-            try {
-                const updateMemberMutation = `
-                    mutation UpdateMember($memberId: String!, $planId: String!) {
-                        updateMember(id: $memberId, data: {
-                            planConnections: [{
-                                planId: $planId,
-                                status: ACTIVE
-                            }]
-                        }) {
-                            id
-                            planConnections {
-                                planId
-                                status
+            case 'checkout.session.completed':
+                const session = webhookEvent.data.object;
+                console.log('Checkout session completed:', session.id);
+
+                // Get the Memberstack member ID from metadata
+                const memberstackMemberId = session.metadata?.memberstackUserId;
+                if (!memberstackMemberId) {
+                    throw new Error('No Memberstack member ID found in session metadata');
+                }
+
+                // Get the plan ID from metadata
+                const checkoutPlanId = session.metadata?.planId;
+                if (!checkoutPlanId) {
+                    throw new Error('No plan ID found in session metadata');
+                }
+
+                // Update member's plan in Memberstack
+                try {
+                    const checkoutResult = await addPlanToMember(memberstackMemberId, checkoutPlanId);
+                    console.log('Successfully updated member plan in Memberstack:', checkoutResult);
+                } catch (error) {
+                    console.error('Failed to update Memberstack:', error);
+                    throw error;
+                }
+
+                // Extract relevant data
+                console.log('Checkout session details:', {
+                    id: session.id,
+                    customerId: session.customer,
+                    customerEmail: session.customer_details.email,
+                    customerName: session.customer_details.name,
+                    customerAddress: session.customer_details.address,
+                    customerPhone: session.customer_details.phone,
+                    amount: session.amount_total,
+                    currency: session.currency,
+                    metadata: session.metadata,
+                    countryCode: session.metadata.countryCode
+                });
+
+                // Get country code from metadata
+                const countryCode = session.metadata.countryCode;
+                console.log('Using country code from metadata:', countryCode);
+
+                // Calculate shipping rate
+                console.log('Calculating shipping for country:', countryCode);
+                const calculatedRate = calculateShippingRate(countryCode);
+                console.log('Shipping calculation:', {
+                    country: countryCode,
+                    calculatedRate,
+                    totalWeight: session.metadata.totalWeight,
+                    productWeight: session.metadata.productWeight,
+                    packagingWeight: session.metadata.packagingWeight,
+                    source: session.metadata.source
+                });
+
+                // Prepare data for Memberstack update
+                const customFields = {
+                    shippingCountry: countryCode,
+                    shippingRate: calculatedRate.price,
+                    shippingLabel: calculatedRate.label,
+                    orderTotal: session.amount_total,
+                    orderCurrency: session.currency,
+                    customerName: session.customer_details.name,
+                    customerEmail: session.customer_details.email,
+                    customerPhone: session.customer_details.phone,
+                    customerAddress: session.customer_details.address
+                };
+
+                console.log('Preparing MemberStack update:', {
+                    memberId: memberstackMemberId,
+                    customFields
+                });
+
+                // Send order confirmation email
+                try {
+                    const emailTemplate = emailTemplates.de;
+                    const msg = {
+                        to: session.customer_details.email,
+                        from: 'info@lieblingsbrot.at',
+                        templateId: emailTemplate.confirmationTemplateId,
+                        dynamicTemplateData: {
+                            customerName: session.customer_details.name,
+                            orderTotal: (session.amount_total / 100).toFixed(2),
+                            currency: session.currency.toUpperCase(),
+                            shippingAddress: {
+                                name: session.customer_details.name,
+                                line1: session.customer_details.address.line1,
+                                line2: session.customer_details.address.line2,
+                                city: session.customer_details.address.city,
+                                postal_code: session.customer_details.address.postal_code,
+                                country: session.customer_details.address.country
                             }
                         }
-                    }
-                `;
+                    };
 
-                const result = await callMemberstackAPI(updateMemberMutation, {
-                    memberId: memberstackMemberId,
-                    planId: planId
-                });
+                    await sgMail.send(msg);
+                    console.log('Order confirmation email sent');
+                } catch (error) {
+                    console.error('Failed to send order confirmation email:', error);
+                    // Don't throw here, continue with other operations
+                }
 
-                console.log('Successfully updated member plan in Memberstack:', result);
-            } catch (error) {
-                console.error('Failed to update Memberstack:', error);
-                throw error;
-            }
+                try {
+                    // Update custom fields
+                    const updateCustomFieldsMutation = `
+                        mutation UpdateMember($memberId: String!, $data: JSON!) {
+                            updateMember(id: $memberId, data: $data) {
+                                id
+                                customFields
+                            }
+                        }
+                    `;
 
-            // Extract relevant data
-            console.log('Checkout session details:', {
-                id: session.id,
-                customer: session.customer,
-                customerEmail: session.customer_email,
-                shipping: session.shipping,
-                metadata: session.metadata
-            });
-
-            // Get country code from metadata
-            const countryCode = session.metadata.countryCode;
-            console.log('Using country code from metadata:', countryCode);
-
-            // Calculate shipping rate
-            console.log('Calculating shipping for country:', countryCode);
-            const calculatedRate = calculateShippingRate(countryCode);
-            console.log('Shipping calculation:', {
-                country: countryCode,
-                calculatedRate,
-                totalWeight: session.metadata.totalWeight,
-                productWeight: session.metadata.productWeight,
-                packagingWeight: session.metadata.packagingWeight,
-                source: session.metadata.source
-            });
-
-            // Prepare data for Memberstack update
-            const customFields = {
-                shippingCountry: countryCode,
-                shippingRate: calculatedRate.price,
-                totalWeight: parseInt(session.metadata.totalWeight),
-                productWeight: parseInt(session.metadata.productWeight),
-                packagingWeight: parseInt(session.metadata.packagingWeight),
-                checkoutSessionId: session.id,
-                source: session.metadata.source,
-                orderDate: new Date().toISOString()
-            };
-
-            console.log('Preparing MemberStack update:', {
-                memberId: memberstackMemberId,
-                customFields
-            });
-
-            // Send order notification email
-            console.log('Sending order notification email...');
-            try {
-                const template = emailTemplates[session.metadata.language || 'de'];
-                const orderDetails = {
-                    orderNumber: session.id,
-                    customerEmail: session.customer_details.email,
-                    shippingAddress: {
-                        name: session.customer_details.name,
-                        line1: session.customer_details.address.line1,
-                        line2: session.customer_details.address.line2,
-                        city: session.customer_details.address.city,
-                        state: session.customer_details.address.state,
-                        postal_code: session.customer_details.address.postal_code,
-                        country: session.customer_details.address.country
-                    },
-                    weights: {
-                        productWeight: parseInt(session.metadata.productWeight),
-                        packagingWeight: parseInt(session.metadata.packagingWeight),
-                        totalWeight: parseInt(session.metadata.totalWeight)
-                    },
-                    items: [{
-                        name: 'Little Big Hope Kochbuch',
-                        price: (session.amount_subtotal / 100).toFixed(2),
-                        currency: session.currency.toUpperCase()
-                    }],
-                    shipping: {
-                        method: 'Standard Versand',
-                        cost: (session.shipping_cost.amount_total / 100).toFixed(2),
-                        currency: session.currency.toUpperCase()
-                    },
-                    total: {
-                        subtotal: (session.amount_subtotal / 100).toFixed(2),
-                        shipping: (session.shipping_cost.amount_total / 100).toFixed(2),
-                        tax: (session.total_details.amount_tax / 100).toFixed(2),
-                        total: (session.amount_total / 100).toFixed(2),
-                        currency: session.currency.toUpperCase()
-                    }
-                };
-
-                const msg = {
-                    to: session.customer_email,
-                    from: process.env.SENDGRID_FROM_EMAIL,
-                    subject: template.order_notification.subject,
-                    html: template.order_notification.html({ orderDetails })
-                };
-
-                const emailResponse = await sgMail.send(msg);
-                console.log('Order notification email sent successfully:', emailResponse[0].statusCode);
-            } catch (error) {
-                console.error('Failed to send order notification email:', error.response?.body || error);
-                // Continue processing even if email fails
-            }
-
-            // Update Memberstack member
-            console.log('Attempting MemberStack update:', {
-                memberId: memberstackMemberId,
-                customFields
-            });
-
-            try {
-                // Update custom fields
-                const updateMemberMutation = `
-                    mutation UpdateMember($memberId: String!, $data: JSON!) {
-                        updateMember(id: $memberId, data: $data) {
-                            id
+                    const result = await callMemberstackAPI(updateCustomFieldsMutation, {
+                        memberId: memberstackMemberId,
+                        data: {
                             customFields
                         }
-                    }
-                `;
+                    });
 
-                const result = await callMemberstackAPI(updateMemberMutation, {
-                    memberId: memberstackMemberId,
-                    data: customFields
-                });
+                    console.log('Successfully updated Memberstack member:', result);
+                } catch (error) {
+                    console.error('Failed to update MemberStack:', error);
+                    // The error is already logged and stored for retry by callMemberstackAPI
+                }
 
-                console.log('Successfully updated Memberstack member:', result);
-            } catch (error) {
-                console.error('Failed to update MemberStack:', error);
-                // The error is already logged and stored for retry by callMemberstackAPI
-            }
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({ received: true })
+                };
+
+            default:
+                console.log('Unhandled event type:', webhookEvent.type);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({ message: 'Event type not handled' })
+                };
         }
-
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({ received: true })
-        };
-
     } catch (error) {
-        console.error('Webhook error:', error.message);
+        console.error('Webhook error:', error);
         return {
-            statusCode: 400,
+            statusCode: 500,
             headers,
-            body: JSON.stringify({
-                error: error.message
+            body: JSON.stringify({ 
+                error: 'Webhook processing failed',
+                message: error.message 
             })
         };
     }
