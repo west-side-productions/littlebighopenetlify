@@ -10,7 +10,7 @@ const emailTemplates = {
 };
 
 // Memberstack API URL
-const MEMBERSTACK_API = 'https://api.memberstack.io/graphql';
+const MEMBERSTACK_API = 'https://api.memberstack.com/v2/graphql';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
@@ -105,42 +105,29 @@ async function storeFailedRequest(data) {
     }
 }
 
-// Memberstack API client with built-in retries
-async function callMemberstackAPI(query, variables, attempt = 1) {
-    console.log(`Calling Memberstack GraphQL API with variables:`, variables);
+// Helper function to call Memberstack API
+async function callMemberstackAPI(query, variables) {
+    console.log('Calling Memberstack GraphQL API with variables:', variables);
+    
     try {
-        const response = await axios({
-            method: 'POST',
-            url: MEMBERSTACK_API,
+        const response = await axios.post(MEMBERSTACK_API, {
+            query,
+            variables
+        }, {
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
-            },
-            data: {
-                query,
-                variables
-            },
-            timeout: NETLIFY_TIMEOUT
+                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`,
+                'Content-Type': 'application/json'
+            }
         });
 
         if (response.data.errors) {
-            throw new Error(JSON.stringify(response.data.errors));
+            console.error('Memberstack API returned errors:', response.data.errors);
+            throw new Error(response.data.errors[0].message);
         }
 
         return response.data;
     } catch (error) {
         console.error('Error calling Memberstack API:', error.response?.data || error.message);
-        
-        // Handle specific error cases
-        if (error.response) {
-            const status = error.response.status;
-            if ((status === 401 || status === 403) && attempt < MAX_RETRIES) {
-                const delay = Math.min(INITIAL_DELAY * Math.pow(2, attempt - 1), MAX_DELAY);
-                console.log(`Auth error (${status}), retry attempt ${attempt} after ${delay}ms`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return callMemberstackAPI(query, variables, attempt + 1);
-            }
-        }
         throw error;
     }
 }
@@ -148,51 +135,27 @@ async function callMemberstackAPI(query, variables, attempt = 1) {
 // Simple function to add a lifetime plan to a member
 async function addLifetimePlanToMember(memberId, planId) {
     const mutation = `
-        mutation UpdateMember($memberId: String!, $data: JSON!) {
-            updateMember(id: $memberId, data: $data) {
+        mutation UpdateMember($memberId: ID!, $planId: ID!) {
+            updateMember(id: $memberId, data: {
+                planConnections: [{
+                    planId: $planId,
+                    status: "ACTIVE",
+                    isLifetime: true
+                }]
+            }) {
                 id
                 email
                 planConnections {
                     planId
                     status
-                    purchasedAt
                 }
-                customFields
             }
         }
     `;
 
     console.log('Adding lifetime plan to member:', { memberId, planId });
 
-    const variables = {
-        memberId,
-        data: {
-            planConnections: [{
-                planId,
-                status: "ACTIVE",
-                isLifetime: true,
-                purchasedAt: new Date().toISOString()
-            }]
-        }
-    };
-
-    const result = await callMemberstackAPI(mutation, variables);
-    
-    // Verify the update was successful
-    const member = result.data?.updateMember;
-    if (!member) {
-        throw new Error('Failed to update member: No member data returned');
-    }
-
-    const activePlan = member.planConnections?.find(
-        conn => conn.planId === planId && conn.status === "ACTIVE"
-    );
-
-    if (!activePlan) {
-        throw new Error('Lifetime plan was not successfully activated');
-    }
-
-    return member;
+    return callMemberstackAPI(mutation, { memberId, planId });
 }
 
 exports.handler = async (event) => {
