@@ -73,12 +73,6 @@ const PRODUCT_CONFIG = {
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
     stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
-    stripePrices: {
-        de: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
-        en: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
-        it: 'price_1QSjdDJRMXFic4sWWs0pOYf8',
-        fr: 'price_1QSjdDJRMXFic4sWWs0pOYf8'
-    },
     memberstackPlanId: 'prc_online-kochkurs-8b540kc2', // Default plan ID for course
     defaultShippingRate: 'shr_1QScKFJRMXFic4sW9e80ABBp' // Default to Austria shipping
 };
@@ -188,10 +182,10 @@ async function initializeDependencies() {
 async function initializeCheckoutButton() {
     console.log('Setting up checkout button...');
     
-    // Find all checkout buttons and email links
-    const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button], [data-email-checkout]');
+    // Find all checkout buttons
+    const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button]');
     if (checkoutButtons.length === 0) {
-        console.log('No checkout buttons found on page');
+        console.error('No checkout buttons found on page');
         return;
     }
     
@@ -199,15 +193,6 @@ async function initializeCheckoutButton() {
     checkoutButtons.forEach(button => {
         button.addEventListener('click', async (event) => {
             console.log('Checkout button clicked');
-            
-            // If this is an email link, set redirect and go to registration
-            if (button.hasAttribute('data-email-checkout')) {
-                event.preventDefault();
-                localStorage.setItem('checkoutRedirectUrl', 'membershome');
-                window.location.href = '/registrieren';
-                return;
-            }
-            
             await handleCheckout(event);
         });
     });
@@ -602,8 +587,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
         // First check if we're on membershome and need to start checkout
-        const isOnMembershome = window.location.pathname.endsWith('/membershome');
-        console.log('Is on membershome:', isOnMembershome, 'Path:', window.location.pathname);
+        const isOnMembershome = window.location.pathname === '/membershome';
+        console.log('Is on membershome:', isOnMembershome);
         
         // Initialize language selectors if they exist
         try {

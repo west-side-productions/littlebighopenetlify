@@ -18,28 +18,6 @@ const headers = {
 // Delay function
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Load email templates
-const emailTemplates = {
-    de: require('./email-templates/de')
-};
-
-async function sendWelcomeEmail(email, language = 'de') {
-    try {
-        const msg = {
-            to: email,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: 'Welcome to Little Big Hope',
-            text: emailTemplates[language].welcome(),
-            html: emailTemplates[language].welcomeHtml(),
-        };
-
-        await sgMail.send(msg);
-        console.log('Welcome email sent successfully');
-    } catch (error) {
-        console.error('Failed to send welcome email:', error);
-    }
-}
-
 exports.handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') {
         return {
@@ -195,7 +173,15 @@ async function handleMemberVerified(data) {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Send welcome email first
-        await sendWelcomeEmail(email, language);
+        await sendEmail({
+            to: email,
+            templateName: 'welcome',
+            language,
+            variables: {
+                firstName,
+                language
+            }
+        });
         
         console.log('Welcome email sent');
 
