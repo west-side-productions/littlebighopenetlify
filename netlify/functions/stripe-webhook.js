@@ -12,9 +12,10 @@ const emailTemplates = {
 const MEMBERSTACK_API_V1 = 'https://api.memberstack.com/v1';
 
 // Constants for API interaction
-const MAX_RETRIES = 5;
-const INITIAL_DELAY = 3000;
-const MAX_DELAY = 15000;
+const MAX_RETRIES = 4;
+const INITIAL_DELAY = 1000;
+const MAX_DELAY = 3000;
+const NETLIFY_TIMEOUT = 25000; // Leave 5s buffer from 30s limit
 
 // CORS headers
 const headers = {
@@ -105,7 +106,8 @@ async function storeFailedRequest(data) {
 
 // Memberstack API client with built-in retries
 async function callMemberstackAPI(endpoint, data, attempt = 1) {
-    const delay = Math.min(INITIAL_DELAY * Math.pow(2, attempt - 1), MAX_DELAY);
+    const startTime = Date.now();
+    const delay = Math.min(INITIAL_DELAY * Math.pow(1.5, attempt - 1), MAX_DELAY);
     
     try {
         const response = await axios({
@@ -119,8 +121,7 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
                 secretKey: process.env.MEMBERSTACK_SECRET_KEY,
                 ...data
             },
-            timeout: 8000,
-            validateStatus: status => status === 200
+            timeout: 5000 // 5 second timeout per request
         });
         
         return response.data;
@@ -128,32 +129,42 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
         console.log(`API attempt ${attempt} failed:`, {
             status: error.response?.status,
             endpoint,
-            delay
+            delay,
+            timeElapsed: Date.now() - startTime
         });
 
-        // If we hit Cloudflare 502, wait longer
-        if (error.response?.status === 502 && attempt < MAX_RETRIES) {
+        // Check if we're approaching the Netlify timeout
+        if (Date.now() - startTime > NETLIFY_TIMEOUT) {
+            console.log('Approaching Netlify timeout, storing request for later retry');
+            await storeFailedRequest({
+                type: 'memberstack_timeout',
+                data: {
+                    endpoint,
+                    payload: data,
+                    error: 'Netlify timeout approaching',
+                    attempts: attempt
+                }
+            });
+            throw new Error('Netlify timeout approaching');
+        }
+
+        // If we have retries left and time remaining, retry
+        if (attempt < MAX_RETRIES) {
             await new Promise(resolve => setTimeout(resolve, delay));
             return callMemberstackAPI(endpoint, data, attempt + 1);
         }
 
-        // If we've exhausted retries, store the failed request and throw
-        if (attempt >= MAX_RETRIES) {
-            await storeFailedRequest({
-                type: 'memberstack',
-                data: {
-                    endpoint,
-                    payload: data,
-                    error: error.message,
-                    status: error.response?.status
-                }
-            });
-            throw new Error(`Failed to call Memberstack API after ${MAX_RETRIES} attempts: ${error.message}`);
-        }
-
-        // For other errors, retry with backoff
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return callMemberstackAPI(endpoint, data, attempt + 1);
+        // Store failed request if we've exhausted retries
+        await storeFailedRequest({
+            type: 'memberstack',
+            data: {
+                endpoint,
+                payload: data,
+                error: error.message,
+                status: error.response?.status
+            }
+        });
+        throw error;
     }
 }
 
@@ -428,34 +439,37 @@ exports.handler = async (event) => {
                     });
 
                     try {
-                        // First try to update custom fields only, since Memberstack should handle the plan via Stripe webhook
+                        // First try to update custom fields only
                         const updateUrl = `/members/${memberStackData.memberId}`;
                         const updateResponse = await callMemberstackAPI(updateUrl, {
-                            secretKey: process.env.MEMBERSTACK_SECRET_KEY,
                             customFields: memberStackData.customFields
                         });
 
                         console.log('Member custom fields update response:', updateResponse);
 
-                        // As a backup, try to add the plan directly
+                        // Try to add the plan with a shorter timeout
                         try {
                             const planResponse = await callMemberstackAPI('/members/add-plan', {
                                 memberId: memberStackData.memberId,
                                 planId: session.metadata.planId
                             });
-                            console.log('Backup plan addition complete:', planResponse);
+                            console.log('Plan addition complete:', planResponse);
                         } catch (planError) {
-                            // Log but don't throw - Memberstack should handle this via their Stripe integration
-                            console.log('Backup plan addition failed (expected if Memberstack handled via Stripe):', {
-                                message: planError.message,
-                                status: planError.response?.status
+                            // Store the plan addition for retry but don't block the webhook
+                            await storeFailedRequest({
+                                type: 'memberstack_plan',
+                                data: {
+                                    memberId: memberStackData.memberId,
+                                    planId: session.metadata.planId,
+                                    error: planError.message
+                                }
                             });
+                            console.log('Plan addition stored for retry:', planError.message);
                         }
                     } catch (error) {
                         console.error('MemberStack API error:', {
                             message: error.message,
-                            memberId: memberStackData.memberId,
-                            planId: session.metadata.planId
+                            memberId: memberStackData.memberId
                         });
                         
                         // Store the error but don't throw - let the webhook complete
