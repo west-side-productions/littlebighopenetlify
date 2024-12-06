@@ -10,7 +10,7 @@ const emailTemplates = {
 };
 
 // Memberstack API URL
-const MEMBERSTACK_API_V1 = 'https://api.memberstack.io/v1';
+const MEMBERSTACK_API = 'https://api.memberstack.io/graphql';
 
 // Constants for API interaction
 const MAX_RETRIES = 4;
@@ -106,20 +106,27 @@ async function storeFailedRequest(data) {
 }
 
 // Memberstack API client with built-in retries
-async function callMemberstackAPI(endpoint, data, attempt = 1) {
-    console.log(`Calling Memberstack API endpoint: ${endpoint}`);
+async function callMemberstackAPI(query, variables, attempt = 1) {
+    console.log(`Calling Memberstack GraphQL API with variables:`, variables);
     try {
         const response = await axios({
             method: 'POST',
-            url: `${MEMBERSTACK_API_V1}${endpoint}`,
+            url: MEMBERSTACK_API,
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
                 'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
             },
-            data: data,
+            data: {
+                query,
+                variables
+            },
             timeout: NETLIFY_TIMEOUT
         });
+
+        if (response.data.errors) {
+            throw new Error(JSON.stringify(response.data.errors));
+        }
+
         return response.data;
     } catch (error) {
         console.error('Error calling Memberstack API:', error.response?.data || error.message);
@@ -131,7 +138,7 @@ async function callMemberstackAPI(endpoint, data, attempt = 1) {
                 const delay = Math.min(INITIAL_DELAY * Math.pow(2, attempt - 1), MAX_DELAY);
                 console.log(`Auth error (${status}), retry attempt ${attempt} after ${delay}ms`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return callMemberstackAPI(endpoint, data, attempt + 1);
+                return callMemberstackAPI(query, variables, attempt + 1);
             }
         }
         throw error;
@@ -169,16 +176,31 @@ exports.handler = async (event) => {
                 throw new Error('No plan ID found in session metadata');
             }
 
-            // Update member's plan in Memberstack
+            // Update member's plan in Memberstack using GraphQL
             try {
-                await callMemberstackAPI(`/members/update`, {
+                const updateMemberMutation = `
+                    mutation UpdateMember($memberId: String!, $planId: String!) {
+                        updateMember(id: $memberId, data: {
+                            planConnections: [{
+                                planId: $planId,
+                                status: ACTIVE
+                            }]
+                        }) {
+                            id
+                            planConnections {
+                                planId
+                                status
+                            }
+                        }
+                    }
+                `;
+
+                const result = await callMemberstackAPI(updateMemberMutation, {
                     memberId: memberstackMemberId,
-                    planConnections: [{
-                        planId: planId,
-                        status: "ACTIVE"
-                    }]
+                    planId: planId
                 });
-                console.log('Successfully updated member plan in Memberstack');
+
+                console.log('Successfully updated member plan in Memberstack:', result);
             } catch (error) {
                 console.error('Failed to update Memberstack:', error);
                 throw error;
@@ -288,9 +310,21 @@ exports.handler = async (event) => {
 
             try {
                 // Update custom fields
-                await callMemberstackAPI(`/members/${memberstackMemberId}`, {
+                const updateMemberMutation = `
+                    mutation UpdateMember($memberId: String!, $data: JSON!) {
+                        updateMember(id: $memberId, data: $data) {
+                            id
+                            customFields
+                        }
+                    }
+                `;
+
+                const result = await callMemberstackAPI(updateMemberMutation, {
+                    memberId: memberstackMemberId,
                     data: customFields
                 });
+
+                console.log('Successfully updated Memberstack member:', result);
             } catch (error) {
                 console.error('Failed to update MemberStack:', error);
                 // The error is already logged and stored for retry by callMemberstackAPI
