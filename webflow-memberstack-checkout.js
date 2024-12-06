@@ -245,7 +245,7 @@ async function handleCheckout(event) {
         }
 
         // Start checkout process
-        await startCheckout(shippingRateId);
+        await startCheckout(shippingRateId, productType);
 
     } catch (error) {
         console.error('Checkout error:', error);
@@ -279,7 +279,7 @@ function getPreferredLanguage() {
 }
 
 // Function to start checkout process
-async function startCheckout(shippingRateId = CONFIG.defaultShippingRate) {
+async function startCheckout(shippingRateId = null, forcedProductType = null) {
     console.log('Starting checkout process');
     const button = document.querySelector('[data-checkout-button]');
     const originalText = button ? button.textContent : '';
@@ -300,11 +300,16 @@ async function startCheckout(shippingRateId = CONFIG.defaultShippingRate) {
 
         // Get the product type and corresponding configuration
         const productElement = document.querySelector('[data-product-type]');
-        const productType = productElement?.dataset.productType || 'course';
+        const productType = forcedProductType || productElement?.dataset.productType || 'course';
         const productConfig = PRODUCT_CONFIG[productType];
 
         if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
+        }
+
+        // Only require shipping rate for physical products
+        if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
+            throw new Error('Missing required field: shippingRateId');
         }
 
         // Get the language and corresponding price ID
@@ -587,8 +592,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
         // First check if we're on membershome and need to start checkout
-        const isOnMembershome = window.location.pathname === '/membershome';
-        console.log('Is on membershome:', isOnMembershome);
+        const pathname = window.location.pathname;
+        const isOnMembershome = pathname === '/membershome' || pathname.endsWith('/membershome');
+        console.log('Is on membershome:', isOnMembershome, 'Path:', pathname);
         
         // Initialize language selectors if they exist
         try {
@@ -648,13 +654,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Check if we need to start checkout on membershome
-            const checkoutRedirectUrl = localStorage.getItem('checkoutRedirectUrl');
-            if (checkoutRedirectUrl === 'membershome' && isOnMembershome) {
-                localStorage.removeItem('checkoutRedirectUrl');
-                console.log('Starting checkout on membershome...');
-                await startCheckout().catch(error => {
-                    console.error('Error starting checkout:', error);
-                });
+            if (isOnMembershome) {
+                const params = new URLSearchParams(window.location.search);
+                const member = params.get('member');
+                const verified = member ? JSON.parse(decodeURIComponent(member)).verified : false;
+                
+                if (verified || localStorage.getItem('checkoutRedirectUrl') === 'membershome') {
+                    localStorage.removeItem('checkoutRedirectUrl');
+                    console.log('Starting checkout on membershome...');
+                    
+                    // On membershome, we start with the course product type
+                    const productType = 'course';
+                    await startCheckout(null, productType).catch(error => {
+                        console.error('Error starting checkout:', error);
+                    });
+                }
             }
 
             console.log('Checkout system initialized successfully');

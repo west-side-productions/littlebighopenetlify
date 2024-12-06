@@ -88,58 +88,49 @@ exports.handler = async function(event, context) {
         if (data.metadata && typeof data.metadata !== 'object') {
             throw new Error('Invalid metadata format');
         }
-        if (!data.shippingRateId) {
+        
+        // Only require shipping rate for physical products
+        if ((data.metadata?.productType === 'physical' || data.metadata?.productType === 'bundle') && !data.shippingRateId) {
             throw new Error('Missing required field: shippingRateId');
         }
 
-        // Validate shipping rate
-        const shippingRate = validateShippingRate(data.shippingRateId);
-        
-        // Get the country code from the shipping rate
-        const countryCode = shippingRate.countries[0]; // Use first country as default
+        // Validate shipping rate if provided
+        let shippingRate;
+        if (data.shippingRateId) {
+            shippingRate = validateShippingRate(data.shippingRateId);
+        }
 
-        // Create metadata object
-        const metadata = {
-            ...data.metadata,
-            source: 'checkout',
-            totalWeight: data.metadata?.totalWeight || '1000',
-            productWeight: data.metadata?.productWeight || '900',
-            packagingWeight: data.metadata?.packagingWeight || '100',
-            planId: 'pln_kostenloser-zugang-84l80t3u', // Ensure this specific plan is always set
-            countryCode: countryCode, // Add the country code to metadata
-            language: data.language || 'de' // Default to German if not specified
-        };
-        
-        console.log('Sending metadata to Stripe:', metadata);
+        // Prepare line items
+        const lineItems = [{
+            price: data.priceId,
+            quantity: 1
+        }];
 
-        // Create Stripe checkout session
-        const sessionConfig = {
-            payment_method_types: ['card'],
+        // Prepare session data
+        const sessionData = {
+            customer_email: data.customerEmail,
+            line_items: lineItems,
             mode: 'payment',
-            locale: metadata.language,
+            success_url: `${data.successUrl || 'https://www.littlebighope.com/success'}?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/cancel',
+            metadata: data.metadata || {},
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            shipping_address_collection: {
-                allowed_countries: shippingRate.countries
-            },
-            line_items: [{
-                price: data.priceId,
-                quantity: 1
-            }],
-            shipping_options: [
-                { shipping_rate: data.shippingRateId }  // Use the selected shipping rate
-            ],
-            success_url: data.successUrl || 'https://www.littlebighope.com/vielen-dank-email',
-            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
-            customer_email: data.customerEmail,
-            metadata: metadata,
-            payment_intent_data: {
-                metadata: metadata  // Add metadata to payment intent as well
-            },
-            automatic_tax: { enabled: true }
+            locale: data.language || 'de'
         };
 
-        const session = await stripe.checkout.sessions.create(sessionConfig);
+        // Add shipping options only for physical products
+        if (data.metadata?.productType === 'physical' || data.metadata?.productType === 'bundle') {
+            sessionData.shipping_options = [{
+                shipping_rate: data.shippingRateId
+            }];
+            sessionData.shipping_address_collection = {
+                allowed_countries: shippingRate.countries
+            };
+        }
+
+        // Create Stripe checkout session
+        const session = await stripe.checkout.sessions.create(sessionData);
         return {
             statusCode: 200,
             headers,
