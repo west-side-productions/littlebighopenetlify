@@ -7,7 +7,7 @@ const Memberstack = require('@memberstack/admin'); // Import Memberstack
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Initialize Memberstack client
-const memberstack = Memberstack({
+const memberstack = new Memberstack({
     apiKey: process.env.MEMBERSTACK_SECRET_KEY
 });
 
