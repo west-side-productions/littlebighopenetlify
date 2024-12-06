@@ -323,6 +323,15 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             // Store current URL for redirect after registration
             const currentPath = window.location.pathname;
             const queryParams = window.location.search;
+            
+            // Store checkout configuration
+            if (shippingRateId || forcedProductType) {
+                localStorage.setItem('checkoutConfig', JSON.stringify({
+                    productType: forcedProductType,
+                    shippingRateId: shippingRateId
+                }));
+            }
+            
             localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
             
             // Special handling for membershome path
