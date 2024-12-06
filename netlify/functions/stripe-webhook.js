@@ -358,7 +358,7 @@ exports.handler = async (event) => {
                         });
                     }
 
-                    // Now try to add the Memberstack plan with shorter timeouts
+                    // Now try to add the Memberstack plan
                     console.log('Attempting MemberStack plan addition:', {
                         url: `${MEMBERSTACK_API_V1}/members/add-plan`,
                         memberId: memberStackData.memberId,
@@ -371,14 +371,13 @@ exports.handler = async (event) => {
                                 method: 'POST',
                                 url: `${MEMBERSTACK_API_V1}/members/add-plan`,
                                 headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                    'Content-Type': 'application/json'
                                 },
                                 data: {
+                                    secretKey: process.env.MEMBERSTACK_SECRET_KEY,
                                     planId: session.metadata.planId,
                                     memberId: memberStackData.memberId
-                                },
-                                timeout: 5000 // 5 second timeout for each request
+                                }
                             });
                             return response;
                         }, 3, 1000);
@@ -388,42 +387,12 @@ exports.handler = async (event) => {
                             data: v1Response.data
                         });
                     } catch (error) {
-                        // If we fail to add the plan, we'll store it for later retry
-                        console.error('Failed to add Memberstack plan:', {
-                            error: error.message,
-                            memberId: memberStackData.memberId,
-                            planId: session.metadata.planId
+                        console.error('MemberStack API error:', {
+                            message: error.message,
+                            response: error.response?.data,
+                            status: error.response?.status
                         });
-                        
-                        // Create a background task to retry the plan addition
-                        try {
-                            await fetch(process.env.RETRY_WEBHOOK_URL, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    type: 'memberstack_plan_retry',
-                                    data: {
-                                        memberId: memberStackData.memberId,
-                                        planId: session.metadata.planId,
-                                        sessionId: session.id
-                                    }
-                                })
-                            });
-                            
-                            // Return success since we've queued the retry
-                            return {
-                                statusCode: 200,
-                                body: JSON.stringify({ 
-                                    status: 'queued',
-                                    message: 'Plan addition queued for retry'
-                                })
-                            };
-                        } catch (retryError) {
-                            console.error('Failed to queue plan retry:', retryError);
-                            throw error; // Throw original error if we can't queue
-                        }
+                        throw error; // Re-throw to trigger webhook retry
                     }
 
                     // Update custom fields separately
@@ -433,8 +402,7 @@ exports.handler = async (event) => {
                             method: 'POST',
                             url: updateUrl,
                             headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${process.env.MEMBERSTACK_SECRET_KEY}`
+                                'Content-Type': 'application/json'
                             },
                             data: {
                                 customFields: memberStackData.customFields
