@@ -39,7 +39,7 @@ const SHIPPING_RATES = {
 const PRODUCT_CONFIG = {
     'physical-book': {
         id: 'prc_cookbook_physical',
-        type: 'physical',
+        version: 'physical-book',
         requiresShipping: true,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
@@ -50,7 +50,7 @@ const PRODUCT_CONFIG = {
     },
     'digital': {
         id: 'prc_online-kochkurs-8b540kc2',
-        type: 'digital',
+        version: 'digital',
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
@@ -190,7 +190,7 @@ exports.handler = async function(event, context) {
         }
 
         // Determine product type from metadata
-        const isDigitalProduct = productConfig.type === 'digital';
+        const isDigitalProduct = productConfig.version === 'digital';
         const requiresShipping = productConfig.requiresShipping === true;
         
         // Only require shipping rate for physical products that require shipping
