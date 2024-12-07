@@ -261,6 +261,17 @@ This implementation ensures stable language handling across the site while maint
    }
    ```
 
+## API Endpoints
+
+### Netlify Functions
+All serverless functions are hosted at: `https://littlebighope.netlify.app/.netlify/functions/`
+
+Available endpoints:
+- `create-checkout-session`: Creates a Stripe checkout session
+- `memberstack-webhook`: Handles Memberstack webhooks
+
+**Important**: These functions are hosted separately from the Webflow site. Always use the full URL when making requests to these endpoints.
+
 ## Product System
 
 ### Product Configuration
@@ -522,6 +533,22 @@ const PRODUCT_CONFIG = {
    - [ ] Network failures
    - [ ] Session creation failures
    - [ ] Stripe redirect failures
+
+## Environment Configuration
+
+### Stripe Configuration
+The system is currently configured to run in **TEST MODE**. This means:
+
+1. Client-side: Using test public key
+   ```javascript
+   pk_test_51Nw2OWJRMXFic4sWEgOcPYEYqaGDuuGWGKqKB4fMVQcRJDqQKzZj9qEtgVkrKKTXgV4rFEEYBxh6DQWHZaZRaOWE00rPmWEbFm
+   ```
+
+2. Server-side: Using test secret key (set in Netlify environment variables)
+   - Environment variable: `STRIPE_SECRET_KEY`
+   - Value should be the test mode secret key starting with `sk_test_`
+
+**Important**: When switching to production, both the client-side public key and the server-side secret key must be updated to their live mode equivalents.
 
 ## Membershome Functionality
 

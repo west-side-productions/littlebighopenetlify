@@ -351,46 +351,58 @@ async function startCheckout(shippingRateId = null, productType = null) {
         // Create checkout session with weight information
         const apiEndpoint = window.location.hostname === 'localhost' 
             ? 'http://localhost:8888/.netlify/functions/create-checkout-session'
-            : '/api/create-checkout-session';
+            : 'https://littlebighope.netlify.app/.netlify/functions/create-checkout-session';
             
         log('Making checkout request to:', apiEndpoint);
+        const payload = {
+            productType,
+            shippingRateId,
+            language: getPreferredLanguage(),
+            customerEmail: member.data.auth.email,
+            memberstackUserId: member.data.id,
+            weights: productConfig.requiresShipping ? {
+                productWeight: productConfig.weight,
+                packagingWeight: productConfig.packagingWeight,
+                totalWeight: calculateTotalWeight(productConfig)
+            } : null,
+            metadata: {
+                memberstackUserId: member.data.id,
+                productType: productType,
+                type: productConfig.type,
+                language: getPreferredLanguage(),
+                source: window.location.pathname,
+                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
+                requiresShipping: productConfig.requiresShipping,
+                totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
+                productWeight: productConfig.weight,
+                packagingWeight: productConfig.packagingWeight || 0,
+                dimensions: productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null,
+                shippingClass: productConfig.shippingClass || 'standard'
+            }
+        };
         const response = await fetch(apiEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                productType,
-                shippingRateId,
-                language: getPreferredLanguage(),
-                customerEmail: member.data.auth.email,
-                memberstackUserId: member.data.id,
-                weights: productConfig.requiresShipping ? {
-                    productWeight: productConfig.weight,
-                    packagingWeight: productConfig.packagingWeight,
-                    totalWeight: calculateTotalWeight(productConfig)
-                } : null,
-                metadata: {
-                    memberstackUserId: member.data.id,
-                    productType: productType,
-                    type: productConfig.type,
-                    language: getPreferredLanguage(),
-                    source: window.location.pathname,
-                    planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
-                    requiresShipping: productConfig.requiresShipping,
-                    totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
-                    productWeight: productConfig.weight,
-                    packagingWeight: productConfig.packagingWeight || 0,
-                    dimensions: productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null,
-                    shippingClass: productConfig.shippingClass || 'standard'
-                }
-            })
+            body: JSON.stringify(payload)
+        }).catch(error => {
+            console.error('Network error details:', {
+                error: error,
+                endpoint: apiEndpoint,
+                payload: payload
+            });
+            throw error;
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            log('Server error response:', errorText);
-            throw new Error(response.statusText || `Failed to create checkout session: ${response.status}`);
+            console.error('Checkout error details:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: errorText
+            });
+            throw new Error(`Checkout failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
         let sessionData;
