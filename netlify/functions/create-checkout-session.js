@@ -212,7 +212,7 @@ exports.handler = async function(event, context) {
             statusCode: 200,
             headers,
             body: JSON.stringify({
-                id: session.id,
+                sessionId: session.id,
                 url: session.url
             })
         };
