@@ -39,54 +39,38 @@ const SHIPPING_RATES = {
 const PRODUCT_CONFIG = {
     'course': {
         id: 'prc_course_digital',
-        versions: {
-            'digital': {
-                requiresShipping: false,
-                prices: {
-                    de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-                    en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-                    fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-                    it: 'price_1QTSN6JRMXFic4sW9sklILhd'
-                }
-            }
+        requiresShipping: false,
+        prices: {
+            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
         }
     },
     'book': {
         id: 'prc_cookbook_physical',
-        versions: {
-            'physical-book': {
-                requiresShipping: true,
-                prices: {
-                    de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-                    en: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    it: 'price_1QT206JRMXFic4sW78d5dEDO'
-                }
-            }
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
     'bundle': {
         id: 'prc_bundle_physical',
-        versions: {
-            'physical-book': {
-                requiresShipping: true,
-                prices: {
-                    de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-                    en: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    it: 'price_1QT206JRMXFic4sW78d5dEDO'
-                }
-            }
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
     'free-plan': {
         id: 'prc_free_digital',
-        versions: {
-            'digital': {
-                requiresShipping: false,
-                prices: {}
-            }
-        }
+        requiresShipping: false,
+        prices: {}
     }
 };
 
@@ -159,26 +143,9 @@ exports.handler = async function(event, context) {
             dataType: typeof data,
             isNull: data === null,
             isObject: typeof data === 'object',
-            hasVersion: 'productVersion' in data,
-            version: data.productVersion,
-            versionType: typeof data.productVersion,
             allKeys: Object.keys(data),
             allValues: Object.entries(data).map(([k, v]) => `${k}: ${typeof v}`)
         });
-
-        // Validate version field first
-        if (!data.productVersion) {
-            console.error('Missing version field:', {
-                data,
-                hasVersion: 'productVersion' in data,
-                versionValue: data.productVersion
-            });
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Missing required field: productVersion' })
-            };
-        }
 
         // Validate product type
         if (!data.type || !PRODUCT_CONFIG[data.type]) {
@@ -190,36 +157,9 @@ exports.handler = async function(event, context) {
             };
         }
 
-        // Get product configuration based on type and version
-        const productConfig = PRODUCT_CONFIG[data.type].versions[data.productVersion];
-        if (!productConfig) {
-            console.error(`Invalid version: ${data.productVersion} for type: ${data.type}`, {
-                availableVersions: Object.keys(PRODUCT_CONFIG[data.type].versions),
-                receivedVersion: data.productVersion
-            });
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: `Invalid version: ${data.productVersion} for type: ${data.type}` })
-            };
-        }
-
-        // Validate other required fields
-        const requiredFields = ['customerEmail', 'language'];
-        for (const field of requiredFields) {
-            if (!data[field]) {
-                console.error(`Missing required field: ${field}`, {
-                    fieldValue: data[field],
-                    data
-                });
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: `Missing required field: ${field}` })
-                };
-            }
-        }
-
+        // Get product configuration based on type
+        const productConfig = PRODUCT_CONFIG[data.type];
+        
         // Prepare Stripe session creation
         const sessionParams = {
             payment_method_types: ['card'],

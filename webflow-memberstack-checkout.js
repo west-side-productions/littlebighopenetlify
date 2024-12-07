@@ -14,54 +14,38 @@ const CONFIG = {
 const PRODUCT_CONFIG = {
     'course': {
         type: 'course',
-        versions: {
-            'digital': {
-                prices: {
-                    de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-                    en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-                    fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-                    it: 'price_1QTSN6JRMXFic4sW9sklILhd'
-                },
-                requiresShipping: false
-            }
+        requiresShipping: false,
+        prices: {
+            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
         }
     },
     'book': {
         type: 'book',
-        versions: {
-            'physical-book': {
-                prices: {
-                    de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-                    en: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    it: 'price_1QT206JRMXFic4sW78d5dEDO'
-                },
-                requiresShipping: true
-            }
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
     'bundle': {
         type: 'bundle',
-        versions: {
-            'physical-book': {
-                prices: {
-                    de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-                    en: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-                    it: 'price_1QT206JRMXFic4sW78d5dEDO'
-                },
-                requiresShipping: true
-            }
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
     'free-plan': {
         type: 'free-plan',
-        versions: {
-            'digital': {
-                prices: {},
-                requiresShipping: false
-            }
-        }
+        requiresShipping: false,
+        prices: {}
     }
 };
 
@@ -345,7 +329,7 @@ async function handleCheckout(event, button) {
         }
 
         // Determine version based on product type
-        const version = Object.keys(PRODUCT_CONFIG[productType].versions)[0];
+        const version = productType;
         if (!version) {
             throw new Error(`No version found for product type: ${productType}`);
         }
@@ -435,7 +419,7 @@ async function startCheckout(config) {
         const { detected: language } = await getPreferredLanguage();
         
         // Get price ID for the current version
-        const priceId = PRODUCT_CONFIG[config.type].versions[config.version]?.prices[language];
+        const priceId = PRODUCT_CONFIG[config.type].prices[language];
         if (!priceId) {
             throw new Error(`No price found for version ${config.version} and language ${language}`);
         }
@@ -459,7 +443,7 @@ async function startCheckout(config) {
         };
 
         // Add shipping rate for physical products
-        if (config.version === 'physical-book' && config.shippingRateId) {
+        if (PRODUCT_CONFIG[config.type].requiresShipping && config.shippingRateId) {
             payload.shippingRateId = config.shippingRateId;
             
             // Get shipping rate details
