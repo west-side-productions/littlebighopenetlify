@@ -115,38 +115,41 @@ exports.handler = async function(event, context) {
         const data = JSON.parse(event.body);
         console.log('Parsed request data:', {
             rawData: data,
-            productType: data.productType,
-            typeofProductType: typeof data.productType,
-            hasProductType: 'productType' in data,
+            version: data.version,
+            typeofVersion: typeof data.version,
+            hasVersion: 'version' in data,
             dataKeys: Object.keys(data)
         });
 
         // Validate required fields
-        if (!data.productType) {
-            console.log('Product type validation failed:', {
-                productType: data.productType,
-                truthyCheck: !!data.productType
-            });
-            throw new Error('Missing required field: productType');
-        }
-        if (!data.customerEmail) {
-            throw new Error('Missing required field: customerEmail');
-        }
-        if (data.metadata && typeof data.metadata !== 'object') {
-            throw new Error('Invalid metadata format');
+        const requiredFields = ['version', 'customerEmail', 'language'];
+        for (const field of requiredFields) {
+            if (!data[field]) {
+                console.error(`Missing required field: ${field}`);
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ error: `Missing required field: ${field}` })
+                };
+            }
         }
 
-        // Get product configuration
-        const productConfig = PRODUCT_CONFIG[data.productType];
+        // Get product configuration based on version
+        const productConfig = PRODUCT_CONFIG[data.version];
         if (!productConfig) {
-            throw new Error(`Invalid product type: ${data.productType}`);
+            console.error(`Invalid product version: ${data.version}`);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: `Invalid product version: ${data.version}` })
+            };
         }
 
         // Get price ID based on product type and language
         const language = data.language || 'de';
         const priceId = productConfig.prices[language];
         if (!priceId) {
-            throw new Error(`No price found for product ${data.productType} in language ${language}`);
+            throw new Error(`No price found for product ${data.version} in language ${language}`);
         }
 
         // Determine product type from metadata

@@ -304,34 +304,69 @@ async function sendOrderNotificationEmail(session) {
 
 // Checkout Functions
 async function startCheckout(config) {
-    if (!config || !config.productType) {
-        console.error('Invalid checkout configuration');
-        return;
+    if (!config || typeof config !== 'object') {
+        throw new Error('Invalid checkout configuration - configuration object required');
+    }
+    
+    if (!config.productType || typeof config.productType !== 'string') {
+        throw new Error('Invalid checkout configuration - productType must be a string');
     }
 
     const productConfig = PRODUCT_CONFIG[config.productType];
     if (!productConfig) {
-        console.error(`Invalid product type: ${config.productType}`);
-        return;
+        throw new Error(`Invalid product type: ${config.productType}`);
     }
 
     try {
-        log('Creating checkout session:', config);
+        // Get language and price ID
+        const language = await getPreferredLanguage();
+        const priceId = productConfig.prices[language.detected] || productConfig.prices.de;
         
+        if (!priceId) {
+            throw new Error(`No price configuration found for product type: ${config.productType}`);
+        }
+
+        // Create the base payload
         const payload = {
-            productType: config.productType,
-            customerEmail: config.customerEmail,
-            language: config.language,
-            shippingRateId: config.shippingRateId,
-            successUrl: config.successUrl || 'https://www.littlebighope.com/vielen-dank-email',
-            cancelUrl: config.cancelUrl || 'https://www.littlebighope.com/produkte',
+            version: config.productType, // Use version instead of productType for Stripe
+            priceId: priceId,
+            customerEmail: config.customerEmail || '',
+            language: language.detected || 'de',
+            successUrl: 'https://www.littlebighope.com/vielen-dank-email',
+            cancelUrl: 'https://www.littlebighope.com/produkte',
             metadata: {
-                source: 'checkout',
-                ...config.metadata
+                source: window.location.pathname,
+                version: config.productType, // Also include in metadata
+                type: productConfig.type,
+                language: language.detected || 'de',
+                countryCode: 'DE',
+                requiresShipping: productConfig.requiresShipping || false,
+                shippingClass: 'standard',
+                dimensions: null,
+                productWeight: undefined,
+                packagingWeight: 0,
+                totalWeight: NaN,
+                planId: productConfig.memberstackPlanId
             }
         };
 
-        log('Sending checkout payload:', payload);
+        // Add memberstackId to metadata if available
+        if (config.metadata?.memberstackId) {
+            payload.metadata.memberstackUserId = config.metadata.memberstackId;
+        }
+
+        // Only add shipping if it's required
+        if (productConfig.requiresShipping && config.shippingRateId) {
+            payload.shippingRateId = config.shippingRateId;
+        }
+
+        // Log the exact payload being sent
+        console.log('Creating checkout session:', {
+            payload,
+            stringifiedPayload: JSON.stringify(payload),
+            version: payload.version,
+            hasVersion: 'version' in payload
+        });
 
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
             method: 'POST',
@@ -341,10 +376,22 @@ async function startCheckout(config) {
             body: JSON.stringify(payload)
         });
 
+        // Log raw response for debugging
+        console.log('Raw response:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries())
+        });
+
         if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Checkout session creation failed:', errorData);
-            throw new Error(errorData.error || 'Failed to create checkout session');
+            const errorText = await response.text();
+            console.error('Checkout session creation failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText,
+                originalPayload: payload
+            });
+            throw new Error(`Failed to create checkout session: ${response.status}`);
         }
 
         const session = await response.json();
@@ -366,14 +413,28 @@ async function handleCheckout(event) {
     event.preventDefault();
     
     try {
-        const member = await $memberstackDom.getCurrentMember();
+        const member = await window.MemberStack.getCurrentMember();
         log('Current member:', member?.id);
         
         // Get product configuration from the button's data attributes
         const button = event.currentTarget;
         const productType = button.getAttribute('data-product-type');
-        const productConfig = PRODUCT_CONFIG[productType];
         
+        log('Product type from button:', {
+            productType,
+            buttonElement: button,
+            buttonDataset: button.dataset,
+            buttonAttributes: {
+                'data-product-type': button.getAttribute('data-product-type'),
+                'data-checkout-button': button.getAttribute('data-checkout-button')
+            }
+        });
+        
+        if (!productType) {
+            throw new Error('Product type not found on button');
+        }
+        
+        const productConfig = PRODUCT_CONFIG[productType];
         if (!productConfig) {
             console.error(`Invalid product configuration for type: ${productType}`);
             return;
@@ -388,9 +449,10 @@ async function handleCheckout(event) {
         const checkoutConfig = {
             productType: productType,
             customerEmail: member?.email || '',
-            language: language.detected || 'de', // Use the detected language from the response
+            language: language.detected || 'de',
             metadata: {
-                memberstackId: member?.id
+                memberstackId: member?.id,
+                productType: productType
             }
         };
         
@@ -403,18 +465,44 @@ async function handleCheckout(event) {
             checkoutConfig.shippingRateId = shippingSelect.value;
         }
         
-        log('Creating checkout session:', checkoutConfig);
+        log('Creating checkout session with config:', checkoutConfig);
         await startCheckout(checkoutConfig);
         
     } catch (error) {
         console.error('Checkout error:', error);
+        alert('Checkout error: ' + error.message);
     }
+}
+
+// Initialize checkout buttons
+async function initializeCheckoutButtons() {
+    const buttons = document.querySelectorAll('[data-checkout-button]');
+    log(`Found ${buttons.length} checkout buttons`);
+    
+    buttons.forEach(button => {
+        // Remove existing listeners by cloning
+        const newButton = button.cloneNode(true);
+        
+        // Explicitly copy over the data attributes
+        const productType = button.getAttribute('data-product-type');
+        if (productType) {
+            newButton.setAttribute('data-product-type', productType);
+        }
+        
+        log(`Setting up button for product type: ${productType}`);
+        
+        button.parentNode.replaceChild(newButton, button);
+        
+        // Add event listener to the new button
+        newButton.addEventListener('click', handleCheckout);
+    });
+    log('Checkout buttons initialized');
 }
 
 // Handle membershome functionality
 async function handleMembershome() {
     log('Handling membershome...');
-    const member = await window.$memberstackDom.getCurrentMember();
+    const member = await window.MemberStack.getCurrentMember();
     
     if (member?.data && window.location.pathname === '/membershome') {
         const storedConfig = localStorage.getItem('checkoutConfig');
@@ -443,7 +531,16 @@ async function handleMembershome() {
 // Track Memberstack initialization
 async function initializeMemberstack() {
     try {
-        if (!window.$memberstackDom) {
+        // Wait for Memberstack to be ready
+        await new Promise((resolve) => {
+            if (window.MemberStack) {
+                resolve();
+            } else {
+                document.addEventListener('memberstack.ready', resolve);
+            }
+        });
+
+        if (!window.MemberStack) {
             console.warn('Memberstack not available');
             return false;
         }
@@ -454,7 +551,7 @@ async function initializeMemberstack() {
         window.memberstack = {
             getCurrentMember: async () => {
                 try {
-                    const member = await window.$memberstackDom.getCurrentMember();
+                    const member = await window.MemberStack.getCurrentMember();
                     return member;
                 } catch (error) {
                     console.warn('Error getting current member:', error);
@@ -463,7 +560,7 @@ async function initializeMemberstack() {
             },
             getMemberJSON: async () => {
                 try {
-                    const member = await window.$memberstackDom.getCurrentMember();
+                    const member = await window.MemberStack.getCurrentMember();
                     return member?.data || null;
                 } catch (error) {
                     console.warn('Error getting member JSON:', error);
@@ -472,7 +569,7 @@ async function initializeMemberstack() {
             },
             updateMember: async (data) => {
                 try {
-                    await window.$memberstackDom.updateMember({ data });
+                    await window.MemberStack.updateMember({ data });
                     return true;
                 } catch (error) {
                     console.warn('Error updating member:', error);
@@ -481,10 +578,10 @@ async function initializeMemberstack() {
             }
         };
 
-        // Add member update handler using the correct v1 method
+        // Add member update handler
         try {
-            window.$memberstackDom.addEventListener('member.update', (event) => {
-                log('Member updated:', event);
+            window.MemberStack.onMemberUpdate((member) => {
+                log('Member updated:', member);
                 checkLanguageRedirect();
             });
             log('Member update listener added');
@@ -568,28 +665,6 @@ function initializeShippingSelects() {
     return shippingSelects;
 }
 
-// Initialize checkout buttons
-async function initializeCheckoutButtons() {
-    const buttons = document.querySelectorAll('[data-checkout-button]');
-    log(`Found ${buttons.length} checkout buttons`);
-    
-    buttons.forEach(button => {
-        const productType = button.getAttribute('data-product-type');
-        log(`Setting up button for product type: ${productType}`);
-        
-        // Store original text before replacing button
-        const originalButtonText = button.textContent;
-        
-        // Remove existing listeners by cloning
-        const newButton = button.cloneNode(true);
-        button.parentNode.replaceChild(newButton, button);
-        
-        // Add event listener to the new button
-        newButton.addEventListener('click', handleCheckout);
-    });
-    log('Checkout buttons initialized');
-}
-
 // Initialize checkout system
 async function initializeCheckoutSystem() {
     try {
@@ -659,8 +734,8 @@ async function getPreferredLanguage() {
     try {
         // 1. Check Memberstack
         log('Checking Memberstack language...');
-        if ($memberstackDom) {
-            const member = await $memberstackDom.getCurrentMember();
+        if (window.MemberStack) {
+            const member = await window.MemberStack.getCurrentMember();
             if (member?.data?.language) {
                 log('Found language in Memberstack:', member.data.language);
                 return {
