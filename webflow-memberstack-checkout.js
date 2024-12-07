@@ -427,12 +427,12 @@ async function startCheckout(config) {
         // Create the request payload
         const payload = {
             priceId,
-            type: config.type,                 // Product type: 'course', 'book', 'bundle'
+            productType: config.type,          // Changed from type to productType to match server
             customerEmail: config.customerEmail,
             language,
             metadata: {
-                language,                      // Language code (de, en, fr, it)
-                countryCode: 'DE',            // Default country code
+                language,                     
+                countryCode: 'DE',            
                 source: window.location.pathname
             },
             successUrl: window.location.origin + '/vielen-dank-email',
@@ -450,7 +450,7 @@ async function startCheckout(config) {
             }
         }
 
-        log('Creating checkout session with payload:', payload);
+        console.log('Creating checkout session with payload:', JSON.stringify(payload, null, 2));
 
         // Create checkout session
         const response = await fetch('/.netlify/functions/create-checkout-session', {

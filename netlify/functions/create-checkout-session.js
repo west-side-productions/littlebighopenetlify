@@ -138,18 +138,22 @@ exports.handler = async function(event, context) {
             };
         }
 
-        console.log('Parsed request data:', {
-            rawData: data,
-            dataType: typeof data,
-            isNull: data === null,
-            isObject: typeof data === 'object',
-            allKeys: Object.keys(data),
-            allValues: Object.entries(data).map(([k, v]) => `${k}: ${typeof v}`)
+        console.log('Received request data:', {
+            rawBody: event.body,
+            parsedData: data,
+            hasType: 'type' in data,
+            hasProductType: 'productType' in data,
+            type: data.type,
+            productType: data.productType
         });
 
-        // Validate product type
-        if (!data.type || !PRODUCT_CONFIG[data.type]) {
-            console.error('Invalid or missing product type:', data.type);
+        // Validate product type (check both type and productType)
+        const productType = data.productType || data.type;
+        if (!productType || !PRODUCT_CONFIG[productType]) {
+            console.error('Invalid or missing product type:', { 
+                productType,
+                availableTypes: Object.keys(PRODUCT_CONFIG)
+            });
             return {
                 statusCode: 400,
                 headers,
@@ -158,7 +162,7 @@ exports.handler = async function(event, context) {
         }
 
         // Get product configuration
-        const productConfig = PRODUCT_CONFIG[data.type];
+        const productConfig = PRODUCT_CONFIG[productType];
         
         // Prepare Stripe session creation
         const sessionParams = {
