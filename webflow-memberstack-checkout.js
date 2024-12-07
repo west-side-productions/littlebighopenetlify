@@ -75,10 +75,11 @@ const PRODUCT_CONFIG = {
     }
 };
 
-// Product type to version mapping
-const PRODUCT_VERSION_MAP = {
+// Button type to Stripe version mapping
+const BUTTON_VERSION_MAP = {
     'course': 'digital',
-    'book': 'physical-book'
+    'book': 'physical-book',
+    'bundle': 'bundle'
 };
 
 // Shipping Rates Structure
@@ -178,11 +179,10 @@ function validateWeights(productConfig) {
 }
 
 // Price Functions
-async function updateTotalPrice(productType, shippingRateId = null) {
-    const version = PRODUCT_VERSION_MAP[productType];
+async function updateTotalPrice(version, shippingRateId = null) {
     const productConfig = PRODUCT_CONFIG[version];
     if (!productConfig) {
-        console.error(`Invalid product type: ${productType}`);
+        console.error(`Invalid version: ${version}`);
         return;
     }
 
@@ -213,10 +213,10 @@ async function updateTotalPrice(productType, shippingRateId = null) {
     const totalPrice = basePrice + shippingPrice;
 
     // Update price displays
-    const subtotalElement = document.getElementById(`subtotal-price-${productType}`);
-    const shippingElement = document.getElementById(`shipping-price-${productType}`);
-    const totalElement = document.getElementById(`total-price-${productType}`);
-    const checkoutButton = document.querySelector(`[data-checkout-button][data-product-type="${productType}"]`);
+    const subtotalElement = document.getElementById(`subtotal-price-${version}`);
+    const shippingElement = document.getElementById(`shipping-price-${version}`);
+    const totalElement = document.getElementById(`total-price-${version}`);
+    const checkoutButton = document.querySelector(`[data-checkout-button][data-version="${version}"]`);
 
     if (subtotalElement) subtotalElement.textContent = basePrice.toFixed(2);
     if (shippingElement) shippingElement.textContent = shippingPrice.toFixed(2);
@@ -316,12 +316,18 @@ async function startCheckout(config) {
     }
     
     if (!config.version || typeof config.version !== 'string') {
+        console.error('Version validation failed:', {
+            config,
+            hasVersion: 'version' in config,
+            versionValue: config.version,
+            versionType: typeof config.version
+        });
         throw new Error('Invalid checkout configuration - version must be a string');
     }
 
     const productConfig = PRODUCT_CONFIG[config.version];
     if (!productConfig) {
-        throw new Error(`Invalid product version: ${config.version}`);
+        throw new Error(`Invalid version: ${config.version}`);
     }
 
     try {
@@ -333,7 +339,7 @@ async function startCheckout(config) {
             throw new Error(`No price configuration found for version: ${config.version}`);
         }
 
-        // Create the base payload with version at root level
+        // Create the payload - only include version, not productType
         const payload = {
             version: config.version,
             priceId: priceId,
@@ -371,10 +377,12 @@ async function startCheckout(config) {
         console.log('Creating checkout session:', {
             payload,
             stringifiedPayload: JSON.stringify(payload),
-            version: payload.version,
-            hasVersion: 'version' in payload,
-            versionType: typeof payload.version,
-            versionValue: payload.version
+            payloadKeys: Object.keys(payload),
+            version: {
+                inPayload: 'version' in payload,
+                value: payload.version,
+                type: typeof payload.version
+            }
         });
 
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
@@ -398,7 +406,9 @@ async function startCheckout(config) {
                 status: response.status,
                 statusText: response.statusText,
                 error: errorText,
-                originalPayload: payload
+                originalPayload: payload,
+                payloadVersion: payload.version,
+                stringifiedPayload: JSON.stringify(payload)
             });
             throw new Error(`Failed to create checkout session: ${response.status}`);
         }
@@ -425,52 +435,51 @@ async function handleCheckout(event) {
         const member = await window.MemberStack.getCurrentMember();
         log('Current member:', member?.id);
         
-        // Get product configuration from the button's data attributes
+        // Get button data
         const button = event.currentTarget;
-        const productType = button.getAttribute('data-product-type');
+        const buttonType = button.getAttribute('data-product-type');
         
-        log('Product type from button:', {
-            productType,
+        // Map button type to Stripe version
+        const version = BUTTON_VERSION_MAP[buttonType];
+        
+        log('Button data:', {
+            buttonType,
+            mappedVersion: version,
             buttonElement: button,
             buttonDataset: button.dataset,
             buttonAttributes: {
-                'data-product-type': button.getAttribute('data-product-type'),
+                'data-product-type': buttonType,
                 'data-checkout-button': button.getAttribute('data-checkout-button')
             }
         });
         
-        if (!productType) {
-            throw new Error('Product type not found on button');
+        if (!version) {
+            console.error('Invalid button type:', {
+                buttonType,
+                availableTypes: Object.keys(BUTTON_VERSION_MAP),
+                buttonElement: button
+            });
+            throw new Error(`Invalid button type: ${buttonType}`);
         }
         
-        // Map to Stripe version
-        const version = PRODUCT_VERSION_MAP[productType];
-        log('Version mapping:', {
-            originalProductType: productType,
-            mappedVersion: version,
-            availableVersions: Object.keys(PRODUCT_CONFIG),
-            versionMap: PRODUCT_VERSION_MAP
-        });
-
         const productConfig = PRODUCT_CONFIG[version];
         if (!productConfig) {
-            console.error(`Invalid product configuration for type: ${productType}, version: ${version}`);
+            console.error(`Invalid version: ${version}`);
             return;
         }
         
-        log('Using product configuration:', {
-            productType,
+        log('Using configuration:', {
             version,
-            config: productConfig
+            config: productConfig,
+            buttonType
         });
         
         // Get user's preferred language
         const language = await getPreferredLanguage();
         
-        // Prepare checkout configuration
+        // Create checkout configuration
         const checkoutConfig = {
-            version: version, // Explicitly set version
-            productType: productType,
+            version: version,
             customerEmail: member?.email || '',
             language: language.detected || 'de',
             metadata: {
@@ -488,10 +497,11 @@ async function handleCheckout(event) {
             checkoutConfig.shippingRateId = shippingSelect.value;
         }
         
-        log('Creating checkout session with config:', {
+        log('Starting checkout with config:', {
             checkoutConfig,
             hasVersion: 'version' in checkoutConfig,
-            version: checkoutConfig.version
+            version: checkoutConfig.version,
+            versionType: typeof checkoutConfig.version
         });
 
         await startCheckout(checkoutConfig);
@@ -508,16 +518,32 @@ async function initializeCheckoutButtons() {
     log(`Found ${buttons.length} checkout buttons`);
     
     buttons.forEach(button => {
+        // Get button data
+        const buttonType = button.getAttribute('data-product-type');
+        const version = BUTTON_VERSION_MAP[buttonType];
+        
+        log('Setting up button:', {
+            buttonType,
+            version,
+            buttonElement: button,
+            buttonDataset: button.dataset
+        });
+
+        if (!version) {
+            console.error('Invalid button type:', {
+                element: button,
+                buttonType,
+                availableTypes: Object.keys(BUTTON_VERSION_MAP)
+            });
+            return;
+        }
+
         // Remove existing listeners by cloning
         const newButton = button.cloneNode(true);
         
-        // Explicitly copy over the data attributes
-        const productType = button.getAttribute('data-product-type');
-        if (productType) {
-            newButton.setAttribute('data-product-type', productType);
-        }
-        
-        log(`Setting up button for product type: ${productType}`);
+        // Preserve all data attributes
+        newButton.setAttribute('data-product-type', buttonType);
+        newButton.setAttribute('data-version', version); // Add version attribute
         
         button.parentNode.replaceChild(newButton, button);
         

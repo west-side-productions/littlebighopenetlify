@@ -137,15 +137,42 @@ exports.handler = async function(event, context) {
             allValues: Object.entries(data).map(([k, v]) => `${k}: ${typeof v}`)
         });
 
-        // Validate required fields
-        const requiredFields = ['version', 'customerEmail', 'language'];
+        // Validate version field first
+        if (!data.version) {
+            console.error('Missing version field:', {
+                data,
+                hasVersion: 'version' in data,
+                versionValue: data.version
+            });
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Missing required field: version' })
+            };
+        }
+
+        // Get product configuration based on version
+        const productConfig = PRODUCT_CONFIG[data.version];
+        if (!productConfig) {
+            console.error(`Invalid version: ${data.version}`, {
+                availableVersions: Object.keys(PRODUCT_CONFIG),
+                receivedVersion: data.version
+            });
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: `Invalid version: ${data.version}` })
+            };
+        }
+
+        // Validate other required fields
+        const requiredFields = ['customerEmail', 'language'];
         for (const field of requiredFields) {
             if (!data[field]) {
                 console.error(`Missing required field: ${field}`, {
                     fieldValue: data[field],
                     fieldExists: field in data,
-                    fieldType: typeof data[field],
-                    allFields: Object.keys(data)
+                    fieldType: typeof data[field]
                 });
                 return {
                     statusCode: 400,
@@ -153,20 +180,6 @@ exports.handler = async function(event, context) {
                     body: JSON.stringify({ error: `Missing required field: ${field}` })
                 };
             }
-        }
-
-        // Get product configuration based on version
-        const productConfig = PRODUCT_CONFIG[data.version];
-        if (!productConfig) {
-            console.error(`Invalid product version: ${data.version}`, {
-                availableVersions: Object.keys(PRODUCT_CONFIG),
-                receivedVersion: data.version
-            });
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: `Invalid product version: ${data.version}` })
-            };
         }
 
         // Get price ID based on product type and language
