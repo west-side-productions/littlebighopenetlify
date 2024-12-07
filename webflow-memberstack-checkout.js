@@ -468,6 +468,67 @@ function waitForMemberstack() {
     });
 }
 
+async function initializeCheckoutButtons() {
+    const buttons = document.querySelectorAll('[data-checkout-button]');
+    log(`Found ${buttons.length} checkout buttons`);
+    
+    // Remove all existing buttons first
+    buttons.forEach(button => {
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+    });
+    
+    // Now add event listeners to the new buttons
+    document.querySelectorAll('[data-checkout-button]').forEach(button => {
+        const productType = button.dataset.productType;
+        log(`Setting up button for product type: ${productType}`);
+        
+        button.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Get the actual clicked button
+            const clickedButton = event.currentTarget;
+            const clickedProductType = clickedButton.dataset.productType;
+            log(`Checkout clicked for product type: ${clickedProductType}`);
+            
+            const productConfig = PRODUCT_CONFIG[clickedProductType];
+            if (!productConfig) {
+                console.error(`Invalid product type: ${clickedProductType}`);
+                return;
+            }
+            
+            try {
+                // Disable button during checkout
+                clickedButton.disabled = true;
+                const originalText = clickedButton.textContent;
+                clickedButton.textContent = 'Processing...';
+                
+                // Get shipping rate if needed
+                let shippingRateId = null;
+                if (productConfig.requiresShipping) {
+                    const shippingSelect = clickedButton.closest('.product-section').querySelector(`#shipping-rate-select-${clickedProductType}`);
+                    shippingRateId = shippingSelect?.value;
+                    if (!shippingRateId) {
+                        throw new Error('Please select a shipping option');
+                    }
+                }
+                
+                // Start checkout process
+                await startCheckout(shippingRateId, clickedProductType);
+            } catch (error) {
+                console.error('Checkout error:', error);
+                alert(error.message || 'An error occurred during checkout. Please try again.');
+            } finally {
+                // Re-enable button
+                clickedButton.disabled = false;
+                clickedButton.textContent = originalText;
+            }
+        });
+    });
+    log('Checkout buttons initialized');
+}
+
 async function initializeCheckoutSystem() {
     if (systemInitialized) {
         log('Checkout system already initialized');
@@ -511,80 +572,7 @@ async function initializeCheckoutSystem() {
         log('Shipping selects initialized');
 
         // Initialize checkout buttons
-        const buttons = document.querySelectorAll('[data-checkout-button]');
-        log(`Found ${buttons.length} checkout buttons`);
-        
-        buttons.forEach(button => {
-            const productType = button.dataset.productType;
-            log(`Setting up button for product type: ${productType}`);
-            
-            // Remove any existing listeners by cloning
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
-            
-            newButton.addEventListener('click', async (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                log(`Checkout clicked for product type: ${productType}`);
-                
-                const productConfig = PRODUCT_CONFIG[productType];
-                if (!productConfig) {
-                    console.error(`Invalid product type: ${productType}`);
-                    return;
-                }
-                
-                try {
-                    // Disable button during checkout
-                    newButton.disabled = true;
-                    const originalText = newButton.textContent;
-                    newButton.textContent = 'Processing...';
-                    
-                    // Get shipping rate if needed
-                    let shippingRateId = null;
-                    if (productConfig.requiresShipping) {
-                        const shippingSelect = newButton.closest('.product-section').querySelector(`#shipping-rate-select-${productType}`);
-                        shippingRateId = shippingSelect?.value;
-                        if (!shippingRateId) {
-                            throw new Error('Please select a shipping option');
-                        }
-                    }
-                    
-                    // Start checkout process
-                    await startCheckout(shippingRateId, productType);
-                } catch (error) {
-                    console.error('Checkout error:', error);
-                    alert(error.message || 'An error occurred during checkout. Please try again.');
-                } finally {
-                    // Re-enable button
-                    newButton.disabled = false;
-                    newButton.textContent = originalText;
-                }
-            });
-        });
-
-        // Initialize prices and show shipping sections
-        const products = document.querySelectorAll('[data-product-type]');
-        products.forEach(product => {
-            const productType = product.dataset.productType;
-            if (!productType) return;
-            
-            try {
-                updateTotalPrice(productType);
-            } catch (error) {
-                console.warn(`Failed to initialize price for ${productType}:`, error);
-            }
-        });
-        
-        const shippingSections = document.querySelectorAll('.shipping-section');
-        shippingSections.forEach(section => {
-            const productType = section.closest('[data-product-type]')?.dataset.productType;
-            if (!productType) return;
-            
-            const config = PRODUCT_CONFIG[productType];
-            if (config && (config.type === 'physical' || config.type === 'bundle')) {
-                section.classList.add('visible');
-            }
-        });
+        await initializeCheckoutButtons();
         
         log('Checkout system initialized successfully');
         systemInitialized = true;
