@@ -185,6 +185,7 @@ exports.handler = async function(event, context) {
             allow_promotion_codes: true,
             success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
             cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
+            locale: data.language || 'de',
             metadata: {
                 ...data.metadata,
                 productType: productType,
@@ -192,16 +193,29 @@ exports.handler = async function(event, context) {
             }
         };
 
+        // Add shipping configuration if product requires shipping
         if (productConfig.requiresShipping) {
+            // Get all available countries from shipping rates
+            const allowedCountries = Object.values(SHIPPING_RATES)
+                .flatMap(rate => rate.countries)
+                .filter((country, index, self) => self.indexOf(country) === index); // Remove duplicates
+
             sessionParams.shipping_address_collection = {
-                allowed_countries: SHIPPING_RATES[data.shippingRateId]?.countries || []
+                allowed_countries: allowedCountries
             };
             
-            if (data.shippingRateId) {
-                sessionParams.shipping_options = [{
-                    shipping_rate: data.shippingRateId
-                }];
-            }
+            // Add all shipping rates as options
+            sessionParams.shipping_options = Object.entries(SHIPPING_RATES).map(([rateId, rateConfig]) => ({
+                shipping_rate: rateId,
+                shipping_rate_data: {
+                    display_name: rateConfig.label,
+                    fixed_amount: {
+                        amount: Math.round(rateConfig.price * 100), // Convert to cents
+                        currency: 'eur'
+                    },
+                    type: 'fixed_amount'
+                }
+            }));
         }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
