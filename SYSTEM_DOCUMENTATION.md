@@ -523,6 +523,33 @@ const PRODUCT_CONFIG = {
    - [ ] Session creation failures
    - [ ] Stripe redirect failures
 
+## Membershome Functionality
+
+### Overview
+The `/membershome` page is designed to facilitate the checkout process for logged-in users while also handling cases for users who are not logged in.
+
+### Key Features
+1. **Member Verification**:
+   - The system checks if a user is logged in using `window.$memberstackDom.getCurrentMember()`. If the user is not logged in, the system stores the checkout configuration in `localStorage` and redirects the user to the registration page (`/registrieren`).
+
+2. **Checkout Initialization**:
+   - The `initializeCheckoutSystem` function waits for Memberstack to be ready and initializes the Stripe payment system, which is essential for the checkout process.
+
+3. **Handling Membershome**:
+   - When the user is on the `/membershome` page, the code checks if the user is verified. If verified, it retrieves the stored checkout configuration from `localStorage` and starts the checkout process using the `startCheckout` function.
+
+4. **Error Handling**:
+   - The system includes error handling to alert users if there are issues during the checkout process, ensuring that problems are logged and communicated effectively.
+
+### Additional Notes
+
+- The checkout process for the `/membershome` page includes handling for users who are not logged in. If a user attempts to access the checkout without being logged in, they are redirected to the registration page. 
+- Upon successful registration and login, users can return to the `/membershome` page to complete their checkout process seamlessly.
+- The system ensures that all necessary configurations for the checkout are stored in `localStorage` to facilitate a smooth transition back to the checkout after registration.
+
+### Conclusion
+The functionality for `/membershome` is integrated into the checkout process, allowing users to complete their checkout seamlessly after logging in. It is recommended to test this flow in a live environment to ensure all edge cases are handled correctly.
+
 ## Components
 
 ### Active Components

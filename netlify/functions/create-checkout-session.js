@@ -35,6 +35,42 @@ const SHIPPING_RATES = {
     }
 };
 
+// Product Configuration
+const PRODUCT_CONFIG = {
+    course: {
+        id: 'prc_online-kochkurs-8b540kc2',
+        type: 'digital',
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+        },
+        requiresShipping: false
+    },
+    book: {
+        id: 'prc_cookbook_physical',
+        type: 'physical',
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+        }
+    },
+    bundle: {
+        type: 'bundle',
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+        }
+    }
+};
+
 // Helper function to validate shipping rate against country
 const validateShippingRate = (shippingRateId) => {
     const rate = SHIPPING_RATES[shippingRateId];
@@ -79,8 +115,8 @@ exports.handler = async function(event, context) {
         console.log('Received checkout request:', data);
 
         // Validate required fields
-        if (!data.priceId) {
-            throw new Error('Missing required field: priceId');
+        if (!data.productType) {
+            throw new Error('Missing required field: productType');
         }
         if (!data.customerEmail) {
             throw new Error('Missing required field: customerEmail');
@@ -89,9 +125,22 @@ exports.handler = async function(event, context) {
             throw new Error('Invalid metadata format');
         }
 
+        // Get product configuration
+        const productConfig = PRODUCT_CONFIG[data.productType];
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${data.productType}`);
+        }
+
+        // Get price ID based on product type and language
+        const language = data.language || 'de';
+        const priceId = productConfig.prices[language];
+        if (!priceId) {
+            throw new Error(`No price found for product ${data.productType} in language ${language}`);
+        }
+
         // Determine product type from metadata
-        const isDigitalProduct = data.metadata?.type === 'digital';
-        const requiresShipping = data.metadata?.requiresShipping === true;
+        const isDigitalProduct = productConfig.type === 'digital';
+        const requiresShipping = productConfig.requiresShipping === true;
         
         // Only require shipping rate for physical products that require shipping
         let shippingRate = null;
@@ -121,7 +170,7 @@ exports.handler = async function(event, context) {
             payment_method_types: ['card'],
             customer_email: data.customerEmail,
             line_items: [{
-                price: data.priceId,
+                price: priceId,
                 quantity: 1
             }],
             mode: 'payment',
