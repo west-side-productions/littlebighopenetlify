@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Little Big Hope - Checkout</title>
+    <script>
+        // Environment variables
+        const MEMBERSTACK_LIFETIME_PLAN_ID = 'pln_lifetime-access-84l80t3u';
+        const MEMBERSTACK_FREE_PLAN_ID = 'pln_free-access-84l80t3u';
+    </script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script 
+        data-memberstack-app="app_cm24j3get009s0spw6w6wz49psh" 
+        src="https://static.memberstack.com/scripts/v1/memberstack.js" 
+        type="text/javascript"
+        async
+    ></script>
+    <style>
+        .product-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .price-display {
+            margin: 10px 0;
+        }
+        .price-display.total {
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-top: 15px;
+        }
+        .shipping-note {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+        }
+        .error-message {
+            color: red;
+            display: none;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Course Section -->
+    <div class="product-section">
+        <div class="product" data-product-type="course" data-base-price="99.99">
+            <h2>Online Cooking Course</h2>
+            <p>Price: €99.99</p>
+        </div>
+
+        <!-- Price Summary -->
+        <div class="price-summary">
+            <div class="price-display">
+                <span>Subtotal: €</span>
+                <span id="subtotal-price-course">99.99</span>
+            </div>
+            <div class="price-display">
+                <span>Shipping: €</span>
+                <span id="shipping-price-course">0.00</span>
+            </div>
+            <div class="price-display total">
+                <span>Total: €</span>
+                <span id="total-price-course">99.99</span>
+            </div>
+        </div>
+
+        <!-- Checkout Button -->
+        <button 
+            class="checkout-button" 
+            data-memberstack-content="checkout"
+            data-memberstack-bypass="true"
+            data-checkout-button
+            data-product-type="course"
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+            Proceed to Checkout (€99.99)
+        </button>
+        <div class="error-message"></div>
+    </div>
+
+    <!-- Book Section -->
+    <div class="product-section">
+        <div class="product" data-product-type="book" data-base-price="29.99">
+            <h2>Cookbook</h2>
+            <p>Price: €29.99</p>
+        </div>
+    
+        <!-- Shipping Country Selection -->
+        <div class="shipping-selection" style="margin-bottom: 15px;">
+            <label for="shipping-rate-select-book">Shipping Country:</label>
+            <select id="shipping-rate-select-book" name="Versand-nach" style="margin-left: 10px; padding: 5px;">
+                <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
+                <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
+                <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
+                <option value="shr_1QScOlJRMXFic4sW8MHW0kq7">European Union</option>
+            </select>
+        </div>
+    
+        <!-- Price Summary -->
+        <div class="price-summary">
+            <div class="price-display">
+                <span>Subtotal: €</span>
+                <span id="subtotal-price-book">29.99</span>
+            </div>
+            <div class="price-display">
+                <span>Shipping: €</span>
+                <span id="shipping-price-book">0.00</span>
+            </div>
+            <div class="price-display total">
+                <span>Total: €</span>
+                <span id="total-price-book">29.99</span>
+            </div>
+            <p class="shipping-note">Shipping costs are calculated based on your selected country.</p>
+        </div>
+    
+        <!-- Checkout Button -->
+        <button 
+            class="checkout-button" 
+            data-memberstack-content="checkout"
+            data-memberstack-bypass="true"
+            data-checkout-button
+            data-product-type="book"
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+            Proceed to Checkout (€29.99)
+        </button>
+        <div class="error-message"></div>
+    </div>
+
+    <!-- Bundle Section -->
+    <div class="product-section">
+        <div class="product" data-product-type="bundle" data-base-price="119.99">
+            <h2>Course + Book Bundle</h2>
+            <p>Price: €119.99</p>
+        </div>
+    
+        <!-- Shipping Country Selection -->
+        <div class="shipping-selection" style="margin-bottom: 15px;">
+            <label for="shipping-rate-select-bundle">Shipping Country:</label>
+            <select id="shipping-rate-select-bundle" name="Versand-nach" style="margin-left: 10px; padding: 5px;">
+                <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
+                <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
+                <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
+                <option value="shr_1QScOlJRMXFic4sW8MHW0kq7">European Union</option>
+            </select>
+        </div>
+    
+        <!-- Price Summary -->
+        <div class="price-summary">
+            <div class="price-display">
+                <span>Subtotal: €</span>
+                <span id="subtotal-price-bundle">119.99</span>
+            </div>
+            <div class="price-display">
+                <span>Shipping: €</span>
+                <span id="shipping-price-bundle">0.00</span>
+            </div>
+            <div class="price-display total">
+                <span>Total: €</span>
+                <span id="total-price-bundle">119.99</span>
+            </div>
+            <p class="shipping-note">Shipping costs are calculated based on your selected country.</p>
+        </div>
+    
+        <!-- Checkout Button -->
+        <button 
+            class="checkout-button" 
+            data-memberstack-content="checkout"
+            data-memberstack-bypass="true"
+            data-checkout-button
+            data-product-type="bundle"
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+            Proceed to Checkout (€119.99)
+        </button>
+        <div class="error-message"></div>
+    </div>
+
+    <!-- Free Plan Section -->
+    <div class="product-section">
+        <h2>Free Access</h2>
+        <p>Get started with our free content!</p>
+        <button class="checkout-button" data-checkout-button data-product-type="free">
+            Start Free Access
+        </button>
+        <div class="error-message" data-error-type="free"></div>
+    </div>
+
+    <script src="webflow-memberstack-checkout.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Show shipping sections for physical products
+            const showShippingSections = () => {
+                const sections = document.querySelectorAll('.shipping-section');
+                sections.forEach(section => {
+                    const productType = section.closest('[data-product-type]')?.dataset.productType;
+                    if (!productType) return;
+                    
+                    const config = PRODUCT_CONFIG[productType];
+                    if (config && (config.type === 'physical' || config.type === 'bundle')) {
+                        section.classList.add('visible');
+                    }
+                });
+            };
+
+            // Initialize prices for all products
+            const initializePrices = () => {
+                const products = document.querySelectorAll('[data-product-type]');
+                products.forEach(product => {
+                    const productType = product.dataset.productType;
+                    if (!productType) return;
+                    
+                    try {
+                        updateTotalPrice(productType);
+                    } catch (error) {
+                        console.warn(`Failed to initialize price for ${productType}:`, error);
+                    }
+                });
+            };
+
+            // Initialize all components
+            initializeCheckoutSystem().catch(error => {
+                console.error('Failed to initialize checkout:', error);
+            });
+        });
+    </script>
+</body>
+</html>

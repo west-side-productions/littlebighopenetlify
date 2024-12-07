@@ -256,17 +256,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Watch for Memberstack initialization
 const checkMemberstack = setInterval(() => {
-    if (typeof $memberstackDom !== 'undefined') {
+    if (typeof $memberstackDom !== 'undefined' && typeof $memberstackDom.listen === 'function') {
         clearInterval(checkMemberstack);
         $lbh.initializeMemberstack();
         
         // Add listener for member changes
-        $memberstackDom.listen('member.update', () => {
-            console.log('Member updated, rechecking language...');
-            $lbh.checkLanguageRedirect();
-        });
+        try {
+            $memberstackDom.listen('member.update', () => {
+                console.log('Member updated, rechecking language...');
+                $lbh.checkLanguageRedirect();
+            });
+        } catch (error) {
+            console.warn('Failed to add member update listener:', error);
+        }
     }
 }, 100);
+
+// Add a timeout to prevent infinite checking
+setTimeout(() => {
+    clearInterval(checkMemberstack);
+    console.warn('Memberstack initialization timed out');
+}, 5000);
 
 // Pre-select language in registration form
 (async function initRegistrationForm() {
