@@ -39,6 +39,7 @@ const SHIPPING_RATES = {
 const PRODUCT_CONFIG = {
     'course': {
         id: 'prc_course_digital',
+        type: 'course',
         requiresShipping: false,
         prices: {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
@@ -49,6 +50,7 @@ const PRODUCT_CONFIG = {
     },
     'book': {
         id: 'prc_cookbook_physical',
+        type: 'book',
         requiresShipping: true,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
@@ -59,6 +61,7 @@ const PRODUCT_CONFIG = {
     },
     'bundle': {
         id: 'prc_bundle_physical',
+        type: 'bundle',
         requiresShipping: true,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
@@ -69,6 +72,7 @@ const PRODUCT_CONFIG = {
     },
     'free-plan': {
         id: 'prc_free_digital',
+        type: 'free-plan',
         requiresShipping: false,
         prices: {}
     }
@@ -148,10 +152,11 @@ exports.handler = async function(event, context) {
         });
 
         // Validate product type (check both type and productType)
-        const productType = data.productType || data.type;
+        const productType = data.metadata?.productType || data.metadata?.type || data.type;
         if (!productType || !PRODUCT_CONFIG[productType]) {
             console.error('Invalid or missing product type:', { 
                 productType,
+                metadata: data.metadata,
                 availableTypes: Object.keys(PRODUCT_CONFIG)
             });
             return {

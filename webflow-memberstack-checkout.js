@@ -416,31 +416,41 @@ async function startCheckout(config) {
         }
 
         // Get language
-        const { detected: language } = await getPreferredLanguage();
+        const language = await getPreferredLanguage();
+        const productType = config.type || config.version;
+        const productConfig = PRODUCT_CONFIG[productType];
         
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${productType}`);
+        }
+
         // Get price ID for the current type
-        const priceId = PRODUCT_CONFIG[config.type].prices[language];
+        const priceId = productConfig.prices[language];
         if (!priceId) {
-            throw new Error(`No price found for type ${config.type} and language ${language}`);
+            throw new Error(`No price found for type ${productType} and language ${language}`);
         }
 
         // Create the request payload
         const payload = {
             priceId,
-            productType: config.type,          // Changed from type to productType to match server
             customerEmail: config.customerEmail,
             language,
             metadata: {
-                language,                     
-                countryCode: 'DE',            
-                source: window.location.pathname
+                type: productConfig.type,
+                productType: productType,
+                requiresShipping: productConfig.requiresShipping,
+                language,
+                countryCode: 'DE',
+                source: window.location.pathname,
+                memberstackUserId: config.memberstackUserId,
+                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
             },
             successUrl: window.location.origin + '/vielen-dank-email',
             cancelUrl: window.location.origin + '/produkte'
         };
 
         // Add shipping rate for physical products
-        if (PRODUCT_CONFIG[config.type].requiresShipping && config.shippingRateId) {
+        if (productConfig.requiresShipping && config.shippingRateId) {
             payload.shippingRateId = config.shippingRateId;
             
             // Get shipping rate details
@@ -448,6 +458,17 @@ async function startCheckout(config) {
             if (shippingRate) {
                 payload.metadata.countryCode = shippingRate.countries[0] || 'DE';
             }
+
+            // Add physical product details
+            if (productConfig.weight) {
+                payload.metadata.totalWeight = productConfig.weight + (productConfig.packagingWeight || 0);
+                payload.metadata.productWeight = productConfig.weight;
+                payload.metadata.packagingWeight = productConfig.packagingWeight || 0;
+            }
+            if (productConfig.dimensions) {
+                payload.metadata.dimensions = JSON.stringify(productConfig.dimensions);
+            }
+            payload.metadata.shippingClass = productConfig.shippingClass || 'standard';
         }
 
         console.log('Creating checkout session with payload:', JSON.stringify(payload, null, 2));
@@ -461,6 +482,7 @@ async function startCheckout(config) {
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('Checkout error response:', errorData);
             throw new Error(`Failed to create checkout session: ${response.status} ${errorData.error || ''}`);
         }
 
@@ -767,49 +789,19 @@ function initializeCheckoutButton() {
 }
 
 // Function to get user's preferred language
-async function getPreferredLanguage() {
-    log('Starting language detection...');
+function getPreferredLanguage() {
+    // Check URL path first
+    const path = window.location.pathname;
+    if (path.startsWith('/it/')) return 'it';
+    if (path.startsWith('/en/')) return 'en';
     
-    // Check Memberstack language first
-    log('Checking Memberstack language...');
-    try {
-        const member = await getCurrentMember();
-        if (member) {
-            const memberstackLanguage = member.language;
-            if (memberstackLanguage) {
-                log('Found language in Memberstack:', memberstackLanguage);
-                return {
-                    source: 'memberstack',
-                    detected: memberstackLanguage
-                };
-            }
-        }
-    } catch (error) {
-        console.error('Error getting Memberstack language:', error);
+    // Check browser language
+    const browserLang = navigator.language || navigator.userLanguage;
+    if (browserLang) {
+        const lang = browserLang.toLowerCase().split('-')[0];
+        if (lang === 'it' || lang === 'en') return lang;
     }
-
-    // Check URL path
-    const pathParts = window.location.pathname.split('/').filter(Boolean);
-    const firstPathPart = pathParts[0]?.toLowerCase();
     
-    if (['de', 'en', 'fr', 'it'].includes(firstPathPart)) {
-        log('Language detection complete:', {
-            source: 'url',
-            detected: firstPathPart
-        });
-        return {
-            source: 'url',
-            detected: firstPathPart
-        };
-    }
-
     // Default to German
-    log('Language detection complete:', {
-        source: 'default',
-        detected: 'de'
-    });
-    return {
-        source: 'default',
-        detected: 'de'
-    };
+    return 'de';
 }
