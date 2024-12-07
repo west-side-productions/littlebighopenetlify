@@ -169,48 +169,102 @@ exports.handler = async function(event, context) {
         // Get product configuration
         const productConfig = PRODUCT_CONFIG[productType];
         
-        // Create session configuration
+        // Create session configuration with full shipping options
         const sessionParams = {
+            mode: 'payment',
             payment_method_types: ['card'],
-            customer_email: data.customerEmail,
             line_items: [{
                 price: data.priceId,
-                quantity: 1
+                quantity: 1,
+                adjustable_quantity: {
+                    enabled: true,
+                    minimum: 1,
+                    maximum: 10
+                }
             }],
-            mode: 'payment',
-            success_url: `${data.successUrl || 'https://www.littlebighope.com/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
+            shipping_address_collection: {
+                allowed_countries: ['AT', 'DE', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+            },
+            shipping_options: [
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 500,
+                            currency: 'eur',
+                        },
+                        display_name: 'Standard Shipping (Austria)',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                        metadata: {
+                            country: 'AT'
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 1000,
+                            currency: 'eur',
+                        },
+                        display_name: 'Standard Shipping (Germany)',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        },
+                        metadata: {
+                            country: 'DE'
+                        }
+                    }
+                },
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: 1000,
+                            currency: 'eur',
+                        },
+                        display_name: 'Standard Shipping (EU)',
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 7,
+                            },
+                        }
+                    }
+                }
+            ],
             metadata: {
                 version: data.version,
                 ...data.metadata,
                 source: data.metadata?.source || 'checkout',
-                countryCode: data.countryCode || 'DE',
                 language: data.language || 'de'
             },
-            payment_intent_data: {
-                metadata: {
-                    version: data.version,
-                    ...data.metadata,
-                    source: data.metadata?.source || 'checkout',
-                    countryCode: data.countryCode || 'DE',
-                    language: data.language || 'de'
-                }
-            },
+            success_url: `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.SITE_URL}/cancel`,
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             locale: data.language || 'de'
         };
-
-        // Add shipping options only for products that require shipping
-        if (productConfig.requiresShipping && data.shippingRateId) {
-            const shippingRate = validateShippingRate(data.shippingRateId);
-            sessionParams.shipping_address_collection = {
-                allowed_countries: shippingRate.countries
-            };
-            sessionParams.shipping_options = [{
-                shipping_rate: data.shippingRateId
-            }];
-        }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
         const session = await stripe.checkout.sessions.create(sessionParams);

@@ -252,55 +252,179 @@ async function initializeDependencies() {
 const emailTemplates = {
     orderConfirmation: {
         subject: 'Order Confirmation - Little Big Hope',
-        html: (data) => `<p>Thank you for your order!</p><p>Your order details:</p><pre>${JSON.stringify(data, null, 2)}</pre>`,
-        text: (data) => `Thank you for your order!
+        html: (data) => `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { text-align: center; margin-bottom: 30px; }
+                    .details { background: #f9f9f9; padding: 20px; border-radius: 5px; }
+                    .footer { text-align: center; margin-top: 30px; font-size: 0.9em; color: #666; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Thank You for Your Order!</h1>
+                    </div>
+                    <p>Hello,</p>
+                    <p>Thank you for your purchase from Little Big Hope. We're excited to have you as a customer!</p>
+                    <div class="details">
+                        <h2>Order Details:</h2>
+                        <p>Order ID: ${data.id}</p>
+                        <p>Date: ${new Date().toLocaleDateString()}</p>
+                        <p>Product: ${data.metadata?.productType || 'Product'}</p>
+                        ${data.shipping ? `
+                            <h3>Shipping Information:</h3>
+                            <p>Shipping Method: ${data.shipping.carrier}</p>
+                            <p>Estimated Delivery: 3-5 business days</p>
+                        ` : ''}
+                    </div>
+                    <div class="footer">
+                        <p>If you have any questions, please contact us at support@littlebighope.com</p>
+                        <p> Little Big Hope. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `,
+        text: (data) => `
+Thank You for Your Order!
 
-Your order details:
-${JSON.stringify(data, null, 2)}`
+Hello,
+
+Thank you for your purchase from Little Big Hope. We're excited to have you as a customer!
+
+Order Details:
+-------------
+Order ID: ${data.id}
+Date: ${new Date().toLocaleDateString()}
+Product: ${data.metadata?.productType || 'Product'}
+${data.shipping ? `
+Shipping Information:
+-------------------
+Shipping Method: ${data.shipping.carrier}
+Estimated Delivery: 3-5 business days
+` : ''}
+
+If you have any questions, please contact us at support@littlebighope.com
+
+ Little Big Hope. All rights reserved.
+        `
     },
     orderNotification: {
-        subject: 'New Order Notification',
-        html: (data) => `<p>New order received!</p><p>Order details:</p><pre>${JSON.stringify(data, null, 2)}</pre>`,
-        text: (data) => `New order received!
+        subject: 'New Order Notification - Little Big Hope',
+        html: (data) => `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: #f5f5f5; padding: 20px; margin-bottom: 30px; }
+                    .details { background: #fff; padding: 20px; border: 1px solid #ddd; }
+                    .customer-info { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>New Order Received</h1>
+                        <p>Order ID: ${data.id}</p>
+                    </div>
+                    <div class="details">
+                        <h2>Order Details</h2>
+                        <p>Date: ${new Date().toLocaleDateString()}</p>
+                        <p>Product Type: ${data.metadata?.productType || 'Not specified'}</p>
+                        <p>Language: ${data.metadata?.language || 'Not specified'}</p>
+                        <p>Amount: ${data.amount_total ? (data.amount_total / 100).toFixed(2) : 'N/A'} ${data.currency?.toUpperCase() || 'EUR'}</p>
+                        
+                        <div class="customer-info">
+                            <h3>Customer Information</h3>
+                            <p>Email: ${data.customer_email || 'Not provided'}</p>
+                            ${data.shipping ? `
+                                <h3>Shipping Details</h3>
+                                <p>Name: ${data.shipping.name}</p>
+                                <p>Address: ${data.shipping.address.line1}</p>
+                                <p>City: ${data.shipping.address.city}</p>
+                                <p>Country: ${data.shipping.address.country}</p>
+                                <p>Postal Code: ${data.shipping.address.postal_code}</p>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `,
+        text: (data) => `
+New Order Received
+-----------------
+Order ID: ${data.id}
 
-Order details:
-${JSON.stringify(data, null, 2)}`
+Order Details:
+-------------
+Date: ${new Date().toLocaleDateString()}
+Product Type: ${data.metadata?.productType || 'Not specified'}
+Language: ${data.metadata?.language || 'Not specified'}
+Amount: ${data.amount_total ? (data.amount_total / 100).toFixed(2) : 'N/A'} ${data.currency?.toUpperCase() || 'EUR'}
+
+Customer Information:
+-------------------
+Email: ${data.customer_email || 'Not provided'}
+
+${data.shipping ? `Shipping Details:
+----------------
+Name: ${data.shipping.name}
+Address: ${data.shipping.address.line1}
+City: ${data.shipping.address.city}
+Country: ${data.shipping.address.country}
+Postal Code: ${data.shipping.address.postal_code}` : ''}
+        `
     }
 };
 
 // Function to send order confirmation email
 async function sendOrderConfirmationEmail(email, session) {
+    if (!email) {
+        console.error('No email provided for order confirmation');
+        return;
+    }
+
     const msg = {
         to: email,
-        from: 'no-reply@littlebighope.com', // Use your verified sender
+        from: 'no-reply@littlebighope.com',
         subject: emailTemplates.orderConfirmation.subject,
         html: emailTemplates.orderConfirmation.html(session),
         text: emailTemplates.orderConfirmation.text(session),
     };
 
     try {
-        // await sgMail.send(msg);
-        console.log('Order confirmation email sent');
+        await sgMail.send(msg);
+        console.log('Order confirmation email sent to:', email);
     } catch (error) {
         console.error('Error sending order confirmation email:', error);
+        throw error;
     }
 }
 
 // Function to send order notification email
 async function sendOrderNotificationEmail(session) {
     const msg = {
-        to: 'admin@littlebighope.com', // Admin email
-        from: 'no-reply@littlebighope.com', // Use your verified sender
+        to: 'admin@littlebighope.com',
+        from: 'no-reply@littlebighope.com',
         subject: emailTemplates.orderNotification.subject,
         html: emailTemplates.orderNotification.html(session),
         text: emailTemplates.orderNotification.text(session),
     };
 
     try {
-        // await sgMail.send(msg);
-        console.log('Order notification email sent');
+        await sgMail.send(msg);
+        console.log('Order notification email sent to admin');
     } catch (error) {
         console.error('Error sending order notification email:', error);
+        throw error;
     }
 }
 
