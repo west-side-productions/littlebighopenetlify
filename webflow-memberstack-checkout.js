@@ -280,24 +280,15 @@ async function sendOrderNotificationEmail(session) {
 async function handleCheckout(event, button) {
     try {
         event.preventDefault();
-        event.stopPropagation();
         
-        // Get the product type from the button
+        // Get product type and map to version
         const productType = button.getAttribute('data-product-type');
-        if (!productType) {
-            throw new Error('Product type not specified');
-        }
-
-        // Map product type to version
-        const version = BUTTON_VERSION_MAP[productType];
-        if (!version) {
-            throw new Error('Invalid product type: ' + productType);
-        }
-
-        log('Processing checkout:', {
+        const version = productType === 'course' ? 'digital' : 'physical-book';
+        
+        log('Starting checkout for:', {
             productType,
             version,
-            buttonData: button.dataset
+            button
         });
 
         // Get current member info
@@ -321,9 +312,9 @@ async function handleCheckout(event, button) {
 
         // Create checkout config
         const checkoutConfig = {
-            version: version,
+            version: version,  // Include version at root level
             customerEmail: customerEmail,
-            metadata: await getCheckoutMetadata(version)
+            metadata: await getCheckoutMetadata(version, { productType })
         };
 
         // Add shipping rate if required
@@ -391,13 +382,12 @@ async function startCheckout(config) {
         // Create the request payload
         const payload = {
             priceId,
-            version: config.version, // Ensure version is included at root level
+            version: config.version,  // Include version at root level
             customerEmail: config.customerEmail,
             language: language,
             metadata: {
                 ...config.metadata,
-                version: config.version, // Ensure version is also in metadata
-                source: 'checkout',
+                version: config.version,  // Also include version in metadata
                 language: language
             },
             successUrl: window.location.origin + (successUrls[language] || successUrls.de),
@@ -565,34 +555,46 @@ function updateTotalPrice(version, shippingRateId = null) {
 }
 
 // Update metadata for checkout
-function getCheckoutMetadata(version, config = {}) {
-    const productConfig = PRODUCT_CONFIG[version];
-    if (!productConfig) {
-        console.error(`Invalid version: ${version}`);
-        return {};
-    }
+async function getCheckoutMetadata(version, config = {}) {
+    try {
+        // Get current member info
+        let memberstackUserId = '';
+        try {
+            const member = await getCurrentMember();
+            memberstackUserId = member?.data?.id || '';
+        } catch (error) {
+            console.warn('Failed to get member ID:', error);
+        }
 
-    const metadata = {
-        version: version, // Explicitly include version
-        requiresShipping: productConfig.requiresShipping || false,
-        shippingClass: productConfig.shippingClass || 'standard',
-        countryCode: 'DE',
-        dimensions: productConfig.dimensions || null,
-        productWeight: productConfig.totalWeight,
-        packagingWeight: productConfig.packagingWeight || 0,
-        totalWeight: calculateTotalWeight(productConfig),
-        source: window.location.pathname,
-        language: 'de'  // Default to German
-    };
+        // Get product configuration
+        const productConfig = PRODUCT_CONFIG[version];
+        if (!productConfig) {
+            throw new Error(`Invalid version: ${version}`);
+        }
 
-    if (config.memberstackId) {
-        metadata.memberstackUserId = config.memberstackId;
-    }
-    if (config.planId) {
-        metadata.planId = config.planId;
-    }
+        // Build metadata
+        const metadata = {
+            memberstackUserId,
+            version,  // Include version in metadata
+            productType: config.productType || version,
+            type: version,  // Use version as type
+            language: (await getPreferredLanguage()).detected || 'de',
+            source: window.location.pathname,
+            planId: 'pln_kostenloser-zugang-84l80t3u',
+            requiresShipping: productConfig.requiresShipping || false,
+            totalWeight: productConfig.totalWeight || null,
+            packagingWeight: productConfig.packagingWeight || 0,
+            dimensions: productConfig.dimensions || null,
+            shippingClass: productConfig.shippingClass || 'standard',
+            countryCode: 'DE'  // Default to DE
+        };
 
-    return metadata;
+        log('Generated checkout metadata:', metadata);
+        return metadata;
+    } catch (error) {
+        console.error('Error generating metadata:', error);
+        throw error;
+    }
 }
 
 // Handle membershome functionality

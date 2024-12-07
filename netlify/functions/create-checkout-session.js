@@ -184,7 +184,7 @@ exports.handler = async function(event, context) {
 
         // Get price ID based on product type and language
         const language = data.language || 'de';
-        const priceId = productConfig.prices[language];
+        const priceId = data.priceId || productConfig.prices[language];
         if (!priceId) {
             throw new Error(`No price found for product ${data.version} in language ${language}`);
         }
@@ -210,7 +210,7 @@ exports.handler = async function(event, context) {
         const metadata = {
             version: data.version,  // Ensure version is included in metadata
             ...data.metadata,
-            source: data.metadata.source || 'checkout',
+            source: data.metadata?.source || 'checkout',
             countryCode: countryCode,
             language: data.language || 'de'
         };
