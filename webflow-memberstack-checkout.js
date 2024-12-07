@@ -294,22 +294,25 @@ async function handleCheckout(event) {
             throw new Error('No button found in event');
         }
         
-        const version = button.getAttribute('data-product-type');
-        if (!version) {
+        const buttonType = button.getAttribute('data-product-type');
+        if (!buttonType || !BUTTON_VERSION_MAP[buttonType]) {
             console.error('Invalid button type:', {
                 buttonType: button.getAttribute('data-product-type'),
-                availableTypes: Object.keys(PRODUCT_CONFIG),
+                availableTypes: Object.keys(BUTTON_VERSION_MAP),
                 buttonElement: button
             });
             throw new Error(`Invalid button type: ${button.getAttribute('data-product-type')}`);
         }
         
+        const version = BUTTON_VERSION_MAP[buttonType];
+        
         log('Button data:', {
+            buttonType,
             version,
             buttonElement: button,
             buttonDataset: button.dataset,
             buttonAttributes: {
-                'data-product-type': version,
+                'data-product-type': buttonType,
                 'data-checkout-button': button.getAttribute('data-checkout-button')
             }
         });
@@ -330,10 +333,10 @@ async function handleCheckout(event) {
         const checkoutConfig = {
             version: version, // Ensure version is at the root level
             customerEmail: member?.email || '',
-            metadata: {
+            metadata: getCheckoutMetadata(version, {
                 memberstackId: member?.id,
                 planId: member?.planId
-            }
+            })
         };
         
         // Add shipping if required
@@ -360,89 +363,6 @@ async function handleCheckout(event) {
     }
 }
 
-async function startCheckout(config) {
-    log('Starting checkout process');
-    
-    try {
-        if (!config.version) {
-            throw new Error('Version is required for checkout');
-        }
-
-        const productConfig = PRODUCT_CONFIG[config.version];
-        if (!productConfig) {
-            throw new Error(`Invalid product version: ${config.version}`);
-        }
-
-        log('Using product configuration:', {
-            version: productConfig.version,
-            config: productConfig,
-            shippingRequired: productConfig.requiresShipping,
-            shippingRate: productConfig.shippingRate
-        });
-
-        const language = await getPreferredLanguage();
-        const priceId = getPriceIdForLanguage(productConfig, language);
-
-        // Create the request payload with version at root level
-        const checkoutConfig = {
-            version: config.version, // Ensure version is at root level
-            priceId,
-            customerEmail: config.customerEmail,
-            language,
-            successUrl: getSuccessUrl(language),
-            cancelUrl: getCancelUrl(language),
-            metadata: {
-                memberstackUserId: config.metadata?.memberstackId,
-                version: config.version,
-                language,
-                source: window.location.pathname,
-                planId: config.metadata?.planId,
-                requiresShipping: productConfig.requiresShipping,
-                totalWeight: productConfig.totalWeight || null,
-                packagingWeight: productConfig.packagingWeight || 0,
-                dimensions: productConfig.dimensions || null,
-                shippingClass: productConfig.shippingClass || 'standard',
-                countryCode: config.metadata?.countryCode || 'DE'
-            }
-        };
-
-        if (productConfig.requiresShipping && config.shippingRateId) {
-            checkoutConfig.shippingRateId = config.shippingRateId;
-        }
-
-        log('Creating checkout session:', checkoutConfig);
-
-        const response = await fetch('/.netlify/functions/create-checkout-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(checkoutConfig)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.text();
-            log('Checkout session creation failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorData
-            });
-            throw new Error(`Failed to create checkout session: ${response.status}`);
-        }
-
-        const { sessionId } = await response.json();
-        const stripe = await getStripe();
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        
-        if (error) {
-            log('Stripe redirect error:', error);
-            throw error;
-        }
-    } catch (error) {
-        log('Error creating checkout session:', error);
-        throw error;
-    }
-}
 
 // Initialize checkout buttons
 function initializeCheckoutButtons() {
@@ -556,14 +476,24 @@ function updateTotalPrice(version, shippingRateId = null) {
 function getCheckoutMetadata(version, config = {}) {
     const metadata = {
         version: version,
-        type: PRODUCT_CONFIG[version]?.version || 'unknown',
         requiresShipping: PRODUCT_CONFIG[version]?.requiresShipping || false,
         shippingClass: 'standard',
-        countryCode: 'DE'
+        countryCode: 'DE',
+        dimensions: PRODUCT_CONFIG[version]?.dimensions || null,
+        productWeight: PRODUCT_CONFIG[version]?.totalWeight,
+        packagingWeight: PRODUCT_CONFIG[version]?.packagingWeight || 0,
+        totalWeight: calculateTotalWeight(PRODUCT_CONFIG[version]),
+        language: getPreferredLanguage()
     };
 
     if (config.memberstackId) {
         metadata.memberstackUserId = config.memberstackId;
+    }
+    if (config.planId) {
+        metadata.planId = config.planId;
+    }
+    if (config.source) {
+        metadata.source = config.source;
     }
 
     return metadata;

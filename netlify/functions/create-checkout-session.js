@@ -208,6 +208,7 @@ exports.handler = async function(event, context) {
 
         // Create metadata object
         const metadata = {
+            version: data.version,  // Ensure version is included at top level
             ...data.metadata,
             source: data.metadata.source || 'checkout',
             countryCode: countryCode,
