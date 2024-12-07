@@ -377,7 +377,7 @@ async function startCheckout(shippingRateId = null, productType = null) {
                     language: getPreferredLanguage(),
                     source: window.location.pathname,
                     planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
-                    requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle',
+                    requiresShipping: productConfig.requiresShipping,
                     totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
                     productWeight: productConfig.weight,
                     packagingWeight: productConfig.packagingWeight || 0,
