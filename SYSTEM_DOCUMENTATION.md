@@ -123,7 +123,54 @@
    };
    ```
 
-4. **Error Handling**
+### Order Email System
+1. **Email Types**
+   - `orderConfirmation`: Sent to customers after successful purchase
+   - `orderNotification`: Sent to shipping company for physical products
+
+2. **Trigger Conditions**
+   ```javascript
+   // Order confirmation email
+   if (session.customer_details?.email) {
+       await sendOrderConfirmationEmail(session.customer_details.email, session);
+   }
+
+   // Shipping notification email
+   if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
+       await sendOrderNotificationEmail(session);
+   }
+   ```
+
+3. **Template Structure**
+   - Both HTML and text versions available
+   - Language-specific content based on user preferences
+   - Dynamic content injection for order details
+   - Includes:
+     - Order summary
+     - Shipping details (if applicable)
+     - Payment confirmation
+     - Next steps instructions
+
+4. **Email Templates Location**
+   - Path: `/netlify/functions/email-templates/[language].js`
+   - Supported languages: de, en, fr, it
+   - Example structure:
+   ```javascript
+   module.exports = {
+       orderConfirmation: {
+           subject: 'Order Confirmation - Little Big Hope',
+           html: (data) => `...`,
+           text: (data) => `...`
+       },
+       orderNotification: {
+           subject: 'New Order Notification',
+           html: (data) => `...`,
+           text: (data) => `...`
+       }
+   };
+   ```
+
+### Error Handling
    - Retry mechanism for failed sends
    - Error logging and monitoring
    - Fallback templates
