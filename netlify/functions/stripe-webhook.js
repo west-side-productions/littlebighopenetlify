@@ -105,16 +105,19 @@ async function sendOrderNotificationEmail(session) {
         console.log('Prepared email data:', JSON.stringify(emailData, null, 2));
 
         // Verify template exists
-        if (!emailTemplates.de.order_notification) {
-            throw new Error('Email template "order_notification" not found');
+        if (!emailTemplates.de.orderNotification) {
+            console.error('Available templates:', Object.keys(emailTemplates.de));
+            throw new Error('Email template "orderNotification" not found');
         }
 
         const msg = {
             to: 'office@west-side-productions.at',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: 'Neue Bestellung eingegangen',
-            text: emailTemplates.de.order_notification.html(emailData),
-            html: emailTemplates.de.order_notification.html(emailData),
+            text: emailTemplates.de.orderNotification.text ? 
+                  emailTemplates.de.orderNotification.text(emailData) : 
+                  emailTemplates.de.orderNotification.html(emailData).replace(/<[^>]*>/g, ''),
+            html: emailTemplates.de.orderNotification.html(emailData)
         };
 
         console.log('Sending email with SendGrid:', {
