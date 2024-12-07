@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Watch for Memberstack initialization
 const checkMemberstack = setInterval(() => {
-    if (typeof $memberstackDom !== 'undefined' && typeof $memberstackDom.listen === 'function') {
+    if (typeof $memberstackDom !== 'undefined') {
         clearInterval(checkMemberstack);
         $lbh.initializeMemberstack();
         
@@ -317,7 +317,7 @@ window.$memberstackDom = {
     customDomains: true,
     onReady() {
         console.log("Memberstack ready, dispatching initialized event");
-        window.dispatchEvent(new Event('memberstack:initialized'));
+        document.dispatchEvent(new Event('memberstack.ready'));
         // Check if we need to redirect based on language
         if (!location.pathname.includes('/verify') && 
             !location.pathname.includes('/verification-success') && 
@@ -329,7 +329,7 @@ window.$memberstackDom = {
     },
     onError(error) {
         console.error("Memberstack initialization error:", error);
-        window.dispatchEvent(new CustomEvent('memberstack:error', { detail: error }));
+        window.dispatchEvent(new CustomEvent('memberstack.error', { detail: error }));
     }
 };
 </script>
@@ -350,7 +350,7 @@ window.$memberstackDom = {
         if (!window.$memberstackDom?.getCurrentMember) {
             console.log('Waiting for Memberstack...');
             await new Promise((resolve) => {
-                window.addEventListener('memberstack:initialized', resolve);
+                document.addEventListener('memberstack.ready', resolve);
                 setTimeout(resolve, 15000); // Timeout after 15s
             });
         }
@@ -364,7 +364,7 @@ window.$memberstackDom = {
             if (email && token) {
                 console.log('Handling verification success...');
                 try {
-                    await $memberstackDom.verifyEmail({ email, token });
+                    await window.$memberstackDom.verifyEmail({ email, token });
                     console.log('Email verified successfully');
                 } catch (error) {
                     console.error('Error verifying email:', error);

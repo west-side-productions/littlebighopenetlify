@@ -111,11 +111,22 @@ exports.handler = async function(event, context) {
     }
 
     try {
+        console.log('Raw event body:', event.body);
         const data = JSON.parse(event.body);
-        console.log('Received checkout request:', data);
+        console.log('Parsed request data:', {
+            rawData: data,
+            productType: data.productType,
+            typeofProductType: typeof data.productType,
+            hasProductType: 'productType' in data,
+            dataKeys: Object.keys(data)
+        });
 
         // Validate required fields
         if (!data.productType) {
+            console.log('Product type validation failed:', {
+                productType: data.productType,
+                truthyCheck: !!data.productType
+            });
             throw new Error('Missing required field: productType');
         }
         if (!data.customerEmail) {
