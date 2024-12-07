@@ -336,28 +336,41 @@ async function startCheckout(shippingRateId = null, productType = null) {
 
     try {
         // Check if user is logged in
-        const member = await window.$memberstackDom.getCurrentMember();
+        const member = await window.memberstack.getCurrentMember();
         if (!member?.data) {
             // Store checkout state
-            localStorage.setItem('checkoutConfig', JSON.stringify({
+            const checkoutConfig = {
                 productType: productType,
                 shippingRateId: shippingRateId
-            }));
+            };
+            localStorage.setItem('checkoutConfig', JSON.stringify(checkoutConfig));
             localStorage.setItem('checkoutRedirectUrl', window.location.pathname + window.location.search);
             window.location.href = '/registrieren';
             return;
         }
 
         // Create checkout session with weight information
-        const apiEndpoint = window.location.hostname === 'localhost' 
-            ? 'http://localhost:8888/.netlify/functions/create-checkout-session'
-            : 'https://littlebighope.netlify.app/.netlify/functions/create-checkout-session';
+        const apiEndpoint = window.location.protocol === 'file:' 
+            ? 'https://littlebighope.netlify.app/.netlify/functions/create-checkout-session'
+            : (window.location.hostname === 'localhost' 
+                ? 'http://localhost:8888/.netlify/functions/create-checkout-session'
+                : 'https://littlebighope.netlify.app/.netlify/functions/create-checkout-session');
             
         log('Making checkout request to:', apiEndpoint);
+        const language = await getPreferredLanguage();
+        
+        // Debug logging
+        log('Debug - Product Type:', {
+            rawProductType: productType,
+            typeofProductType: typeof productType,
+            productConfig: productConfig,
+            configKeys: Object.keys(PRODUCT_CONFIG)
+        });
+        
         const payload = {
-            productType,
-            shippingRateId,
-            language: getPreferredLanguage(),
+            productType: productType,  // Ensure this is explicitly set
+            shippingRateId: shippingRateId,
+            language: language,
             customerEmail: member.data.auth.email,
             memberstackUserId: member.data.id,
             weights: productConfig.requiresShipping ? {
@@ -369,7 +382,7 @@ async function startCheckout(shippingRateId = null, productType = null) {
                 memberstackUserId: member.data.id,
                 productType: productType,
                 type: productConfig.type,
-                language: getPreferredLanguage(),
+                language: language,
                 source: window.location.pathname,
                 planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
                 requiresShipping: productConfig.requiresShipping,
@@ -380,10 +393,17 @@ async function startCheckout(shippingRateId = null, productType = null) {
                 shippingClass: productConfig.shippingClass || 'standard'
             }
         };
+        
+        log('Debug - Final Payload:', {
+            rawPayload: payload,
+            stringifiedPayload: JSON.stringify(payload)
+        });
+        
         const response = await fetch(apiEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             body: JSON.stringify(payload)
         }).catch(error => {
@@ -466,6 +486,46 @@ async function handleMembershome() {
             }
         }
     }
+}
+
+// Function to wait for Memberstack to be ready
+function waitForMemberstack(timeout = 5000) {
+    return new Promise((resolve) => {
+        // If Memberstack is already available, resolve immediately
+        if (window.$memberstackDom) {
+            log('Memberstack already available');
+            memberstackInitialized = true;
+            resolve(window.$memberstackDom);
+            return;
+        }
+
+        log('Waiting for Memberstack...');
+
+        // Listen for Memberstack ready event
+        document.addEventListener('memberstack.ready', () => {
+            log('Memberstack ready event received');
+            memberstackInitialized = true;
+            resolve(window.$memberstackDom);
+        });
+
+        // Fallback: check periodically
+        const checkInterval = setInterval(() => {
+            if (window.$memberstackDom) {
+                clearInterval(checkInterval);
+                clearTimeout(timeoutId);
+                log('Memberstack found through polling');
+                memberstackInitialized = true;
+                resolve(window.$memberstackDom);
+            }
+        }, 100);
+
+        // Set a timeout to avoid hanging
+        const timeoutId = setTimeout(() => {
+            clearInterval(checkInterval);
+            log('NO MEMBERSTACK AVAILABLE, using localStorage');
+            resolve(null);
+        }, timeout);
+    });
 }
 
 // Initialize shipping rate selection
@@ -639,46 +699,6 @@ function initializeCheckoutButton() {
     }
     log('Legacy initializeCheckoutButton called - using main initialization');
     return initializeCheckoutSystem();
-}
-
-// Function to wait for Memberstack to be ready
-function waitForMemberstack(timeout = 5000) {
-    return new Promise((resolve) => {
-        // If Memberstack is already available, resolve immediately
-        if (window.$memberstackDom) {
-            log('Memberstack already available');
-            memberstackInitialized = true;
-            resolve(window.$memberstackDom);
-            return;
-        }
-
-        log('Waiting for Memberstack...');
-
-        // Listen for Memberstack ready event
-        document.addEventListener('memberstack.ready', () => {
-            log('Memberstack ready event received');
-            memberstackInitialized = true;
-            resolve(window.$memberstackDom);
-        });
-
-        // Fallback: check periodically
-        const checkInterval = setInterval(() => {
-            if (window.$memberstackDom) {
-                clearInterval(checkInterval);
-                clearTimeout(timeoutId);
-                log('Memberstack found through polling');
-                memberstackInitialized = true;
-                resolve(window.$memberstackDom);
-            }
-        }, 100);
-
-        // Set a timeout to avoid hanging
-        const timeoutId = setTimeout(() => {
-            clearInterval(checkInterval);
-            log('NO MEMBERSTACK AVAILABLE, using localStorage');
-            resolve(null);
-        }, timeout);
-    });
 }
 
 // Document ready handler
