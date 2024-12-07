@@ -82,67 +82,72 @@ The system supports multiple languages (de, en, fr, it) with German (de) as the 
    5. Default to 'de'
    ```
 
-2. **Registration Form**:
-   - The registration form includes a language select field with Memberstack integration:
-   ```html
-   <select data-ms-field="language" data-ms-member="language">
-       <option value="en">English</option>
-       <option value="it">Italiano</option>
-       <option value="fr">Français</option>
-       <option value="de">Deutsch</option>
-   </select>
-   ```
-   - The detected language is automatically pre-selected in this dropdown
-   - The selected language is saved as a custom field in the member's Memberstack profile upon registration
-
-3. **Language Detection Implementation**:
+2. **Initialization and Event Handling**:
    ```javascript
-   const LANGUAGE_CONFIG = {
-       supported: ['de', 'en', 'fr', 'it'],
-       default: 'de'
-   };
-
-   // Language detection function
-   language: () => {
-       // 1. Try Memberstack (highest priority for logged-in users)
-       if (member?.data?.customFields?.language) {
-           return member.data.customFields.language;
+   // Core initialization tracking
+   memberStackAvailable: false,  // Starts as false until confirmed
+   
+   // Memberstack initialization tracking
+   initializeMemberstack: function() {
+       if (typeof $memberstackDom !== 'undefined') {
+           console.log('Memberstack initialized');
+           $lbh.memberStackAvailable = true;
+           $lbh.checkLanguageRedirect();
        }
-
-       // 2. Try Webflow's current locale
-       const currentLocaleLink = document.querySelector('.w-locales-item a.w--current');
-       if (currentLocaleLink?.getAttribute('hreflang')) {
-           return hrefLang;
-       }
-
-       // 3. Try URL path
-       const pathParts = window.location.pathname.split('/');
-       if (LANGUAGE_CONFIG.supported.includes(pathParts[1])) {
-           return pathParts[1];
-       }
-
-       // 4. Try browser language
-       const browserLang = navigator.language.split('-')[0].toLowerCase();
-       if (LANGUAGE_CONFIG.supported.includes(browserLang)) {
-           return browserLang;
-       }
-
-       // 5. Fallback to default
-       return LANGUAGE_CONFIG.default;
    }
+   
+   // Event listeners
+   document.addEventListener('DOMContentLoaded', () => {
+       $lbh.checkLanguageRedirect();
+   });
+   
+   // Memberstack initialization check
+   const checkMemberstack = setInterval(() => {
+       if (typeof $memberstackDom !== 'undefined') {
+           clearInterval(checkMemberstack);
+           $lbh.initializeMemberstack();
+           
+           // Listen for member updates
+           $memberstackDom.listen('member.update', () => {
+               $lbh.checkLanguageRedirect();
+           });
+       }
+   }, 100);
    ```
 
-4. **URL Structure**:
+3. **URL Structure and Redirection**:
    - Default language (de): `domain.com/page`
    - Other languages: `domain.com/[lang]/page`
    - Example: `domain.com/en/products`
+   
+   The system automatically redirects users based on their detected language:
+   - Root path ('/'): Redirects to /{lang}/ if language is not German
+   - Language path: Redirects if current language prefix doesn't match detected language
+   - Non-language path: Adds language prefix if detected language is not German
 
-5. **Language Persistence**:
-   - Language preference is stored in Memberstack custom fields for registered users
-   - The system automatically redirects users to their preferred language path
-   - Non-logged-in users are directed based on the language detection priority
+4. **Logging and Debugging**:
+   The system includes comprehensive logging for debugging:
+   - Language detection process and source
+   - Current path and detected language information
+   - Redirect decisions and target URLs
+   - Error tracking with stack traces
+   
+   Example log output:
+   ```javascript
+   Starting language redirect check...
+   Current path: /products
+   Detected language: en
+   First path part: products
+   Language redirect (add lang) -> target: /en/products
+   ```
 
-This multi-layered approach ensures consistent language handling across the site while respecting user preferences and maintaining a good user experience for both logged-in and anonymous users.
+5. **Verification Page Handling**:
+   Language redirects are skipped on verification-related pages:
+   - /verify
+   - /verification-success
+   - /verification-error
+
+This implementation ensures stable language handling across the site while maintaining good user experience and proper debugging capabilities.
 
 ## Email System
 
