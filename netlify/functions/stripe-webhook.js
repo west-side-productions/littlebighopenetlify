@@ -31,20 +31,21 @@ async function addPlanToMember(memberId) {
 }
 
 // Function to send order confirmation email
-async function sendOrderConfirmationEmail(email, data) {
+async function sendOrderConfirmationEmail(email, session) {
     try {
         const msg = {
             to: email,
             from: process.env.SENDGRID_FROM_EMAIL,
-            subject: 'Order Confirmation',
-            text: emailTemplates.de.orderConfirmation(data),
-            html: emailTemplates.de.orderConfirmationHtml(data),
+            subject: emailTemplates.de.orderConfirmation.subject,
+            text: emailTemplates.de.orderConfirmation.text(session),
+            html: emailTemplates.de.orderConfirmation.html(session),
         };
 
         await sgMail.send(msg);
         console.log('Order confirmation email sent successfully');
     } catch (error) {
         console.error('Failed to send order confirmation email:', error);
+        console.error('Error details:', error.response?.body?.errors || error);
     }
 }
 
@@ -188,9 +189,10 @@ exports.handler = async (event) => {
                 }
 
                 // Send notification email to shipping company if it's a physical product
-                if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
-                    console.log('Product type requires shipping, sending notification email', {
+                if (session.metadata?.requiresShipping === 'true' || session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
+                    console.log('Product requires shipping, sending notification email', {
                         productType: session.metadata.productType,
+                        requiresShipping: session.metadata.requiresShipping,
                         weights: {
                             productWeight: session.metadata.productWeight,
                             packagingWeight: session.metadata.packagingWeight,
@@ -199,7 +201,10 @@ exports.handler = async (event) => {
                     });
                     await sendOrderNotificationEmail(session);
                 } else {
-                    console.log('Product type does not require shipping:', session.metadata?.productType);
+                    console.log('Product type does not require shipping:', {
+                        productType: session.metadata.productType,
+                        requiresShipping: session.metadata.requiresShipping
+                    });
                 }
             } else {
                 console.log('⚠️ Session not processed:', {
