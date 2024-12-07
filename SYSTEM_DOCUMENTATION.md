@@ -208,58 +208,161 @@ const PRODUCT_CONFIG = {
 ## Checkout Process
 
 ### Technical Flow
-1. **Product Selection**
-   - DOM event listeners
-   - Data attribute validation
-   - Price calculation
-
-2. **Language Detection**
+1. **Authentication Flow**
    ```javascript
-   function getPreferredLanguage() {
-       const language = $lbh.language();
-       const productElement = document.querySelector('[data-product-type]');
-       const productType = productElement?.dataset.productType || 'book';
-       const productConfig = PRODUCT_CONFIG[productType];
-       
-       return productConfig?.prices[language] 
-           ? language 
-           : LANGUAGE_CONFIG.default;
+   // Member status check
+   const member = await window.$memberstackDom.getCurrentMember();
+   if (!member?.data) {
+       // Store checkout state
+       localStorage.setItem('checkoutConfig', JSON.stringify({
+           productType: productType,
+           shippingRateId: shippingRateId
+       }));
+       localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
+       window.location.href = '/registrieren';
+       return;
    }
    ```
 
-3. **Shipping Calculation**
+2. **Shipping Rate Selection**
    ```javascript
-   function calculateShippingRate(country) {
-       const countryCode = country.toUpperCase();
-       const rate = SHIPPING_RATES[countryCode] || 
-                   EU_COUNTRIES.includes(countryCode) && 
-                   SHIPPING_RATES.EU;
-       
-       if (!rate) throw new Error(`No shipping rate for: ${countryCode}`);
-       return rate;
+   // Shipping rate validation
+   const shippingSelect = document.querySelector('#shipping-rate-select');
+   if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
+       if (!shippingSelect?.value) {
+           throw new Error('Please select a shipping option');
+       }
+       shippingRateId = shippingSelect.value;
    }
    ```
 
-4. **Stripe Integration**
-   - Session creation
-   - Webhook handling
-   - Error management
+3. **Checkout Session Creation**
+   ```javascript
+   const payload = {
+       priceId: priceId,
+       customerEmail: member.data.auth.email,
+       language: language,
+       successUrl: window.location.origin + '/vielen-dank-email',
+       cancelUrl: window.location.origin + '/produkte',
+       metadata: {
+           memberstackUserId: member.data.id,
+           productType: productType,
+           type: productConfig.type,
+           language: language,
+           source: window.location.pathname,
+           planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
+           requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle',
+           totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
+           productWeight: productConfig.weight,
+           packagingWeight: productConfig.packagingWeight || 0,
+           dimensions: productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null,
+           shippingClass: productConfig.shippingClass || 'standard'
+       }
+   };
+   ```
 
-### Security Measures
-1. **Input Validation**
-   - Data attribute verification
-   - Price validation
-   - Country code validation
+4. **Stripe Redirect**
+   ```javascript
+   const session = await response.json();
+   const stripe = await loadStripe(CONFIG.stripePublicKey);
+   const { error } = await stripe.redirectToCheckout({
+       sessionId: session.sessionId
+   });
+   ```
 
-2. **API Security**
-   - Webhook signatures
-   - API key management
-   - Rate limiting
+### Error Handling
+1. **Button State Management**
+   ```javascript
+   const button = document.querySelector('[data-checkout-button]');
+   const originalText = button ? button.textContent : '';
+   
+   try {
+       if (button) {
+           button.textContent = 'Processing...';
+           button.disabled = true;
+       }
+       // ... checkout logic
+   } catch (error) {
+       if (button) {
+           button.textContent = originalText;
+           button.disabled = false;
+       }
+       throw error;
+   }
+   ```
 
-3. **Error Handling**
-   - Retry mechanisms
-   - User feedback
-   - Logging and monitoring
+2. **Session Creation Errors**
+   ```javascript
+   if (!response.ok) {
+       const errorText = await response.text();
+       console.error('Checkout session creation failed:', {
+           status: response.status,
+           statusText: response.statusText,
+           error: errorText
+       });
+       throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
+   }
+   ```
+
+### Configuration Settings
+
+1. **Product Configuration**
+   ```javascript
+   const PRODUCT_CONFIG = {
+       book: {
+           type: 'physical',
+           prices: { de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ' },
+           weight: 0.4,
+           packagingWeight: 0.1,
+           dimensions: { length: 21, width: 14.8, height: 1.5 },
+           shippingClass: 'standard'
+       }
+   };
+   ```
+
+2. **Shipping Rates**
+   ```javascript
+   const SHIPPING_RATES = {
+       'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+           price: 7.28, 
+           label: 'Österreich', 
+           countries: ['AT']
+       },
+       'shr_1QScMXJRMXFic4sWih6q9v36': { 
+           price: 20.72, 
+           label: 'Great Britain', 
+           countries: ['GB']
+       }
+   };
+   ```
+
+### Testing Checklist
+1. **Logged-in User Flow**
+   - [ ] Checkout button triggers session creation
+   - [ ] Shipping rate is correctly passed
+   - [ ] Product metadata is complete
+   - [ ] Stripe redirect works
+   - [ ] Success/cancel URLs are correct
+
+2. **Non-logged-in User Flow**
+   - [ ] Redirects to registration
+   - [ ] Stores checkout configuration
+   - [ ] Stores return URL
+   - [ ] Registration works
+   - [ ] Returns to checkout
+
+3. **Shipping Handling**
+   - [ ] Rate selector works
+   - [ ] Validation prevents empty selection
+   - [ ] Correct rate appears in Stripe
+   - [ ] Weight calculation is accurate
+
+4. **Error Cases**
+   - [ ] Invalid shipping rate
+   - [ ] Missing product configuration
+   - [ ] Network failures
+   - [ ] Session creation failures
+   - [ ] Stripe redirect failures
 
 ## Components
 
