@@ -157,7 +157,7 @@ exports.handler = async function(event, context) {
             };
         }
 
-        // Get product configuration based on type
+        // Get product configuration
         const productConfig = PRODUCT_CONFIG[data.type];
         
         // Prepare Stripe session creation

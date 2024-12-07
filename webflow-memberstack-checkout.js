@@ -418,25 +418,22 @@ async function startCheckout(config) {
         // Get language
         const { detected: language } = await getPreferredLanguage();
         
-        // Get price ID for the current version
+        // Get price ID for the current type
         const priceId = PRODUCT_CONFIG[config.type].prices[language];
         if (!priceId) {
-            throw new Error(`No price found for version ${config.version} and language ${language}`);
+            throw new Error(`No price found for type ${config.type} and language ${language}`);
         }
 
-        // Create the request payload with exact metadata matching
+        // Create the request payload
         const payload = {
             priceId,
-            version: config.version,           // Matches Stripe: 'digital' or 'physical-book'
-            type: config.type,                 // Product type: 'course', 'book', 'bundle', 'free-plan'
+            type: config.type,                 // Product type: 'course', 'book', 'bundle'
             customerEmail: config.customerEmail,
             language,
             metadata: {
-                version: config.version,       // Matches Stripe metadata exactly
-                type: config.type,            
-                language: language,            // Language code (de, en, fr, it)
+                language,                      // Language code (de, en, fr, it)
                 countryCode: 'DE',            // Default country code
-                source: 'checkout'            // Source identifier
+                source: window.location.pathname
             },
             successUrl: window.location.origin + '/vielen-dank-email',
             cancelUrl: window.location.origin + '/produkte'
@@ -453,14 +450,7 @@ async function startCheckout(config) {
             }
         }
 
-        log('Creating checkout session with payload:', {
-            ...payload,
-            metadata: {
-                ...payload.metadata,
-                version: payload.version, // Ensure version is logged correctly
-                type: payload.type // Ensure type is logged correctly
-            }
-        });
+        log('Creating checkout session with payload:', payload);
 
         // Create checkout session
         const response = await fetch('/.netlify/functions/create-checkout-session', {
