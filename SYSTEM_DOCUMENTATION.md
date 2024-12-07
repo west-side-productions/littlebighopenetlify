@@ -164,21 +164,21 @@
 ### Product Configuration
 ```javascript
 const PRODUCT_CONFIG = {
-    course: {
-        id: 'prc_online-kochkurs-8b540kc2',
-        type: 'digital',
+    book: {
+        type: 'physical',
+        weight: 1000,          // 1000g product weight
+        packagingWeight: 100, // 100g packaging
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
             fr: 'price_1QT214JRMXFic4sWr5OXetuw',
             it: 'price_1QT206JRMXFic4sW78d5dEDO'
+        },
+        dimensions: {
+            length: 25,   // cm
+            width: 20,   // cm
+            height: 2    // cm
         }
-    },
-    book: {
-        id: 'prc_cookbook_physical',
-        type: 'physical',
-        prices: { /* ... */ },
-        requiresShipping: true
     }
 };
 ```
@@ -199,11 +199,68 @@ const PRODUCT_CONFIG = {
 <div 
     data-product-type="book" 
     data-requires-shipping="true"
-    data-weight="500"
+    data-weight="1100"
 >
     <!-- Product content -->
 </div>
 ```
+
+## Weight Handling System
+
+### Weight Components
+1. **Product Weight**
+   - Base weight of the product (e.g., book weight)
+   - Stored in product configuration
+   - Measured in grams
+
+2. **Packaging Weight**
+   - Additional weight from packaging materials
+   - Added to product weight for total calculation
+   - Measured in grams
+
+3. **Total Weight Calculation**
+   ```javascript
+   // All weights in grams
+   const totalWeight = productWeight + packagingWeight;
+   ```
+
+### Weight Configuration
+```javascript
+const PRODUCT_CONFIG = {
+    book: {
+        type: 'physical',
+        weight: 1000,         // 1000g product weight
+        packagingWeight: 100, // 100g packaging
+        dimensions: {
+            length: 25,   // cm
+            width: 20,   // cm
+            height: 2    // cm
+        }
+    }
+};
+```
+
+### Weight Validation
+1. **Checkout Process**
+   - Validates total weight matches sum of components
+   - Ensures weight data is present for physical products
+   - Passes weight information to shipping calculator
+
+2. **Webhook Processing**
+   - Verifies weight consistency
+   - Logs weight discrepancies
+   - Triggers alerts for weight mismatches
+
+### Weight-based Shipping
+1. **Rate Calculation**
+   - Uses total weight for shipping cost calculation
+   - Considers destination country
+   - Applies weight-based shipping tiers
+
+2. **Weight Limits**
+   - Maximum weight per package
+   - Weight-based restrictions per country
+   - Combined order weight handling
 
 ## Checkout Process
 
@@ -311,10 +368,10 @@ const PRODUCT_CONFIG = {
    const PRODUCT_CONFIG = {
        book: {
            type: 'physical',
+           weight: 1000,          // 1000g product weight
+           packagingWeight: 100, // 100g packaging
            prices: { de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ' },
-           weight: 0.4,
-           packagingWeight: 0.1,
-           dimensions: { length: 21, width: 14.8, height: 1.5 },
+           dimensions: { length: 25, width: 20, height: 2 },
            shippingClass: 'standard'
        }
    };
