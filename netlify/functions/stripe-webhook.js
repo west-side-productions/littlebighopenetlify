@@ -118,34 +118,77 @@ async function sendOrderNotificationEmail(session) {
 // Main webhook handler
 exports.handler = async (event) => {
     try {
+        console.log('Received webhook event:', event.headers['stripe-signature']);
+        
         // Verify Stripe webhook signature
-        const stripeEvent = Stripe.webhooks.constructEvent(
-            event.body,
-            event.headers['stripe-signature'],
-            process.env.STRIPE_WEBHOOK_SECRET
-        );
+        let stripeEvent;
+        try {
+            stripeEvent = Stripe.webhooks.constructEvent(
+                event.body,
+                event.headers['stripe-signature'],
+                process.env.STRIPE_WEBHOOK_SECRET
+            );
+            console.log('Webhook signature verified. Event type:', stripeEvent.type);
+        } catch (err) {
+            console.error('⚠️ Webhook signature verification failed:', err.message);
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Webhook signature verification failed' })
+            };
+        }
 
         // Only handle successful checkouts
         if (stripeEvent.type === 'checkout.session.completed') {
             const session = stripeEvent.data.object;
+            console.log('Processing checkout session:', {
+                id: session.id,
+                payment_status: session.payment_status,
+                metadata: session.metadata,
+                customer_email: session.customer_details?.email
+            });
             
             // Only proceed if payment is successful and we have a Memberstack ID
             if (session.payment_status === 'paid' && session.metadata?.memberstackUserId) {
-                console.log('Processing successful payment for member:', session.metadata.memberstackUserId);
+                console.log('Payment successful, processing for member:', session.metadata.memberstackUserId);
                 
                 // Add plan to existing member
-                await addPlanToMember(session.metadata.memberstackUserId);
+                try {
+                    await addPlanToMember(session.metadata.memberstackUserId);
+                    console.log('Successfully added plan to member');
+                } catch (error) {
+                    console.error('Failed to add plan to member:', error);
+                }
                 
                 // Send confirmation email to customer
                 if (session.customer_details?.email) {
+                    console.log('Sending confirmation email to:', session.customer_details.email);
                     await sendOrderConfirmationEmail(session.customer_details.email, session);
+                } else {
+                    console.log('⚠️ No customer email found in session');
                 }
 
                 // Send notification email to shipping company if it's a physical product
                 if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
+                    console.log('Product type requires shipping, sending notification email', {
+                        productType: session.metadata.productType,
+                        weights: {
+                            productWeight: session.metadata.productWeight,
+                            packagingWeight: session.metadata.packagingWeight,
+                            totalWeight: session.metadata.totalWeight
+                        }
+                    });
                     await sendOrderNotificationEmail(session);
+                } else {
+                    console.log('Product type does not require shipping:', session.metadata?.productType);
                 }
+            } else {
+                console.log('⚠️ Session not processed:', {
+                    payment_status: session.payment_status,
+                    has_memberstack_id: !!session.metadata?.memberstackUserId
+                });
             }
+        } else {
+            console.log('Ignoring non-checkout event:', stripeEvent.type);
         }
 
         return {
@@ -153,7 +196,8 @@ exports.handler = async (event) => {
             body: JSON.stringify({ received: true })
         };
     } catch (error) {
-        console.error('Error processing webhook:', error);
+        console.error('❌ Error processing webhook:', error);
+        console.error('Error details:', error.response?.body || error);
         return {
             statusCode: 400,
             body: JSON.stringify({ error: error.message })
