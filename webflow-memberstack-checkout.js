@@ -469,7 +469,14 @@ async function startCheckout(config) {
             }
         }
 
-        log('Creating checkout session with payload:', payload);
+        log('Creating checkout session with payload:', {
+            ...payload,
+            metadata: {
+                ...payload.metadata,
+                version: payload.version, // Ensure version is logged correctly
+                type: payload.type // Ensure type is logged correctly
+            }
+        });
 
         // Create checkout session
         const response = await fetch('/.netlify/functions/create-checkout-session', {

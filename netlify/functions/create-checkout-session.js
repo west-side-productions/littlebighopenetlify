@@ -159,24 +159,24 @@ exports.handler = async function(event, context) {
             dataType: typeof data,
             isNull: data === null,
             isObject: typeof data === 'object',
-            hasVersion: 'version' in data,
-            version: data.version,
-            versionType: typeof data.version,
+            hasVersion: 'productVersion' in data,
+            version: data.productVersion,
+            versionType: typeof data.productVersion,
             allKeys: Object.keys(data),
             allValues: Object.entries(data).map(([k, v]) => `${k}: ${typeof v}`)
         });
 
         // Validate version field first
-        if (!data.version) {
+        if (!data.productVersion) {
             console.error('Missing version field:', {
                 data,
-                hasVersion: 'version' in data,
-                versionValue: data.version
+                hasVersion: 'productVersion' in data,
+                versionValue: data.productVersion
             });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Missing required field: version' })
+                body: JSON.stringify({ error: 'Missing required field: productVersion' })
             };
         }
 
@@ -191,16 +191,16 @@ exports.handler = async function(event, context) {
         }
 
         // Get product configuration based on type and version
-        const productConfig = PRODUCT_CONFIG[data.type].versions[data.version];
+        const productConfig = PRODUCT_CONFIG[data.type].versions[data.productVersion];
         if (!productConfig) {
-            console.error(`Invalid version: ${data.version} for type: ${data.type}`, {
+            console.error(`Invalid version: ${data.productVersion} for type: ${data.type}`, {
                 availableVersions: Object.keys(PRODUCT_CONFIG[data.type].versions),
-                receivedVersion: data.version
+                receivedVersion: data.productVersion
             });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: `Invalid version: ${data.version} for type: ${data.type}` })
+                body: JSON.stringify({ error: `Invalid version: ${data.productVersion} for type: ${data.type}` })
             };
         }
 
