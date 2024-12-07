@@ -333,16 +333,27 @@ async function startCheckout(config) {
     try {
         // Get language and price ID
         const language = await getPreferredLanguage();
-        const priceId = productConfig.prices[language.detected] || productConfig.prices.de;
+        log('Language detection result:', language);
         
+        const priceId = productConfig.prices[language.detected];
         if (!priceId) {
-            throw new Error(`No price configuration found for version: ${config.version}`);
+            log('No price found for language:', language.detected, 'falling back to de');
+            if (!productConfig.prices.de) {
+                throw new Error(`No price configuration found for version ${config.version}`);
+            }
         }
+        
+        const finalPriceId = priceId || productConfig.prices.de;
+        log('Using price ID:', {
+            language: language.detected,
+            priceId: finalPriceId,
+            version: config.version
+        });
 
-        // Create the payload - only include version, not productType
+        // Create the payload
         const payload = {
             version: config.version,
-            priceId: priceId,
+            priceId: finalPriceId,
             customerEmail: config.customerEmail || '',
             language: language.detected || 'de',
             successUrl: 'https://www.littlebighope.com/vielen-dank-email',
@@ -355,10 +366,6 @@ async function startCheckout(config) {
                 countryCode: 'DE',
                 requiresShipping: productConfig.requiresShipping || false,
                 shippingClass: 'standard',
-                dimensions: null,
-                productWeight: undefined,
-                packagingWeight: 0,
-                totalWeight: NaN,
                 planId: productConfig.memberstackPlanId
             }
         };
@@ -373,16 +380,12 @@ async function startCheckout(config) {
             payload.shippingRateId = config.shippingRateId;
         }
 
-        // Log the exact payload being sent
-        console.log('Creating checkout session:', {
+        log('Creating checkout session with payload:', {
             payload,
             stringifiedPayload: JSON.stringify(payload),
-            payloadKeys: Object.keys(payload),
-            version: {
-                inPayload: 'version' in payload,
-                value: payload.version,
-                type: typeof payload.version
-            }
+            version: payload.version,
+            priceId: payload.priceId,
+            language: payload.language
         });
 
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
@@ -393,24 +396,17 @@ async function startCheckout(config) {
             body: JSON.stringify(payload)
         });
 
-        // Log raw response for debugging
-        console.log('Raw response:', {
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers.entries())
-        });
-
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Checkout session creation failed:', {
                 status: response.status,
                 statusText: response.statusText,
                 error: errorText,
-                originalPayload: payload,
-                payloadVersion: payload.version,
-                stringifiedPayload: JSON.stringify(payload)
+                payload: payload,
+                version: config.version,
+                priceId: finalPriceId
             });
-            throw new Error(`Failed to create checkout session: ${response.status}`);
+            throw new Error(`Failed to create checkout session: ${response.status} - ${errorText}`);
         }
 
         const session = await response.json();
@@ -429,7 +425,11 @@ async function startCheckout(config) {
 }
 
 async function handleCheckout(event) {
-    event.preventDefault();
+    // Ensure we prevent the default form submission
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
     
     try {
         const member = await window.MemberStack.getCurrentMember();
@@ -437,7 +437,14 @@ async function handleCheckout(event) {
         
         // Get button data
         const button = event.currentTarget;
+        if (!button) {
+            throw new Error('No button found in event');
+        }
+        
         const buttonType = button.getAttribute('data-product-type');
+        if (!buttonType) {
+            throw new Error('Button is missing data-product-type attribute');
+        }
         
         // Map button type to Stripe version
         const version = BUTTON_VERSION_MAP[buttonType];
@@ -474,14 +481,10 @@ async function handleCheckout(event) {
             buttonType
         });
         
-        // Get user's preferred language
-        const language = await getPreferredLanguage();
-        
         // Create checkout configuration
         const checkoutConfig = {
             version: version,
             customerEmail: member?.email || '',
-            language: language.detected || 'de',
             metadata: {
                 memberstackId: member?.id,
                 version: version
@@ -513,44 +516,33 @@ async function handleCheckout(event) {
 }
 
 // Initialize checkout buttons
-async function initializeCheckoutButtons() {
+function initializeCheckoutButtons() {
+    log('Initializing checkout buttons');
     const buttons = document.querySelectorAll('[data-checkout-button]');
-    log(`Found ${buttons.length} checkout buttons`);
     
     buttons.forEach(button => {
-        // Get button data
-        const buttonType = button.getAttribute('data-product-type');
-        const version = BUTTON_VERSION_MAP[buttonType];
+        // Remove any existing listeners first
+        button.removeEventListener('click', handleCheckout);
         
-        log('Setting up button:', {
-            buttonType,
-            version,
-            buttonElement: button,
-            buttonDataset: button.dataset
+        // Add the click event listener
+        button.addEventListener('click', handleCheckout);
+        
+        // Prevent form submission on the button
+        button.setAttribute('type', 'button');
+        
+        log('Initialized checkout button:', {
+            button: button,
+            productType: button.getAttribute('data-product-type'),
+            dataset: button.dataset
         });
-
-        if (!version) {
-            console.error('Invalid button type:', {
-                element: button,
-                buttonType,
-                availableTypes: Object.keys(BUTTON_VERSION_MAP)
-            });
-            return;
-        }
-
-        // Remove existing listeners by cloning
-        const newButton = button.cloneNode(true);
-        
-        // Preserve all data attributes
-        newButton.setAttribute('data-product-type', buttonType);
-        newButton.setAttribute('data-version', version); // Add version attribute
-        
-        button.parentNode.replaceChild(newButton, button);
-        
-        // Add event listener to the new button
-        newButton.addEventListener('click', handleCheckout);
     });
-    log('Checkout buttons initialized');
+}
+
+// Initialize when the DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeCheckoutButtons);
+} else {
+    initializeCheckoutButtons();
 }
 
 // Handle membershome functionality
@@ -785,56 +777,46 @@ function initializeCheckoutButton() {
 async function getPreferredLanguage() {
     log('Starting language detection...');
     
+    // Check Memberstack language first
+    log('Checking Memberstack language...');
     try {
-        // 1. Check Memberstack
-        log('Checking Memberstack language...');
-        if (window.MemberStack) {
-            const member = await window.MemberStack.getCurrentMember();
-            if (member?.data?.language) {
-                log('Found language in Memberstack:', member.data.language);
+        const member = await window.MemberStack.getCurrentMember();
+        if (member) {
+            const memberstackLanguage = member.language;
+            if (memberstackLanguage) {
+                log('Found language in Memberstack:', memberstackLanguage);
                 return {
                     source: 'memberstack',
-                    detected: member.data.language
+                    detected: memberstackLanguage
                 };
             }
         }
-        
-        // 2. Check Webflow locale
-        log('Checking Webflow locale...');
-        const webflowLocale = document.documentElement.getAttribute('lang');
-        if (webflowLocale) {
-            log('Found language in Webflow:', webflowLocale);
-            return {
-                source: 'webflow',
-                detected: webflowLocale
-            };
-        }
-        
-        // 3. Check URL path
-        const pathParts = window.location.pathname.split('/').filter(Boolean);
-        if (pathParts.length > 0) {
-            const firstPart = pathParts[0].toLowerCase();
-            if (['de', 'en', 'fr', 'it'].includes(firstPart)) {
-                log('Found language in URL:', firstPart);
-                return {
-                    source: 'url',
-                    detected: firstPart
-                };
-            }
-        }
-        
-        // 4. Default to German
-        log('No language detected, defaulting to de');
-        return {
-            source: 'default',
-            detected: 'de'
-        };
-        
     } catch (error) {
-        console.error('Error detecting language:', error);
+        console.error('Error getting Memberstack language:', error);
+    }
+
+    // Check URL path
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const firstPathPart = pathParts[0]?.toLowerCase();
+    
+    if (['de', 'en', 'fr', 'it'].includes(firstPathPart)) {
+        log('Language detection complete:', {
+            source: 'url',
+            detected: firstPathPart
+        });
         return {
-            source: 'error',
-            detected: 'de'
+            source: 'url',
+            detected: firstPathPart
         };
     }
+
+    // Default to German
+    log('Language detection complete:', {
+        source: 'default',
+        detected: 'de'
+    });
+    return {
+        source: 'default',
+        detected: 'de'
+    };
 }
