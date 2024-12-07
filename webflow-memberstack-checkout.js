@@ -328,22 +328,34 @@ async function handleCheckout(event, button) {
             throw new Error('Customer email is required');
         }
 
-        // Determine version based on product type
-        const version = productType;
-        if (!version) {
-            throw new Error(`No version found for product type: ${productType}`);
+        // Get the product configuration
+        const productConfig = PRODUCT_CONFIG[productType];
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${productType}`);
+        }
+
+        // Get shipping rate for physical products
+        let shippingRateId = null;
+        if (productConfig.requiresShipping) {
+            const selectId = `shipping-rate-select-${productType}`;
+            const shippingSelect = document.getElementById(selectId);
+            if (!shippingSelect) {
+                throw new Error('Shipping country selection is required for physical products');
+            }
+            shippingRateId = shippingSelect.value;
+            console.log('Selected shipping rate:', shippingRateId);
         }
 
         // Create checkout config
         const checkoutConfig = {
-            version: version,                // Required: digital or physical-book
+            version: productType,            // Required: course, book, or bundle
             type: productType,               // Product type
             customerEmail: customerEmail,
+            shippingRateId: shippingRateId,  // Only for physical products
             metadata: {
-                version: version,            // Required in metadata
+                version: productType,        // Required in metadata
                 type: productType,           // Correct type
                 language: 'de',              // Will be updated in startCheckout
-                countryCode: 'DE',           // Will be updated in startCheckout
                 source: window.location.pathname
             }
         };
@@ -369,7 +381,7 @@ async function getCustomerEmail() {
 
     // Try Memberstack
     try {
-        const member = await getCurrentMember();
+        const member = await $memberstackDom?.getCurrentMember();
         return member?.data?.email || '';
     } catch (error) {
         console.warn('Failed to get member email:', error);
@@ -379,141 +391,131 @@ async function getCustomerEmail() {
 
 // Initialize checkout buttons
 function initializeCheckoutButtons() {
-    log('Initializing checkout buttons');
+    console.log('=== Initializing checkout buttons ===');
     
     try {
-        // Find all checkout buttons
-        const buttons = document.querySelectorAll('[data-product-type]');
+        // First, let's log all buttons we find
+        const allButtons = document.querySelectorAll('button');
+        console.log('All buttons on page:', Array.from(allButtons).map(b => ({
+            text: b.textContent.trim(),
+            type: b.dataset.productType,
+            classes: b.className
+        })));
+
+        // Now get our specific buttons
+        const buttons = document.querySelectorAll('button.checkout-button');
+        console.log('Found checkout buttons:', Array.from(buttons).map(b => ({
+            text: b.textContent.trim(),
+            type: b.dataset.productType,
+            classes: b.className
+        })));
         
         if (buttons.length === 0) {
             console.warn('No checkout buttons found on page');
             return;
         }
 
+        // Remove any existing handlers
+        buttons.forEach(button => {
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+        });
+
         // Add click handlers
         buttons.forEach(button => {
-            button.addEventListener('click', (event) => handleCheckout(event, button));
-            log('Added click handler to button:', button);
+            console.log('Setting up button:', {
+                text: button.textContent.trim(),
+                type: button.dataset.productType,
+                classes: button.className
+            });
+            
+            button.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                console.log('=== BUTTON CLICKED ===');
+                console.log('Button details:', {
+                    text: this.textContent.trim(),
+                    type: this.dataset.productType,
+                    classes: this.className
+                });
+                console.log('Event target:', event.target);
+                console.log('Current target:', event.currentTarget);
+                
+                handleCheckout(event, this);
+            });
         });
+
+        console.log('=== Button initialization complete ===');
 
     } catch (error) {
         console.error('Error initializing checkout buttons:', error);
     }
 }
 
-// Function to start checkout process
-async function startCheckout(config) {
+// Handle checkout process
+async function handleCheckout(event, button) {
+    event.preventDefault();
+    console.log('=== Starting Checkout Process ===');
+    console.log('Button clicked:', {
+        text: button.textContent.trim(),
+        type: button.dataset.productType,
+        classes: button.className
+    });
+
     try {
-        log('Starting checkout with config:', config);
-        
-        // Validate required fields
-        if (!config.version) {
-            throw new Error('Missing version in checkout configuration');
+        // Get product type from button
+        const productType = button.dataset.productType;
+        if (!productType) {
+            throw new Error('No product type specified on button');
         }
-        
-        if (!config.customerEmail) {
-            throw new Error('Customer email is required for checkout');
+        console.log('Product type:', productType);
+
+        // Get customer email
+        const customerEmail = await getCustomerEmail();
+        if (!customerEmail) {
+            throw new Error('Customer email is required');
         }
 
-        // Get language
-        const language = await getPreferredLanguage();
-        console.log('Detected language:', language);
-        
-        const productType = config.type || config.version;
-        console.log('Looking up product config for type:', productType);
+        // Get the product configuration
         const productConfig = PRODUCT_CONFIG[productType];
-        console.log('Found product config:', productConfig);
-        
         if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
         }
+        console.log('Product config:', productConfig);
 
-        // Get price ID for the current type
-        console.log('Getting price for language:', language);
-        const priceId = productConfig.prices[language] || productConfig.prices['de'];
-        console.log('Selected price ID:', priceId);
-        
-        if (!priceId) {
-            throw new Error(`No price found for type ${productType} in any language`);
+        // Get shipping rate for physical products
+        let shippingRateId = null;
+        if (productConfig.requiresShipping) {
+            const selectId = `shipping-rate-select-${productType}`;
+            const shippingSelect = document.getElementById(selectId);
+            if (!shippingSelect) {
+                throw new Error('Shipping country selection is required for physical products');
+            }
+            shippingRateId = shippingSelect.value;
+            console.log('Selected shipping rate:', shippingRateId);
         }
 
-        // Create the request payload
-        const payload = {
-            priceId,
-            customerEmail: config.customerEmail,
-            language,
+        // Create checkout config
+        const checkoutConfig = {
+            version: productType,
+            type: productType,
+            customerEmail: customerEmail,
+            shippingRateId: shippingRateId,
             metadata: {
-                type: productConfig.type,
-                productType: productType,
-                requiresShipping: productConfig.requiresShipping,
-                language,
-                countryCode: 'DE',
-                source: window.location.pathname,
-                memberstackUserId: config.memberstackUserId,
-                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
-            },
-            successUrl: window.location.origin + '/vielen-dank-email',
-            cancelUrl: window.location.origin + '/produkte'
+                version: productType,
+                type: productType,
+                language: 'de',
+                source: window.location.pathname
+            }
         };
 
-        // Add shipping rate for physical products
-        if (productConfig.requiresShipping && config.shippingRateId) {
-            payload.shippingRateId = config.shippingRateId;
-            
-            // Get shipping rate details
-            const shippingRate = SHIPPING_RATES[config.shippingRateId];
-            if (shippingRate) {
-                payload.metadata.countryCode = shippingRate.countries[0] || 'DE';
-            }
-
-            // Add physical product details
-            if (productConfig.weight) {
-                payload.metadata.totalWeight = productConfig.weight + (productConfig.packagingWeight || 0);
-                payload.metadata.productWeight = productConfig.weight;
-                payload.metadata.packagingWeight = productConfig.packagingWeight || 0;
-            }
-            if (productConfig.dimensions) {
-                payload.metadata.dimensions = JSON.stringify(productConfig.dimensions);
-            }
-            payload.metadata.shippingClass = productConfig.shippingClass || 'standard';
-        }
-
-        console.log('Creating checkout session:', JSON.stringify(payload, null, 2));
-
-        // Create checkout session
-        const response = await fetch('/.netlify/functions/create-checkout-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const responseData = await response.json();
-
-        if (!response.ok) {
-            console.error('Checkout error response:', responseData);
-            throw new Error(`Failed to create checkout session: ${response.status} ${responseData.error || ''}`);
-        }
-
-        if (!responseData.id) {
-            throw new Error('No session ID returned from server');
-        }
-
-        console.log('Checkout session created:', responseData);
-        
-        // Redirect to Stripe checkout
-        const { stripe } = await initializeDependencies();
-        const result = await stripe.redirectToCheckout({
-            sessionId: responseData.id // Make sure we're using the session ID from the response
-        });
-
-        if (result.error) {
-            console.error('Stripe redirect error:', result.error);
-            throw new Error(result.error.message);
-        }
+        console.log('Starting checkout with config:', checkoutConfig);
+        await startCheckout(checkoutConfig);
 
     } catch (error) {
-        console.error('Error creating checkout session:', error);
-        throw error;
+        console.error('Checkout error:', error);
+        alert('Sorry, there was a problem starting the checkout. Please try again or contact support if the problem persists.');
     }
 }
 
@@ -740,6 +742,11 @@ async function waitForMemberstack(timeout = 5000) {
 
 // Initialize checkout system
 async function initializeCheckoutSystem() {
+    if (systemInitialized) {
+        console.log('Checkout system already initialized');
+        return true;
+    }
+
     try {
         log('Initializing checkout system...');
         
@@ -749,7 +756,7 @@ async function initializeCheckoutSystem() {
         
         // Find all required elements
         const elements = {
-            checkoutButtons: document.querySelectorAll('[data-product-type]'),
+            checkoutButtons: document.querySelectorAll('button[data-product-type]'),
             shippingSelects: document.querySelectorAll('select[name="shipping-rate"]'),
             priceElements: document.querySelectorAll('[data-price-display]')
         };
@@ -772,6 +779,7 @@ async function initializeCheckoutSystem() {
         await initializeCheckoutButtons();
         await initializePriceElements();
         
+        systemInitialized = true;
         log('Checkout system initialized successfully');
         return true;
     } catch (error) {
@@ -780,14 +788,11 @@ async function initializeCheckoutSystem() {
     }
 }
 
-// Document ready handler
-document.addEventListener('DOMContentLoaded', async () => {
-    log('DOM loaded, checking language...');
-    await checkLanguageRedirect();
-    
-    // Initialize checkout system
+// Only initialize once when the DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing checkout system...');
     initializeCheckoutSystem().catch(error => {
-        console.error('Failed to initialize checkout:', error);
+        console.error('Failed to initialize checkout system:', error);
     });
 });
 
@@ -844,5 +849,73 @@ async function getPreferredLanguage() {
     } catch (error) {
         console.error('Error detecting language:', error);
         return 'de';
+    }
+}
+
+// Function to start checkout process
+async function startCheckout(config) {
+    try {
+        log('Starting checkout process');
+        
+        // Get language for price selection
+        const language = await getPreferredLanguage();
+        
+        // Get product configuration
+        const productConfig = PRODUCT_CONFIG[config.type];
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${config.type}`);
+        }
+        
+        // Get price ID for the current language
+        const priceId = productConfig.prices[language] || productConfig.prices['de'];
+        if (!priceId) {
+            throw new Error(`No price found for language: ${language}`);
+        }
+        
+        // Create checkout session
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                productType: config.type,
+                priceId: priceId,
+                language: language,
+                memberEmail: config.customerEmail,
+                shippingRateId: config.shippingRateId,
+                metadata: config.metadata,
+                successUrl: `${window.location.origin}/vielen-dank-email`,
+                cancelUrl: `${window.location.origin}/produkte`
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Checkout session creation failed: ${errorData.error}`);
+        }
+
+        const sessionData = await response.json();
+        log('Checkout session created:', sessionData);
+
+        if (!sessionData.id) {
+            throw new Error('No session ID returned from server');
+        }
+
+        // Get Stripe instance
+        const stripe = await getStripeInstance();
+        log('Using existing Stripe instance');
+
+        // Redirect to Stripe checkout
+        const result = await stripe.redirectToCheckout({
+            sessionId: sessionData.id
+        });
+
+        if (result.error) {
+            throw result.error;
+        }
+    } catch (error) {
+        log('Checkout error:', error);
+        throw error;
     }
 }

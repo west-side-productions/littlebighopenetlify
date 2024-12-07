@@ -177,15 +177,25 @@ exports.handler = async function(event, context) {
                 quantity: 1
             }],
             mode: 'payment',
-            success_url: data.successUrl,
-            cancel_url: data.cancelUrl,
-            metadata: data.metadata
+            success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
+            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
+            metadata: {
+                ...data.metadata,
+                productType: productType,
+                language: data.language
+            }
         };
 
         if (productConfig.requiresShipping) {
             sessionParams.shipping_address_collection = {
                 allowed_countries: SHIPPING_RATES[data.shippingRateId]?.countries || []
             };
+            
+            if (data.shippingRateId) {
+                sessionParams.shipping_options = [{
+                    shipping_rate: data.shippingRateId
+                }];
+            }
         }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));

@@ -70,8 +70,6 @@
         <!-- Checkout Button -->
         <button 
             class="checkout-button" 
-            data-memberstack-content="checkout"
-            data-memberstack-bypass="true"
             data-checkout-button
             data-product-type="course"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
@@ -118,8 +116,6 @@
         <!-- Checkout Button -->
         <button 
             class="checkout-button" 
-            data-memberstack-content="checkout"
-            data-memberstack-bypass="true"
             data-checkout-button
             data-product-type="book"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
@@ -166,8 +162,6 @@
         <!-- Checkout Button -->
         <button 
             class="checkout-button" 
-            data-memberstack-content="checkout"
-            data-memberstack-bypass="true"
             data-checkout-button
             data-product-type="bundle"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
@@ -188,41 +182,33 @@
 
     <script src="webflow-memberstack-checkout.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // Show shipping sections for physical products
-            const showShippingSections = () => {
-                const sections = document.querySelectorAll('.shipping-section');
-                sections.forEach(section => {
-                    const productType = section.closest('[data-product-type]')?.dataset.productType;
-                    if (!productType) return;
-                    
-                    const config = PRODUCT_CONFIG[productType];
-                    if (config && (config.type === 'physical' || config.type === 'bundle')) {
-                        section.classList.add('visible');
-                    }
-                });
-            };
-
-            // Initialize prices for all products
-            const initializePrices = () => {
-                const products = document.querySelectorAll('[data-product-type]');
-                products.forEach(product => {
-                    const productType = product.dataset.productType;
-                    if (!productType) return;
-                    
-                    try {
-                        updateTotalPrice(productType);
-                    } catch (error) {
-                        console.warn(`Failed to initialize price for ${productType}:`, error);
-                    }
-                });
-            };
-
-            // Initialize all components
-            initializeCheckoutSystem().catch(error => {
-                console.error('Failed to initialize checkout:', error);
+        // Show shipping sections for physical products
+        const showShippingSections = () => {
+            const sections = document.querySelectorAll('.shipping-section');
+            sections.forEach(section => {
+                const productType = section.closest('[data-product-type]')?.dataset.productType;
+                if (!productType) return;
+                
+                const config = PRODUCT_CONFIG[productType];
+                if (config && (config.type === 'physical' || config.type === 'bundle')) {
+                    section.classList.add('visible');
+                }
             });
-        });
+        };
+
+        // Initialize prices for all products
+        const initializePrices = () => {
+            const products = document.querySelectorAll('[data-product-type]');
+            products.forEach(product => {
+                const basePrice = product.getAttribute('data-base-price');
+                if (basePrice) {
+                    const priceDisplay = product.querySelector('.price-display');
+                    if (priceDisplay) {
+                        priceDisplay.textContent = `€${basePrice}`;
+                    }
+                }
+            });
+        };
     </script>
 </body>
 </html>
