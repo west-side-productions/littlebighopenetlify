@@ -37,27 +37,56 @@ const SHIPPING_RATES = {
 
 // Product Configuration
 const PRODUCT_CONFIG = {
-    'physical-book': {
-        id: 'prc_cookbook_physical',
-        version: 'physical-book',
-        requiresShipping: true,
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+    'course': {
+        id: 'prc_course_digital',
+        versions: {
+            'digital': {
+                requiresShipping: false,
+                prices: {
+                    de: 'price_1QTSN6JRMXFic4sW9sklILhd',
+                    en: 'price_1QTSN6JRMXFic4sW9sklILhd',
+                    fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
+                    it: 'price_1QTSN6JRMXFic4sW9sklILhd'
+                }
+            }
         }
     },
-    'digital': {
-        id: 'prc_online-kochkurs-8b540kc2',
-        version: 'digital',
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        },
-        requiresShipping: false
+    'book': {
+        id: 'prc_cookbook_physical',
+        versions: {
+            'physical-book': {
+                requiresShipping: true,
+                prices: {
+                    de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+                    en: 'price_1QT214JRMXFic4sWr5OXetuw',
+                    fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+                    it: 'price_1QT206JRMXFic4sW78d5dEDO'
+                }
+            }
+        }
+    },
+    'bundle': {
+        id: 'prc_bundle_physical',
+        versions: {
+            'physical-book': {
+                requiresShipping: true,
+                prices: {
+                    de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+                    en: 'price_1QT214JRMXFic4sWr5OXetuw',
+                    fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+                    it: 'price_1QT206JRMXFic4sW78d5dEDO'
+                }
+            }
+        }
+    },
+    'free-plan': {
+        id: 'prc_free_digital',
+        versions: {
+            'digital': {
+                requiresShipping: false,
+                prices: {}
+            }
+        }
     }
 };
 
@@ -151,17 +180,27 @@ exports.handler = async function(event, context) {
             };
         }
 
-        // Get product configuration based on version
-        const productConfig = PRODUCT_CONFIG[data.version];
+        // Validate product type
+        if (!data.type || !PRODUCT_CONFIG[data.type]) {
+            console.error('Invalid or missing product type:', data.type);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Invalid or missing product type' })
+            };
+        }
+
+        // Get product configuration based on type and version
+        const productConfig = PRODUCT_CONFIG[data.type].versions[data.version];
         if (!productConfig) {
-            console.error(`Invalid version: ${data.version}`, {
-                availableVersions: Object.keys(PRODUCT_CONFIG),
+            console.error(`Invalid version: ${data.version} for type: ${data.type}`, {
+                availableVersions: Object.keys(PRODUCT_CONFIG[data.type].versions),
                 receivedVersion: data.version
             });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: `Invalid version: ${data.version}` })
+                body: JSON.stringify({ error: `Invalid version: ${data.version} for type: ${data.type}` })
             };
         }
 
@@ -171,8 +210,7 @@ exports.handler = async function(event, context) {
             if (!data[field]) {
                 console.error(`Missing required field: ${field}`, {
                     fieldValue: data[field],
-                    fieldExists: field in data,
-                    fieldType: typeof data[field]
+                    data
                 });
                 return {
                     statusCode: 400,
@@ -182,93 +220,39 @@ exports.handler = async function(event, context) {
             }
         }
 
-        // Get price ID based on product type and language
-        const language = data.language || 'de';
-        const priceId = data.priceId || productConfig.prices[language];
-        if (!priceId) {
-            throw new Error(`No price found for product ${data.version} in language ${language}`);
-        }
-
-        // Determine product type from metadata
-        const isDigitalProduct = productConfig.version === 'digital';
-        const requiresShipping = productConfig.requiresShipping === true;
-        
-        // Only require shipping rate for physical products that require shipping
-        let shippingRate = null;
-        let countryCode = 'DE'; // Default for digital products
-
-        if (requiresShipping) {
-            if (!data.shippingRateId) {
-                throw new Error('Please select a shipping option');
-            }
-            // Validate shipping rate for physical products
-            shippingRate = validateShippingRate(data.shippingRateId);
-            countryCode = shippingRate.countries[0];
-        }
-
-        // Create metadata object
-        const metadata = {
-            version: data.version,  // Ensure version is included in metadata
-            ...data.metadata,
-            source: data.metadata?.source || 'checkout',
-            countryCode: countryCode,
-            language: data.language || 'de'
-        };
-
-        console.log('Creating checkout session with metadata:', metadata);
-
-        // Create session configuration
-        const sessionConfig = {
+        // Prepare Stripe session creation
+        const sessionParams = {
             payment_method_types: ['card'],
-            customer_email: data.customerEmail,
             line_items: [{
-                price: priceId,
+                price: productConfig.prices[data.language],
                 quantity: 1
             }],
             mode: 'payment',
-            success_url: `${data.successUrl || 'https://www.littlebighope.com/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
-            metadata: metadata,
-            payment_intent_data: {
-                metadata: metadata  // Ensure version is included in payment intent metadata
-            },
-            allow_promotion_codes: true,
-            billing_address_collection: 'required',
-            locale: data.language || 'de'
+            success_url: data.successUrl,
+            cancel_url: data.cancelUrl,
+            metadata: data.metadata
         };
 
-        // Add shipping options only for products that require shipping
-        if (requiresShipping && data.shippingRateId) {
-            const shippingRate = validateShippingRate(data.shippingRateId);
-            sessionConfig.shipping_address_collection = {
-                allowed_countries: shippingRate.countries
+        if (productConfig.requiresShipping) {
+            sessionParams.shipping_address_collection = {
+                allowed_countries: SHIPPING_RATES[data.shippingRateId]?.countries || []
             };
-            sessionConfig.shipping_options = [{
-                shipping_rate: data.shippingRateId
-            }];
         }
 
-        console.log('Creating Stripe session with config:', sessionConfig);
-        const session = await stripe.checkout.sessions.create(sessionConfig);
+        const session = await stripe.checkout.sessions.create(sessionParams);
+
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ 
-                sessionId: session.id,
-                publishableKey: process.env.STRIPE_PUBLISHABLE_KEY 
-            })
+            body: JSON.stringify({ id: session.id })
         };
 
     } catch (error) {
-        console.error('Stripe session creation failed:', error);
+        console.error('Error creating checkout session:', error);
         return {
-            statusCode: error.statusCode || 500,
+            statusCode: 500,
             headers,
-            body: JSON.stringify({ 
-                error: error.message,
-                type: error.type,
-                code: error.code
-            })
+            body: JSON.stringify({ error: 'Internal Server Error' })
         };
     }
 };
