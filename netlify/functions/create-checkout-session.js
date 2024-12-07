@@ -173,7 +173,7 @@ exports.handler = async function(event, context) {
         const sessionParams = {
             payment_method_types: ['card'],
             line_items: [{
-                price: productConfig.prices[data.language],
+                price: data.priceId,
                 quantity: 1
             }],
             mode: 'payment',
@@ -188,6 +188,7 @@ exports.handler = async function(event, context) {
             };
         }
 
+        console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
         const session = await stripe.checkout.sessions.create(sessionParams);
 
         return {
