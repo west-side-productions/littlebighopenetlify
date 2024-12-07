@@ -277,70 +277,57 @@ async function sendOrderNotificationEmail(session) {
 }
 
 // Checkout Functions
-async function handleCheckout(event) {
-    // Ensure we prevent the default form submission
-    if (event) {
+async function handleCheckout(event, button) {
+    try {
         event.preventDefault();
         event.stopPropagation();
-    }
-    
-    try {
-        const member = await getCurrentMember();
-        log('Current member:', member?.id || 'No member found');
         
-        // Get button data
-        const button = event.currentTarget;
-        if (!button) {
-            throw new Error('No button found in event');
+        // Get the product type from the button
+        const productType = button.getAttribute('data-product-type');
+        if (!productType) {
+            throw new Error('Product type not specified');
         }
-        
-        const buttonType = button.getAttribute('data-product-type');
-        if (!buttonType || !BUTTON_VERSION_MAP[buttonType]) {
-            console.error('Invalid button type:', {
-                buttonType: button.getAttribute('data-product-type'),
-                availableTypes: Object.keys(BUTTON_VERSION_MAP),
-                buttonElement: button
-            });
-            throw new Error(`Invalid button type: ${button.getAttribute('data-product-type')}`);
+
+        // Map product type to version
+        const version = BUTTON_VERSION_MAP[productType];
+        if (!version) {
+            throw new Error('Invalid product type: ' + productType);
         }
-        
-        const version = BUTTON_VERSION_MAP[buttonType];
-        
-        log('Button data:', {
-            buttonType,
+
+        log('Processing checkout:', {
+            productType,
             version,
-            buttonElement: button,
-            buttonDataset: button.dataset,
-            buttonAttributes: {
-                'data-product-type': buttonType,
-                'data-checkout-button': button.getAttribute('data-checkout-button')
-            }
+            buttonData: button.dataset
         });
-        
-        const productConfig = PRODUCT_CONFIG[version];
-        if (!productConfig) {
-            console.error(`Invalid version: ${version}`);
-            return;
+
+        // Get current member info
+        let customerEmail = '';
+        try {
+            const member = await getCurrentMember();
+            customerEmail = member?.email || '';
+        } catch (error) {
+            console.warn('Failed to get member info:', error);
         }
-        
-        log('Using configuration:', {
-            version,
-            config: productConfig,
-            buttonType: version
-        });
-        
-        // Create checkout configuration
+
+        // If no member email, try to get it from input
+        if (!customerEmail) {
+            const emailInput = document.querySelector('input[name="email"]');
+            customerEmail = emailInput?.value || '';
+        }
+
+        if (!customerEmail) {
+            throw new Error('Customer email is required');
+        }
+
+        // Create checkout config
         const checkoutConfig = {
-            version: version, // Ensure version is at the root level
-            customerEmail: member?.email || '',
-            metadata: getCheckoutMetadata(version, {
-                memberstackId: member?.id,
-                planId: member?.planId
-            })
+            version: version,
+            customerEmail: customerEmail,
+            metadata: await getCheckoutMetadata(version)
         };
-        
-        // Add shipping if required
-        if (productConfig.requiresShipping) {
+
+        // Add shipping rate if required
+        if (PRODUCT_CONFIG[version]?.requiresShipping) {
             const shippingSelect = document.querySelector('select[name="shipping-rate"]');
             if (!shippingSelect?.value) {
                 throw new Error('Please select a shipping option');
@@ -359,30 +346,135 @@ async function handleCheckout(event) {
         
     } catch (error) {
         console.error('Checkout error:', error);
-        alert('Checkout error: ' + error.message);
+        throw error;
     }
 }
 
+// Function to start checkout process
+async function startCheckout(config) {
+    try {
+        log('Starting checkout with config:', config);
+        
+        // Initialize dependencies
+        const { stripe } = await initializeDependencies();
+        if (!stripe) {
+            throw new Error('Stripe not initialized');
+        }
+        
+        // Ensure we have the required fields
+        if (!config.version) {
+            throw new Error('Missing version in checkout configuration');
+        }
+        
+        if (!config.customerEmail) {
+            throw new Error('Customer email is required for checkout');
+        }
+
+        // Get language using our preferred language detection
+        const { detected: language } = await getPreferredLanguage();
+        log('Detected language for checkout:', language);
+        
+        // Map success URLs based on language
+        const successUrls = {
+            de: '/vielen-dank-email',
+            en: '/thank-you-email',
+            fr: '/merci-email',
+            it: '/grazie-email'
+        };
+
+        // Get the price ID for the current language and version
+        const priceId = PRODUCT_CONFIG[config.version]?.prices[language];
+        if (!priceId) {
+            throw new Error(`No price found for version ${config.version} and language ${language}`);
+        }
+
+        // Create the request payload
+        const payload = {
+            priceId,
+            version: config.version, // Ensure version is included at root level
+            customerEmail: config.customerEmail,
+            language: language,
+            metadata: {
+                ...config.metadata,
+                version: config.version, // Ensure version is also in metadata
+                source: 'checkout',
+                language: language
+            },
+            successUrl: window.location.origin + (successUrls[language] || successUrls.de),
+            cancelUrl: window.location.origin + '/produkte'
+        };
+        
+        // Add shipping rate if required
+        if (config.shippingRateId) {
+            payload.shippingRateId = config.shippingRateId;
+        }
+        
+        log('Sending checkout request with payload:', payload);
+        
+        // Send request to create checkout session
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to create checkout session');
+        }
+        
+        const { sessionId } = await response.json();
+        
+        // Redirect to Stripe checkout
+        const result = await stripe.redirectToCheckout({
+            sessionId: sessionId
+        });
+        
+        if (result.error) {
+            throw new Error(result.error.message);
+        }
+        
+    } catch (error) {
+        console.error('Error in startCheckout:', error);
+        throw error;
+    }
+}
 
 // Initialize checkout buttons
 function initializeCheckoutButtons() {
     log('Initializing checkout buttons');
-    const buttons = document.querySelectorAll('[data-checkout-button]');
+    const buttons = document.querySelectorAll('[data-product-type]');
     
     buttons.forEach(button => {
         // Remove any existing listeners first
-        button.removeEventListener('click', handleCheckout);
+        const oldHandler = button._checkoutHandler;
+        if (oldHandler) {
+            button.removeEventListener('click', oldHandler);
+        }
         
-        // Add the click event listener
-        button.addEventListener('click', handleCheckout);
+        // Create a new handler bound to this button
+        const newHandler = async (event) => {
+            try {
+                await handleCheckout(event, button);
+            } catch (error) {
+                console.error('Failed to process checkout:', error);
+                const errorDiv = button.parentElement.querySelector('.error-message');
+                if (errorDiv) {
+                    errorDiv.textContent = error.message;
+                    errorDiv.style.display = 'block';
+                }
+            }
+        };
         
-        // Prevent form submission on the button
-        button.setAttribute('type', 'button');
+        // Store the handler and add the listener
+        button._checkoutHandler = newHandler;
+        button.addEventListener('click', newHandler);
         
         log('Initialized checkout button:', {
-            button: button,
-            version: button.getAttribute('data-product-type'),
-            dataset: button.dataset
+            type: button.getAttribute('data-product-type'),
+            button: button
         });
     });
 }
@@ -474,16 +566,23 @@ function updateTotalPrice(version, shippingRateId = null) {
 
 // Update metadata for checkout
 function getCheckoutMetadata(version, config = {}) {
+    const productConfig = PRODUCT_CONFIG[version];
+    if (!productConfig) {
+        console.error(`Invalid version: ${version}`);
+        return {};
+    }
+
     const metadata = {
-        version: version,
-        requiresShipping: PRODUCT_CONFIG[version]?.requiresShipping || false,
-        shippingClass: 'standard',
+        version: version, // Explicitly include version
+        requiresShipping: productConfig.requiresShipping || false,
+        shippingClass: productConfig.shippingClass || 'standard',
         countryCode: 'DE',
-        dimensions: PRODUCT_CONFIG[version]?.dimensions || null,
-        productWeight: PRODUCT_CONFIG[version]?.totalWeight,
-        packagingWeight: PRODUCT_CONFIG[version]?.packagingWeight || 0,
-        totalWeight: calculateTotalWeight(PRODUCT_CONFIG[version]),
-        language: getPreferredLanguage()
+        dimensions: productConfig.dimensions || null,
+        productWeight: productConfig.totalWeight,
+        packagingWeight: productConfig.packagingWeight || 0,
+        totalWeight: calculateTotalWeight(productConfig),
+        source: window.location.pathname,
+        language: 'de'  // Default to German
     };
 
     if (config.memberstackId) {
@@ -491,9 +590,6 @@ function getCheckoutMetadata(version, config = {}) {
     }
     if (config.planId) {
         metadata.planId = config.planId;
-    }
-    if (config.source) {
-        metadata.source = config.source;
     }
 
     return metadata;
@@ -610,7 +706,7 @@ async function initializeCheckoutSystem() {
         
         // Find all required elements
         const elements = {
-            checkoutButtons: document.querySelectorAll('[data-checkout-button]'),
+            checkoutButtons: document.querySelectorAll('[data-product-type]'),
             shippingSelects: document.querySelectorAll('select[name="shipping-rate"]'),
             priceElements: document.querySelectorAll('[data-price-display]')
         };

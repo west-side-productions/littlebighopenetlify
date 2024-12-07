@@ -208,7 +208,7 @@ exports.handler = async function(event, context) {
 
         // Create metadata object
         const metadata = {
-            version: data.version,  // Ensure version is included at top level
+            version: data.version,  // Ensure version is included in metadata
             ...data.metadata,
             source: data.metadata.source || 'checkout',
             countryCode: countryCode,
@@ -230,7 +230,7 @@ exports.handler = async function(event, context) {
             cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
             metadata: metadata,
             payment_intent_data: {
-                metadata: metadata
+                metadata: metadata  // Ensure version is included in payment intent metadata
             },
             allow_promotion_codes: true,
             billing_address_collection: 'required',
