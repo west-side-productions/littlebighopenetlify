@@ -92,12 +92,22 @@ function prepareOrderNotificationData(session) {
 // Function to send order notification to shipping company
 async function sendOrderNotificationEmail(session) {
     try {
+        console.log('Preparing to send order notification email');
+        
         // Get line items for the session
+        console.log('Fetching line items for session:', session.id);
         const lineItems = await Stripe.checkout.sessions.listLineItems(session.id);
         session.line_items = lineItems;
+        console.log('Line items fetched:', lineItems.data.length, 'items');
 
         // Transform data for email template
         const emailData = prepareOrderNotificationData(session);
+        console.log('Prepared email data:', JSON.stringify(emailData, null, 2));
+
+        // Verify template exists
+        if (!emailTemplates.de.order_notification) {
+            throw new Error('Email template "order_notification" not found');
+        }
 
         const msg = {
             to: 'office@west-side-productions.at',
@@ -107,11 +117,18 @@ async function sendOrderNotificationEmail(session) {
             html: emailTemplates.de.order_notification.html(emailData),
         };
 
+        console.log('Sending email with SendGrid:', {
+            to: msg.to,
+            from: msg.from,
+            subject: msg.subject
+        });
+
         await sgMail.send(msg);
-        console.log('Order notification email sent successfully to shipping company');
+        console.log('✅ Order notification email sent successfully to shipping company');
     } catch (error) {
-        console.error('Failed to send order notification email:', error);
-        console.error('Error details:', error.response?.body || error);
+        console.error('❌ Failed to send order notification email:', error);
+        console.error('Error details:', error.response?.body?.errors || error);
+        throw error; // Re-throw to handle in the main webhook handler
     }
 }
 
