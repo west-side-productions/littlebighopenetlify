@@ -124,6 +124,30 @@ module.exports = {
             </div>
         `
     },
+    orderConfirmation: {
+        subject: 'Ihre Bestellung bei Little Big Hope',
+        text: (data) => {
+            return `
+Vielen Dank für Ihre Bestellung!
+
+Ihre Bestellung wurde erfolgreich aufgegeben und wird schnellstmöglich bearbeitet.
+
+Bestellnummer: ${data.id}
+
+Beste Grüße,
+Ihr Little Big Hope Team
+            `;
+        },
+        html: (data) => `
+            ${baseStyles}
+            <h1>Vielen Dank für Ihre Bestellung!</h1>
+            <p>Ihre Bestellung wurde erfolgreich aufgegeben und wird schnellstmöglich bearbeitet.</p>
+            <p><strong>Bestellnummer:</strong> ${sanitizeInput(data.id)}</p>
+            <div class="footer">
+                <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
+            </div>
+        `
+    },
     orderNotification: {
         subject: 'Neue Bestellung eingegangen',
         text: ({ orderDetails = {} }) => {
