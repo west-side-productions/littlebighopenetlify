@@ -172,11 +172,17 @@ exports.handler = async function(event, context) {
         // Prepare Stripe session creation
         const sessionParams = {
             payment_method_types: ['card'],
+            client_reference_id: `${productType}_${Date.now()}`,
+            customer_email: data.customerEmail,
             line_items: [{
                 price: data.priceId,
-                quantity: 1
+                quantity: 1,
+                adjustable_quantity: {
+                    enabled: false
+                }
             }],
             mode: 'payment',
+            allow_promotion_codes: true,
             success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
             cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
             metadata: {
