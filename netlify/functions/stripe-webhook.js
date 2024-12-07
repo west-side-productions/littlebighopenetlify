@@ -189,10 +189,10 @@ exports.handler = async (event) => {
                 }
 
                 // Send notification email to shipping company if it's a physical product
-                if (session.metadata?.requiresShipping === 'true' || session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
+                if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
                     console.log('Product requires shipping, sending notification email', {
                         productType: session.metadata.productType,
-                        requiresShipping: session.metadata.requiresShipping,
+                        type: session.metadata.type,
                         weights: {
                             productWeight: session.metadata.productWeight,
                             packagingWeight: session.metadata.packagingWeight,
@@ -203,7 +203,7 @@ exports.handler = async (event) => {
                 } else {
                     console.log('Product type does not require shipping:', {
                         productType: session.metadata.productType,
-                        requiresShipping: session.metadata.requiresShipping
+                        type: session.metadata.type
                     });
                 }
             } else {
