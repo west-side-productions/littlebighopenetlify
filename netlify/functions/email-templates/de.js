@@ -124,8 +124,43 @@ module.exports = {
             </div>
         `
     },
-    order_notification: {
+    orderNotification: {
         subject: 'Neue Bestellung eingegangen',
+        text: ({ orderDetails = {} }) => {
+            const address = orderDetails.shippingAddress;
+            return `
+Neue Bestellung Eingegangen
+
+Bestellnummer: ${orderDetails.orderNumber}
+
+Kundeninformationen:
+Lieferadresse:
+${address.name}
+${address.line1}
+${address.line2 ? `${address.line2}\n` : ''}${address.postal_code} ${address.city}
+${address.state ? `${address.state}\n` : ''}${address.country}
+
+E-Mail: ${orderDetails.customerEmail}
+
+Gewichtsinformationen:
+Produktgewicht: ${orderDetails.weights.productWeight} g
+Verpackungsgewicht: ${orderDetails.weights.packagingWeight} g
+Gesamtgewicht: ${orderDetails.weights.totalWeight} g
+
+Bestelldetails:
+${orderDetails.items.map(item => `${item.name}: ${item.price} ${item.currency}`).join('\n')}
+
+Versand:
+Versandart: ${orderDetails.shipping.method}
+Versandkosten: ${orderDetails.shipping.cost} ${orderDetails.shipping.currency}
+
+Zusammenfassung:
+Zwischensumme: ${orderDetails.total.subtotal} ${orderDetails.total.currency}
+Versand: ${orderDetails.total.shipping} ${orderDetails.total.currency}
+MwSt.: ${orderDetails.total.tax} ${orderDetails.total.currency}
+Gesamtsumme: ${orderDetails.total.total} ${orderDetails.total.currency}
+            `;
+        },
         html: ({ orderDetails = {} }) => `
             ${baseStyles}
             <style>
