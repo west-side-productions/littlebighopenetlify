@@ -213,8 +213,8 @@
 const PRODUCT_CONFIG = {
     book: {
         type: 'physical',
-        weight: 1000,          // 1000g product weight
-        packagingWeight: 100, // 100g packaging
+        weight: 1005,          // 1005g product weight
+        packagingWeight: 152,  // 152g packaging
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
@@ -246,7 +246,7 @@ const PRODUCT_CONFIG = {
 <div 
     data-product-type="book" 
     data-requires-shipping="true"
-    data-weight="1100"
+    data-weight="1157"
 >
     <!-- Product content -->
 </div>
@@ -276,8 +276,8 @@ const PRODUCT_CONFIG = {
 const PRODUCT_CONFIG = {
     book: {
         type: 'physical',
-        weight: 1000,         // 1000g product weight
-        packagingWeight: 100, // 100g packaging
+        weight: 1005,         // 1005g product weight
+        packagingWeight: 152, // 152g packaging
         dimensions: {
             length: 25,   // cm
             width: 20,   // cm
@@ -415,8 +415,8 @@ const PRODUCT_CONFIG = {
    const PRODUCT_CONFIG = {
        book: {
            type: 'physical',
-           weight: 1000,          // 1000g product weight
-           packagingWeight: 100, // 100g packaging
+           weight: 1005,          // 1005g product weight
+           packagingWeight: 152, // 152g packaging
            prices: { de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ' },
            dimensions: { length: 25, width: 20, height: 2 },
            shippingClass: 'standard'
