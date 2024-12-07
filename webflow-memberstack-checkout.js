@@ -955,16 +955,33 @@ async function startCheckout(config) {
             throw new Error(`Checkout session creation failed: ${responseData.error || 'Unknown error'}`);
         }
 
-        // Validate that we received a complete Stripe session object
-        if (!responseData || !responseData.url) {
+        // Initialize Stripe if not already done
+        const stripe = await getStripeInstance();
+        if (!stripe) {
+            throw new Error('Failed to initialize Stripe');
+        }
+
+        // Validate the session object
+        if (!responseData || !responseData.id) {
             console.error('Invalid session response:', responseData);
             throw new Error('Invalid checkout session response from server');
         }
 
-        // Redirect directly to the Stripe checkout URL
-        log('Redirecting to Stripe checkout URL:', responseData.url);
-        window.location.href = responseData.url;
+        log('Redirecting to checkout with session ID:', responseData.id);
 
+        // Use the URL from the session if available, otherwise fall back to redirectToCheckout
+        if (responseData.url) {
+            window.location.href = responseData.url;
+        } else {
+            const result = await stripe.redirectToCheckout({
+                sessionId: responseData.id
+            });
+
+            if (result.error) {
+                console.error('Stripe redirect error:', result.error);
+                throw new Error(`Stripe redirect failed: ${result.error.message}`);
+            }
+        }
     } catch (error) {
         log('Checkout error:', error);
         throw error;
