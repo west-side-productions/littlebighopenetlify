@@ -967,7 +967,10 @@ async function startCheckout(config) {
             throw new Error('No session ID returned from server');
         }
 
-        log('Redirecting to checkout with session ID:', responseData.sessionId);
+        log('Starting checkout with session:', {
+            sessionId: responseData.sessionId,
+            publishableKey: responseData.publishableKey
+        });
 
         // Redirect to Stripe checkout using the session ID
         const { error } = await stripe.redirectToCheckout({

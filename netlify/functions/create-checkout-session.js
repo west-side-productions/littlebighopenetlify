@@ -169,53 +169,47 @@ exports.handler = async function(event, context) {
         // Get product configuration
         const productConfig = PRODUCT_CONFIG[productType];
         
-        // Prepare Stripe session creation
+        // Create session configuration
         const sessionParams = {
             payment_method_types: ['card'],
-            client_reference_id: `${productType}_${Date.now()}`,
             customer_email: data.customerEmail,
             line_items: [{
                 price: data.priceId,
-                quantity: 1,
-                adjustable_quantity: {
-                    enabled: false
-                }
+                quantity: 1
             }],
             mode: 'payment',
-            allow_promotion_codes: true,
-            success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
-            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
-            locale: data.language || 'de',
+            success_url: `${data.successUrl || 'https://www.littlebighope.com/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || 'https://www.littlebighope.com/produkte',
             metadata: {
+                version: data.version,
                 ...data.metadata,
-                productType: productType,
-                language: data.language
-            }
+                source: data.metadata?.source || 'checkout',
+                countryCode: data.countryCode || 'DE',
+                language: data.language || 'de'
+            },
+            payment_intent_data: {
+                metadata: {
+                    version: data.version,
+                    ...data.metadata,
+                    source: data.metadata?.source || 'checkout',
+                    countryCode: data.countryCode || 'DE',
+                    language: data.language || 'de'
+                }
+            },
+            allow_promotion_codes: true,
+            billing_address_collection: 'required',
+            locale: data.language || 'de'
         };
 
-        // Add shipping configuration if product requires shipping
-        if (productConfig.requiresShipping) {
-            // Get all available countries from shipping rates
-            const allowedCountries = Object.values(SHIPPING_RATES)
-                .flatMap(rate => rate.countries)
-                .filter((country, index, self) => self.indexOf(country) === index); // Remove duplicates
-
+        // Add shipping options only for products that require shipping
+        if (productConfig.requiresShipping && data.shippingRateId) {
+            const shippingRate = validateShippingRate(data.shippingRateId);
             sessionParams.shipping_address_collection = {
-                allowed_countries: allowedCountries
+                allowed_countries: shippingRate.countries
             };
-            
-            // Add all shipping rates as options
-            sessionParams.shipping_options = Object.entries(SHIPPING_RATES).map(([rateId, rateConfig]) => ({
-                shipping_rate: rateId,
-                shipping_rate_data: {
-                    display_name: rateConfig.label,
-                    fixed_amount: {
-                        amount: Math.round(rateConfig.price * 100), // Convert to cents
-                        currency: 'eur'
-                    },
-                    type: 'fixed_amount'
-                }
-            }));
+            sessionParams.shipping_options = [{
+                shipping_rate: data.shippingRateId
+            }];
         }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
@@ -225,9 +219,9 @@ exports.handler = async function(event, context) {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({
+            body: JSON.stringify({ 
                 sessionId: session.id,
-                url: session.url
+                publishableKey: process.env.STRIPE_PUBLISHABLE_KEY 
             })
         };
 
