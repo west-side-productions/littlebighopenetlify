@@ -16,54 +16,86 @@ const LANGUAGE_CONFIG = {
 };
 
 const $lbh = {
-    memberStackAvailable: !(typeof $memberstackDom === 'undefined'),
+    memberStackAvailable: false,
+
+    // Track Memberstack initialization
+    initializeMemberstack: function() {
+        if (typeof $memberstackDom !== 'undefined') {
+            console.log('Memberstack initialized');
+            $lbh.memberStackAvailable = true;
+            $lbh.checkLanguageRedirect();
+        } else {
+            console.warn('Memberstack not available');
+        }
+    },
 
     // Improved language detection
-    language: () => {
+    language: async () => {
         let detectedLanguage = null;
         const debug = {};
+        console.log('Starting language detection...');
 
         // 1. Try Memberstack (highest priority for logged-in users)
         if ($lbh.memberStackAvailable) {
             try {
-                const member = $memberstackDom.getCurrentMember();
+                console.log('Checking Memberstack language...');
+                const member = await $memberstackDom.getCurrentMember();
                 if (member?.data?.customFields?.language) {
                     detectedLanguage = member.data.customFields.language;
                     debug.source = 'memberstack';
+                    console.log('Found language in Memberstack:', detectedLanguage);
+                } else {
+                    console.log('No language found in Memberstack');
                 }
             } catch (error) {
                 console.warn('Error getting Memberstack language:', error);
             }
+        } else {
+            console.log('Memberstack not available, skipping Memberstack check');
         }
 
         // 2. Try Webflow's current locale
         if (!detectedLanguage) {
+            console.log('Checking Webflow locale...');
             const currentLocaleLink = document.querySelector('.w-locales-item a.w--current');
             if (currentLocaleLink) {
                 const hrefLang = currentLocaleLink.getAttribute('hreflang');
                 if (hrefLang && LANGUAGE_CONFIG.supported.includes(hrefLang)) {
                     detectedLanguage = hrefLang;
                     debug.source = 'webflow';
+                    console.log('Found language in Webflow:', detectedLanguage);
+                } else {
+                    console.log('No valid language found in Webflow locale');
                 }
+            } else {
+                console.log('No Webflow locale element found');
             }
         }
 
         // 3. Try URL path
         if (!detectedLanguage) {
+            console.log('Checking URL path...');
             const pathParts = window.location.pathname.split('/');
             const possibleLang = pathParts[1];
             if (possibleLang && LANGUAGE_CONFIG.supported.includes(possibleLang)) {
                 detectedLanguage = possibleLang;
                 debug.source = 'url';
+                console.log('Found language in URL:', detectedLanguage);
+            } else {
+                console.log('No valid language found in URL path');
             }
         }
 
         // 4. Try browser language
         if (!detectedLanguage) {
+            console.log('Checking browser language...');
             const browserLang = (navigator.language || navigator.userLanguage || '').split('-')[0].toLowerCase();
             if (LANGUAGE_CONFIG.supported.includes(browserLang)) {
                 detectedLanguage = browserLang;
                 debug.source = 'browser';
+                console.log('Found language in browser settings:', detectedLanguage);
+            } else {
+                console.log('No valid language found in browser settings');
             }
         }
 
@@ -71,11 +103,12 @@ const $lbh = {
         if (!detectedLanguage || !LANGUAGE_CONFIG.supported.includes(detectedLanguage)) {
             detectedLanguage = LANGUAGE_CONFIG.default;
             debug.source = 'fallback';
+            console.log('Using default language:', detectedLanguage);
         }
 
-        // Log language detection for debugging
+        // Log language detection summary
         debug.detected = detectedLanguage;
-        console.log('Language detection:', debug);
+        console.log('Language detection complete:', debug);
 
         return detectedLanguage;
     },
@@ -87,35 +120,47 @@ const $lbh = {
 
     loadJson: async function loadJson() {
         if (!$lbh.memberStackAvailable) {
-            return JSON.parse(localStorage.getItem("json") ?? "{}")
+            console.log('Using localStorage for JSON storage');
+            return JSON.parse(localStorage.getItem("json") ?? "{}");
         }
 
-        let json = await $memberstackDom.getMemberJSON()
-        console.log("json", json)
-        return json?.data ?? {}
+        try {
+            let json = await $memberstackDom.getMemberJSON();
+            console.log("Loaded JSON from Memberstack:", json);
+            return json?.data ?? {};
+        } catch (error) {
+            console.warn("Error loading Memberstack JSON, falling back to localStorage:", error);
+            return JSON.parse(localStorage.getItem("json") ?? "{}");
+        }
     },
 
     updateJson: async function updateJson(json) {
         if (!$lbh.memberStackAvailable) {
-            localStorage.setItem("json", JSON.stringify(json))
-            return
+            console.log('Saving JSON to localStorage');
+            localStorage.setItem("json", JSON.stringify(json));
+            return;
         }
 
-        const up = { json: json }
-        console.log("json", up)
-        await $memberstackDom.updateMemberJSON(up)
+        try {
+            const up = { json: json };
+            console.log("Updating Memberstack JSON:", up);
+            await $memberstackDom.updateMemberJSON(up);
+        } catch (error) {
+            console.warn("Error updating Memberstack JSON, falling back to localStorage:", error);
+            localStorage.setItem("json", JSON.stringify(json));
+        }
     },
 
     tryfind: function tryfind(selector, parent) {
-        return (parent ?? document).querySelector(selector)
+        return (parent ?? document).querySelector(selector);
     },
 
     find: function find(selector, parent) {
-        const res = $lbh.tryfind(selector, parent)
+        const res = $lbh.tryfind(selector, parent);
         if (!res) {
-            throw `can't find element by selector '${selector}' in ${parent ?? document}`
+            throw `can't find element by selector '${selector}' in ${parent ?? document}`;
         }
-        return res
+        return res;
     },
 
     formatQuantity: function formatQuantity(q) {
@@ -142,23 +187,116 @@ const $lbh = {
         } else {
             return fract;
         }
+    },
+
+    checkLanguageRedirect: async function checkLanguageRedirect() {
+        console.log('Starting language redirect check...');
+        
+        // Skip on verification pages
+        if (location.pathname.includes('/verify') || 
+            location.pathname.includes('/verification-success') || 
+            location.pathname.includes('/verification-error')) {
+            console.log('Skipping language redirect on verification page');
+            return;
+        }
+
+        try {
+            const lang = await $lbh.language();
+            const pathParts = location.pathname.split('/');
+            const firstPart = pathParts[1];
+            
+            console.log('Current path:', location.pathname);
+            console.log('Detected language:', lang);
+            console.log('First path part:', firstPart);
+            
+            // If we're on root path and not in correct language
+            if (location.pathname === '/' && lang !== 'de') {
+                const target = `${location.origin}/${lang}/`;
+                console.log('Language redirect (root) -> target:', target);
+                location.href = target;
+                return;
+            }
+
+            // If we're on a language path but wrong language
+            if (LANGUAGE_CONFIG.supported.includes(firstPart) && firstPart !== lang) {
+                const newPath = lang === 'de' ? '/' + pathParts.slice(2).join('/') : 
+                    `/${lang}/` + pathParts.slice(2).join('/');
+                const target = location.origin + newPath + location.search;
+                console.log('Language redirect (path) -> target:', target);
+                location.href = target;
+                return;
+            }
+
+            // If we're not on a language path but should be
+            if (!LANGUAGE_CONFIG.supported.includes(firstPart) && lang !== 'de') {
+                const target = `${location.origin}/${lang}${location.pathname}${location.search}`;
+                console.log('Language redirect (add lang) -> target:', target);
+                location.href = target;
+                return;
+            }
+
+            console.log('No language redirect needed');
+        } catch (error) {
+            console.error('Error during language redirect:', error);
+            console.error(error.stack);
+        }
     }
-}
+};
 
 // debug output
 if (!$lbh.memberStackAvailable) {
-    console.warn("NO MEMBERSTACK AVALIABLE, using localStorage")
+    console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
 }
 
-// lang switcher
-if (location.pathname == "/") {
-    const lang = $lbh.language()
-    if (lang != "de") {
-        const target = `${location.origin}/${lang}/`
-        console.log("lang-switch", target)
-        location.href = target
+// Add event listeners for both DOM load and Memberstack
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, checking language...');
+    $lbh.checkLanguageRedirect();
+});
+
+// Watch for Memberstack initialization
+const checkMemberstack = setInterval(() => {
+    if (typeof $memberstackDom !== 'undefined') {
+        clearInterval(checkMemberstack);
+        $lbh.initializeMemberstack();
+        
+        // Add listener for member changes
+        $memberstackDom.listen('member.update', () => {
+            console.log('Member updated, rechecking language...');
+            $lbh.checkLanguageRedirect();
+        });
     }
-}
+}, 100);
+
+// Pre-select language in registration form
+(async function initRegistrationForm() {
+    try {
+        if (location.pathname.includes('/registrieren')) {
+            console.log('Initializing registration form...');
+            const languageSelect = document.querySelector('select[data-ms-field="language"]');
+            if (languageSelect) {
+                const detectedLang = await $lbh.language();
+                languageSelect.value = detectedLang;
+                console.log('Pre-selected registration form language:', detectedLang);
+            }
+        }
+    } catch (error) {
+        console.error('Error initializing registration form:', error);
+    }
+})();
+
+// Root path language check
+(async function checkRootPath() {
+    if (location.pathname === "/") {
+        const lang = await $lbh.language();
+        if (lang !== "de") {
+            const target = `${location.origin}/${lang}/`;
+            console.log("lang-switch", target);
+            location.href = target;
+        }
+    }
+})();
+
 </script>
 
 <!-- Memberstack Configuration -->
@@ -168,13 +306,19 @@ window.$memberstackDom = {
     loadTimeout: 15000,
     customDomains: true,
     onReady() {
-        console.log("Memberstack ready");
-        $lbh.memberStackAvailable = true;
+        console.log("Memberstack ready, dispatching initialized event");
         window.dispatchEvent(new Event('memberstack:initialized'));
+        // Check if we need to redirect based on language
+        if (!location.pathname.includes('/verify') && 
+            !location.pathname.includes('/verification-success') && 
+            !location.pathname.includes('/verification-error')) {
+            window.$lbh?.checkLanguageRedirect().catch(error => {
+                console.warn('Language redirect error:', error);
+            });
+        }
     },
     onError(error) {
-        console.error("Memberstack error", error);
-        $lbh.memberStackAvailable = false;
+        console.error("Memberstack initialization error:", error);
         window.dispatchEvent(new CustomEvent('memberstack:error', { detail: error }));
     }
 };
@@ -193,37 +337,36 @@ window.$memberstackDom = {
 (async function init() {
     try {
         // Wait for Memberstack to be ready
-        await new Promise((resolve, reject) => {
-            if (window.memberstack) {
-                resolve();
-                return;
-            }
-            
-            window.addEventListener('memberstack:initialized', resolve);
-            setTimeout(() => reject(new Error('Memberstack timeout')), 15000);
-        });
+        if (!window.$memberstackDom?.getCurrentMember) {
+            console.log('Waiting for Memberstack...');
+            await new Promise((resolve) => {
+                window.addEventListener('memberstack:initialized', resolve);
+                setTimeout(resolve, 15000); // Timeout after 15s
+            });
+        }
 
-        // Handle verification if on verify page
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
-        
-        if (token && location.pathname.includes('verify')) {
-            console.log('Starting verification process...');
-            try {
-                await window.memberstack.verifyEmail(token);
-                console.log('Verification successful');
-                
-                const lang = $lbh.language();
-                window.location.href = lang === 'de' ? '/verification-success' : `/${lang}/verification-success`;
-            } catch (error) {
-                console.error('Verification error:', error);
-                const lang = $lbh.language();
-                const errorPath = lang === 'de' ? '/verification-error' : `/${lang}/verification-error`;
-                window.location.href = `${errorPath}?message=${encodeURIComponent(error?.message || 'Verification failed')}`;
+        // Handle verification success
+        if (location.pathname.includes('/verification-success')) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email');
+            const token = urlParams.get('token');
+            
+            if (email && token) {
+                console.log('Handling verification success...');
+                try {
+                    await $memberstackDom.verifyEmail({ email, token });
+                    console.log('Email verified successfully');
+                } catch (error) {
+                    console.error('Error verifying email:', error);
+                    location.href = '/verification-error';
+                }
+            } else {
+                console.warn('Missing email or token parameters');
+                location.href = '/verification-error';
             }
         }
     } catch (error) {
-        console.error('Failed to initialize Memberstack:', error);
+        console.error('Verification handler error:', error);
         $lbh.memberStackAvailable = false;
         console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
     }

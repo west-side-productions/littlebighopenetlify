@@ -45,7 +45,8 @@ const PRODUCT_CONFIG = {
         id: 'prc_cookbook_physical',
         type: 'physical',
         requiresShipping: true,
-        weight: 1000,
+        weight: 1005,
+        packagingWeight: 152,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
