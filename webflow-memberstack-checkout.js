@@ -417,17 +417,24 @@ async function startCheckout(config) {
 
         // Get language
         const language = await getPreferredLanguage();
+        console.log('Detected language:', language);
+        
         const productType = config.type || config.version;
+        console.log('Looking up product config for type:', productType);
         const productConfig = PRODUCT_CONFIG[productType];
+        console.log('Found product config:', productConfig);
         
         if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
         }
 
         // Get price ID for the current type
-        const priceId = productConfig.prices[language];
+        console.log('Getting price for language:', language);
+        const priceId = productConfig.prices[language] || productConfig.prices['de'];
+        console.log('Selected price ID:', priceId);
+        
         if (!priceId) {
-            throw new Error(`No price found for type ${productType} and language ${language}`);
+            throw new Error(`No price found for type ${productType} in any language`);
         }
 
         // Create the request payload
@@ -471,7 +478,7 @@ async function startCheckout(config) {
             payload.metadata.shippingClass = productConfig.shippingClass || 'standard';
         }
 
-        console.log('Creating checkout session with payload:', JSON.stringify(payload, null, 2));
+        console.log('Creating checkout session:', JSON.stringify(payload, null, 2));
 
         // Create checkout session
         const response = await fetch('/.netlify/functions/create-checkout-session', {
@@ -480,21 +487,27 @@ async function startCheckout(config) {
             body: JSON.stringify(payload)
         });
 
+        const responseData = await response.json();
+
         if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Checkout error response:', errorData);
-            throw new Error(`Failed to create checkout session: ${response.status} ${errorData.error || ''}`);
+            console.error('Checkout error response:', responseData);
+            throw new Error(`Failed to create checkout session: ${response.status} ${responseData.error || ''}`);
         }
 
-        const session = await response.json();
+        if (!responseData.id) {
+            throw new Error('No session ID returned from server');
+        }
+
+        console.log('Checkout session created:', responseData);
         
         // Redirect to Stripe checkout
         const { stripe } = await initializeDependencies();
         const result = await stripe.redirectToCheckout({
-            sessionId: session.id
+            sessionId: responseData.id // Make sure we're using the session ID from the response
         });
 
         if (result.error) {
+            console.error('Stripe redirect error:', result.error);
             throw new Error(result.error.message);
         }
 
@@ -588,7 +601,7 @@ async function getCheckoutMetadata(version, config = {}) {
         // Get current member info
         let memberstackUserId = '';
         try {
-            const member = await getCurrentMember();
+            const member = await $memberstackDom?.getCurrentMember();
             memberstackUserId = member?.data?.id || '';
         } catch (error) {
             console.warn('Failed to get member ID:', error);
@@ -789,19 +802,47 @@ function initializeCheckoutButton() {
 }
 
 // Function to get user's preferred language
-function getPreferredLanguage() {
-    // Check URL path first
-    const path = window.location.pathname;
-    if (path.startsWith('/it/')) return 'it';
-    if (path.startsWith('/en/')) return 'en';
+async function getPreferredLanguage() {
+    console.log('Starting language detection...');
     
-    // Check browser language
-    const browserLang = navigator.language || navigator.userLanguage;
-    if (browserLang) {
-        const lang = browserLang.toLowerCase().split('-')[0];
-        if (lang === 'it' || lang === 'en') return lang;
+    try {
+        // 1. Check Memberstack language first
+        console.log('Checking Memberstack language...');
+        const member = await getCurrentMember();
+        if (member?.language) {
+            console.log('Found language in Memberstack:', member.language);
+            return member.language;
+        }
+
+        // 2. Check Webflow locale
+        console.log('Checking Webflow locale...');
+        const webflowLocale = document.documentElement.getAttribute('lang');
+        if (webflowLocale) {
+            console.log('Found language in Webflow:', webflowLocale);
+            return webflowLocale;
+        }
+
+        // 3. Check URL path
+        console.log('Checking URL path...');
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        if (pathParts.length > 0 && ['de', 'en', 'fr', 'it'].includes(pathParts[0])) {
+            console.log('Found language in URL path:', pathParts[0]);
+            return pathParts[0];
+        }
+
+        // 4. Check browser language
+        console.log('Checking browser language...');
+        const browserLang = navigator.language.split('-')[0];
+        if (['de', 'en', 'fr', 'it'].includes(browserLang)) {
+            console.log('Found language in browser:', browserLang);
+            return browserLang;
+        }
+
+        // 5. Default to German
+        console.log('No language detected, using default: de');
+        return 'de';
+    } catch (error) {
+        console.error('Error detecting language:', error);
+        return 'de';
     }
-    
-    // Default to German
-    return 'de';
 }
