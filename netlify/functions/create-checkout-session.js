@@ -37,18 +37,7 @@ const SHIPPING_RATES = {
 
 // Product Configuration
 const PRODUCT_CONFIG = {
-    course: {
-        id: 'prc_online-kochkurs-8b540kc2',
-        type: 'digital',
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        },
-        requiresShipping: false
-    },
-    book: {
+    'physical-book': {
         id: 'prc_cookbook_physical',
         type: 'physical',
         requiresShipping: true,
@@ -59,15 +48,16 @@ const PRODUCT_CONFIG = {
             it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
-    bundle: {
-        type: 'bundle',
-        requiresShipping: true,
+    'digital': {
+        id: 'prc_online-kochkurs-8b540kc2',
+        type: 'digital',
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
             fr: 'price_1QT214JRMXFic4sWr5OXetuw',
             it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
+        },
+        requiresShipping: false
     }
 };
 
@@ -82,11 +72,12 @@ const validateShippingRate = (shippingRateId) => {
 
 exports.handler = async function(event, context) {
     // Log request details for debugging
-    console.log('Incoming request:', {
+    console.log('Incoming request details:', {
         method: event.httpMethod,
-        headers: event.headers,
         path: event.path,
-        body: event.body ? JSON.parse(event.body) : null
+        headers: event.headers,
+        bodyExists: !!event.body,
+        bodyLength: event.body?.length
     });
 
     // Handle preflight requests
@@ -112,20 +103,50 @@ exports.handler = async function(event, context) {
 
     try {
         console.log('Raw event body:', event.body);
-        const data = JSON.parse(event.body);
+        
+        if (!event.body) {
+            console.error('Request body is empty');
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Request body is required' })
+            };
+        }
+
+        let data;
+        try {
+            data = JSON.parse(event.body);
+        } catch (e) {
+            console.error('Failed to parse request body:', e);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Invalid JSON in request body' })
+            };
+        }
+
         console.log('Parsed request data:', {
             rawData: data,
-            version: data.version,
-            typeofVersion: typeof data.version,
+            dataType: typeof data,
+            isNull: data === null,
+            isObject: typeof data === 'object',
             hasVersion: 'version' in data,
-            dataKeys: Object.keys(data)
+            version: data.version,
+            versionType: typeof data.version,
+            allKeys: Object.keys(data),
+            allValues: Object.entries(data).map(([k, v]) => `${k}: ${typeof v}`)
         });
 
         // Validate required fields
         const requiredFields = ['version', 'customerEmail', 'language'];
         for (const field of requiredFields) {
             if (!data[field]) {
-                console.error(`Missing required field: ${field}`);
+                console.error(`Missing required field: ${field}`, {
+                    fieldValue: data[field],
+                    fieldExists: field in data,
+                    fieldType: typeof data[field],
+                    allFields: Object.keys(data)
+                });
                 return {
                     statusCode: 400,
                     headers,
@@ -137,7 +158,10 @@ exports.handler = async function(event, context) {
         // Get product configuration based on version
         const productConfig = PRODUCT_CONFIG[data.version];
         if (!productConfig) {
-            console.error(`Invalid product version: ${data.version}`);
+            console.error(`Invalid product version: ${data.version}`, {
+                availableVersions: Object.keys(PRODUCT_CONFIG),
+                receivedVersion: data.version
+            });
             return {
                 statusCode: 400,
                 headers,

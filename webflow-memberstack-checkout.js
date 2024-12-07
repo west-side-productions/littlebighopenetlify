@@ -12,7 +12,7 @@ const CONFIG = {
 
 // Product Configuration
 const PRODUCT_CONFIG = {
-    course: {
+    digital: {
         id: 'prc_online-kochkurs-8b540kc2',
         type: 'digital',
         prices: {
@@ -24,7 +24,7 @@ const PRODUCT_CONFIG = {
         requiresShipping: false,
         memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
-    book: {
+    'physical-book': {
         id: 'prc_cookbook_physical',
         type: 'physical',
         requiresShipping: true,
@@ -73,6 +73,12 @@ const PRODUCT_CONFIG = {
         requiresShipping: false,
         memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     }
+};
+
+// Product type to version mapping
+const PRODUCT_VERSION_MAP = {
+    'course': 'digital',
+    'book': 'physical-book'
 };
 
 // Shipping Rates Structure
@@ -173,7 +179,8 @@ function validateWeights(productConfig) {
 
 // Price Functions
 async function updateTotalPrice(productType, shippingRateId = null) {
-    const productConfig = PRODUCT_CONFIG[productType];
+    const version = PRODUCT_VERSION_MAP[productType];
+    const productConfig = PRODUCT_CONFIG[version];
     if (!productConfig) {
         console.error(`Invalid product type: ${productType}`);
         return;
@@ -308,13 +315,13 @@ async function startCheckout(config) {
         throw new Error('Invalid checkout configuration - configuration object required');
     }
     
-    if (!config.productType || typeof config.productType !== 'string') {
-        throw new Error('Invalid checkout configuration - productType must be a string');
+    if (!config.version || typeof config.version !== 'string') {
+        throw new Error('Invalid checkout configuration - version must be a string');
     }
 
-    const productConfig = PRODUCT_CONFIG[config.productType];
+    const productConfig = PRODUCT_CONFIG[config.version];
     if (!productConfig) {
-        throw new Error(`Invalid product type: ${config.productType}`);
+        throw new Error(`Invalid product version: ${config.version}`);
     }
 
     try {
@@ -323,12 +330,12 @@ async function startCheckout(config) {
         const priceId = productConfig.prices[language.detected] || productConfig.prices.de;
         
         if (!priceId) {
-            throw new Error(`No price configuration found for product type: ${config.productType}`);
+            throw new Error(`No price configuration found for version: ${config.version}`);
         }
 
-        // Create the base payload
+        // Create the base payload with version at root level
         const payload = {
-            version: config.productType, // Use version instead of productType for Stripe
+            version: config.version,
             priceId: priceId,
             customerEmail: config.customerEmail || '',
             language: language.detected || 'de',
@@ -336,7 +343,7 @@ async function startCheckout(config) {
             cancelUrl: 'https://www.littlebighope.com/produkte',
             metadata: {
                 source: window.location.pathname,
-                version: config.productType, // Also include in metadata
+                version: config.version,
                 type: productConfig.type,
                 language: language.detected || 'de',
                 countryCode: 'DE',
@@ -365,7 +372,9 @@ async function startCheckout(config) {
             payload,
             stringifiedPayload: JSON.stringify(payload),
             version: payload.version,
-            hasVersion: 'version' in payload
+            hasVersion: 'version' in payload,
+            versionType: typeof payload.version,
+            versionValue: payload.version
         });
 
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
@@ -434,25 +443,39 @@ async function handleCheckout(event) {
             throw new Error('Product type not found on button');
         }
         
-        const productConfig = PRODUCT_CONFIG[productType];
+        // Map to Stripe version
+        const version = PRODUCT_VERSION_MAP[productType];
+        log('Version mapping:', {
+            originalProductType: productType,
+            mappedVersion: version,
+            availableVersions: Object.keys(PRODUCT_CONFIG),
+            versionMap: PRODUCT_VERSION_MAP
+        });
+
+        const productConfig = PRODUCT_CONFIG[version];
         if (!productConfig) {
-            console.error(`Invalid product configuration for type: ${productType}`);
+            console.error(`Invalid product configuration for type: ${productType}, version: ${version}`);
             return;
         }
         
-        log('Using product configuration:', productConfig);
+        log('Using product configuration:', {
+            productType,
+            version,
+            config: productConfig
+        });
         
         // Get user's preferred language
         const language = await getPreferredLanguage();
         
         // Prepare checkout configuration
         const checkoutConfig = {
+            version: version, // Explicitly set version
             productType: productType,
             customerEmail: member?.email || '',
             language: language.detected || 'de',
             metadata: {
                 memberstackId: member?.id,
-                productType: productType
+                version: version
             }
         };
         
@@ -465,7 +488,12 @@ async function handleCheckout(event) {
             checkoutConfig.shippingRateId = shippingSelect.value;
         }
         
-        log('Creating checkout session with config:', checkoutConfig);
+        log('Creating checkout session with config:', {
+            checkoutConfig,
+            hasVersion: 'version' in checkoutConfig,
+            version: checkoutConfig.version
+        });
+
         await startCheckout(checkoutConfig);
         
     } catch (error) {
