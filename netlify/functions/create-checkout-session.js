@@ -10,28 +10,24 @@ const headers = {
 // Shipping rate configuration
 const SHIPPING_RATES = {
     'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-        price: 7.28, 
+        price: 728, 
         label: 'Österreich', 
         countries: ['AT']
     },
     'shr_1QScMXJRMXFic4sWih6q9v36': { 
-        price: 20.72, 
+        price: 2072, 
         label: 'Great Britain', 
         countries: ['GB']
     },
     'shr_1QScNqJRMXFic4sW3NVUUckl': { 
-        price: 36.53, 
+        price: 3500, 
         label: 'Singapore', 
         countries: ['SG']
     },
     'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
-        price: 20.36, 
+        price: 2036, 
         label: 'European Union', 
-        countries: [
-            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
-            'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
-            'SI', 'SK', 'FI', 'SE'
-        ]
+        countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
     }
 };
 
@@ -191,108 +187,37 @@ exports.handler = async function(event, context) {
         };
 
         // Add shipping options based on selected shipping rate
-        if (productConfig.requiresShipping) {
-            if (data.shippingRateId === 'shr_1QScKFJRMXFic4sW9e80ABBp') {
-                // Austria shipping
-                sessionParams.shipping_address_collection = {
-                    allowed_countries: ['AT']
-                };
-                sessionParams.shipping_options = [{
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 728,
-                            currency: 'eur',
-                        },
-                        display_name: 'Standard Shipping (Austria)',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                        }
-                    }
-                }];
-            } else if (data.shippingRateId === 'shr_1QScMXJRMXFic4sWih6q9v36') {
-                // Great Britain shipping
-                sessionParams.shipping_address_collection = {
-                    allowed_countries: ['GB']
-                };
-                sessionParams.shipping_options = [{
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 2072,
-                            currency: 'eur',
-                        },
-                        display_name: 'Standard Shipping (Great Britain)',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                        }
-                    }
-                }];
-            } else if (data.shippingRateId === 'shr_1QScNqJRMXFic4sW3NVUUckl') {
-                // Singapore shipping
-                sessionParams.shipping_address_collection = {
-                    allowed_countries: ['SG']
-                };
-                sessionParams.shipping_options = [{
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 3653,
-                            currency: 'eur',
-                        },
-                        display_name: 'Standard Shipping (Singapore)',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 14,
-                            },
-                        }
-                    }
-                }];
-            } else if (data.shippingRateId === 'shr_1QScOlJRMXFic4sW8MHW0kq7') {
-                // EU shipping (excluding Austria)
-                sessionParams.shipping_address_collection = {
-                    allowed_countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
-                };
-                sessionParams.shipping_options = [{
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 2036,
-                            currency: 'eur',
-                        },
-                        display_name: 'Standard Shipping (EU)',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 7,
-                            },
-                        }
-                    }
-                }];
+        if (productConfig.requiresShipping && data.shippingRateId) {
+            // Get shipping rate from configuration
+            const shippingRate = SHIPPING_RATES[data.shippingRateId];
+            if (!shippingRate) {
+                throw new Error(`Invalid shipping rate: ${data.shippingRateId}`);
             }
+
+            // Set shipping configuration based on selected rate
+            sessionParams.shipping_address_collection = {
+                allowed_countries: shippingRate.countries
+            };
+            sessionParams.shipping_options = [{
+                shipping_rate_data: {
+                    type: 'fixed_amount',
+                    fixed_amount: {
+                        amount: shippingRate.price,
+                        currency: 'eur',
+                    },
+                    display_name: `Standard Shipping (${shippingRate.label})`,
+                    delivery_estimate: {
+                        minimum: {
+                            unit: 'business_day',
+                            value: shippingRate.label === 'Singapore' ? 7 : shippingRate.label === 'Österreich' ? 3 : 5,
+                        },
+                        maximum: {
+                            unit: 'business_day',
+                            value: shippingRate.label === 'Singapore' ? 14 : shippingRate.label === 'Österreich' ? 5 : 7,
+                        },
+                    }
+                }
+            }];
         }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
