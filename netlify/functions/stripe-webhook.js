@@ -48,21 +48,70 @@ async function sendOrderConfirmationEmail(email, data) {
     }
 }
 
+// Function to transform Stripe session data for email template
+function prepareOrderNotificationData(session) {
+    return {
+        orderDetails: {
+            orderNumber: session.id,
+            customerEmail: session.customer_details?.email,
+            shippingAddress: {
+                name: session.shipping_details?.name,
+                line1: session.shipping_details?.address?.line1,
+                line2: session.shipping_details?.address?.line2,
+                postal_code: session.shipping_details?.address?.postal_code,
+                city: session.shipping_details?.address?.city,
+                state: session.shipping_details?.address?.state,
+                country: session.shipping_details?.address?.country
+            },
+            weights: {
+                productWeight: session.metadata?.productWeight || 0,
+                packagingWeight: session.metadata?.packagingWeight || 0,
+                totalWeight: session.metadata?.totalWeight || 0
+            },
+            items: session.line_items?.data?.map(item => ({
+                name: item.description,
+                price: (item.amount_total / 100).toFixed(2),
+                currency: item.currency?.toUpperCase()
+            })) || [],
+            shipping: {
+                method: 'Standard Versand',
+                cost: ((session.total_details?.shipping_cost || 0) / 100).toFixed(2),
+                currency: session.currency?.toUpperCase()
+            },
+            total: {
+                subtotal: ((session.amount_subtotal || 0) / 100).toFixed(2),
+                shipping: ((session.total_details?.shipping_cost || 0) / 100).toFixed(2),
+                tax: ((session.total_details?.amount_tax || 0) / 100).toFixed(2),
+                total: ((session.amount_total || 0) / 100).toFixed(2),
+                currency: session.currency?.toUpperCase()
+            }
+        }
+    };
+}
+
 // Function to send order notification to shipping company
-async function sendOrderNotificationEmail(data) {
+async function sendOrderNotificationEmail(session) {
     try {
+        // Get line items for the session
+        const lineItems = await Stripe.checkout.sessions.listLineItems(session.id);
+        session.line_items = lineItems;
+
+        // Transform data for email template
+        const emailData = prepareOrderNotificationData(session);
+
         const msg = {
             to: 'office@west-side-productions.at',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: 'Neue Bestellung eingegangen',
-            text: emailTemplates.de.orderNotification(data),
-            html: emailTemplates.de.orderNotificationHtml(data),
+            text: emailTemplates.de.order_notification.html(emailData),
+            html: emailTemplates.de.order_notification.html(emailData),
         };
 
         await sgMail.send(msg);
         console.log('Order notification email sent successfully to shipping company');
     } catch (error) {
         console.error('Failed to send order notification email:', error);
+        console.error('Error details:', error.response?.body || error);
     }
 }
 
