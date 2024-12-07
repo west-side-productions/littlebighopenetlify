@@ -200,11 +200,13 @@ exports.handler = async function(event, context) {
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
         const session = await stripe.checkout.sessions.create(sessionParams);
+        console.log('Created Stripe session:', session);
 
+        // Return the complete session object
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ id: session.id })
+            body: JSON.stringify(session)
         };
 
     } catch (error) {
