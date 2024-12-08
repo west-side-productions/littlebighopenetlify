@@ -960,13 +960,13 @@ async function startCheckout(config) {
         
         // Prepare checkout request data
         const requestData = {
-            type: config.productType,
+            productType: config.productType,  // Single source of truth for product type
             priceId: priceId,
             language: language,
             customerEmail: config.customerEmail,
             shippingRateId: config.shippingRateId,
             metadata: {
-                type: config.productType,
+                productType: config.productType,
                 language: language,
                 customerEmail: config.customerEmail,
                 source: window.location.pathname
