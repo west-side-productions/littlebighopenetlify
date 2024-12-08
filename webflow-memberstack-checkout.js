@@ -545,14 +545,12 @@ async function handleCheckout(event, button) {
         }
 
         // Get language from URL path
-        const pathParts = window.location.pathname.split('/');
-        const language = pathParts.length > 1 && ['de', 'en', 'fr', 'it'].includes(pathParts[1]) 
-            ? pathParts[1] 
-            : 'de';
+        const language = getPreferredLanguage(); // Use our dedicated function
 
-        // Get product configuration
+        // Get product configuration and version
         const productConfig = PRODUCT_CONFIG[productType];
-        if (!productConfig) {
+        const productTypeInfo = PRODUCT_TYPE_MAP[productType];
+        if (!productConfig || !productTypeInfo) {
             throw new Error(`Invalid product type: ${productType}`);
         }
 
@@ -570,13 +568,14 @@ async function handleCheckout(event, button) {
 
         // Prepare checkout data
         const checkoutData = {
-            productType: productType, // This is what the server expects
+            type: productType, // This is what the server expects for product type
             priceId: priceId,
             email: customerEmail,
             successUrl: `${window.location.origin}/vielen-dank-email`,
             cancelUrl: `${window.location.origin}/produkte`,
             metadata: {
                 productType: productType,
+                version: productTypeInfo.version, // Use version from PRODUCT_TYPE_MAP
                 deliveryType: productConfig.deliveryType,
                 requiresShipping: productConfig.requiresShipping,
                 language: language,

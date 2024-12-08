@@ -123,12 +123,12 @@ exports.handler = async function(event, context) {
 
         console.log('Received data:', {
             data: data,
-            productType: data.productType,
+            type: data.type,
             availableTypes: Object.keys(PRODUCT_CONFIG)
         });
 
         // Validate product type
-        const productType = data.productType;
+        const productType = data.type;
         if (!productType || !PRODUCT_CONFIG[productType]) {
             console.error('Invalid product type:', { 
                 receivedType: productType,
