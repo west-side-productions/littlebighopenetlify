@@ -433,30 +433,29 @@ async function initializeCheckoutButtons() {
     console.log('=== Initializing checkout buttons ===');
     
     try {
-        // Remove any existing event listeners
-        document.querySelectorAll('.checkout-button').forEach(button => {
+        // Clear any existing event listeners by removing old buttons
+        const checkoutButtons = document.querySelectorAll('[data-checkout-button][data-product-type]');
+        checkoutButtons.forEach(button => {
             const newButton = button.cloneNode(true);
             button.parentNode.replaceChild(newButton, button);
         });
 
-        // Initialize each button individually
-        const buttonConfigs = [
-            { id: 'checkout-button-course', type: 'course', price: 99.99 },
-            { id: 'checkout-button-book', type: 'book', price: 29.99 },
-            { id: 'checkout-button-bundle', type: 'bundle', price: 119.99 }
-        ];
-
-        for (const config of buttonConfigs) {
-            const button = document.getElementById(config.id);
-            if (!button) {
-                console.warn(`Button not found: ${config.id}`);
-                continue;
+        // Initialize each button with its specific configuration
+        checkoutButtons.forEach(button => {
+            const productType = button.dataset.productType;
+            
+            if (!PRODUCT_CONFIG[productType]) {
+                console.warn(`Invalid product type on button:`, {
+                    button: button,
+                    productType: productType,
+                    availableTypes: Object.keys(PRODUCT_CONFIG)
+                });
+                return;
             }
 
-            console.log(`Initializing button: ${config.id}`, {
+            console.log(`Initializing button for ${productType}:`, {
                 buttonElement: button,
-                productType: config.type,
-                price: config.price,
+                productType: productType,
                 dataset: button.dataset
             });
 
@@ -464,9 +463,15 @@ async function initializeCheckoutButtons() {
                 event.preventDefault();
                 event.stopPropagation();
 
-                console.log(`Button clicked: ${config.id}`, {
-                    productType: config.type,
-                    price: config.price,
+                // Clear any previous error messages
+                const errorElements = document.querySelectorAll('[id^="error-message-"]');
+                errorElements.forEach(el => {
+                    el.textContent = '';
+                    el.style.display = 'none';
+                });
+
+                console.log(`Button clicked for ${productType}:`, {
+                    productType: productType,
                     buttonElement: this,
                     dataset: this.dataset
                 });
@@ -474,88 +479,20 @@ async function initializeCheckoutButtons() {
                 try {
                     await handleCheckout(event, this);
                 } catch (error) {
-                    console.error(`Checkout error for ${config.id}:`, error);
-                    const errorDiv = document.getElementById(`error-message-${config.type}`);
+                    console.error(`Checkout error for ${productType}:`, error);
+                    const errorDiv = document.getElementById(`error-message-${productType}`);
                     if (errorDiv) {
                         errorDiv.textContent = error.message;
                         errorDiv.style.display = 'block';
                     }
                 }
             });
-        }
+        });
 
         console.log('=== Button initialization complete ===');
 
     } catch (error) {
         console.error('Error initializing checkout buttons:', error);
-    }
-}
-
-// Checkout Functions
-async function handleCheckout(event, button) {
-    console.log('=== Starting Checkout Process ===');
-    console.log('Button details:', {
-        id: button.id,
-        dataset: button.dataset,
-        productType: button.dataset.productType
-    });
-
-    try {
-        // Get product type from button
-        const productType = button.dataset.productType;
-        if (!productType) {
-            throw new Error('No product type specified on button');
-        }
-
-        // Validate product type
-        if (!PRODUCT_CONFIG[productType]) {
-            console.error('Invalid product type:', {
-                receivedType: productType,
-                availableTypes: Object.keys(PRODUCT_CONFIG)
-            });
-            throw new Error(`Invalid product type: ${productType}`);
-        }
-
-        // Get customer email
-        const customerEmail = await getCustomerEmail();
-        if (!customerEmail) {
-            throw new Error('Customer email is required');
-        }
-
-        // Get shipping rate for physical products
-        let shippingRateId = null;
-        if (PRODUCT_CONFIG[productType].requiresShipping) {
-            const selectId = `shipping-rate-select-${productType}`;
-            const shippingSelect = document.getElementById(selectId);
-            if (!shippingSelect) {
-                throw new Error('Shipping country selection is required for physical products');
-            }
-            shippingRateId = shippingSelect.value;
-        }
-
-        // Create checkout config
-        const checkoutConfig = {
-            productType: productType,
-            customerEmail: customerEmail,
-            shippingRateId: shippingRateId,
-            metadata: {
-                productType: productType,
-                source: window.location.pathname
-            }
-        };
-        
-        console.log('Starting checkout with config:', checkoutConfig);
-        await startCheckout(checkoutConfig);
-
-    } catch (error) {
-        console.error('Checkout error:', error);
-        // Show error in the appropriate error div
-        const errorDiv = document.getElementById(`error-message-${button.dataset.productType}`);
-        if (errorDiv) {
-            errorDiv.textContent = error.message;
-            errorDiv.style.display = 'block';
-        }
-        throw error;
     }
 }
 
