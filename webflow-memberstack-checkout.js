@@ -578,10 +578,7 @@ async function handleCheckout(event, button) {
         const checkoutData = {
             line_items: [{
                 price: priceId,
-                quantity: 1,
-                adjustable_quantity: {
-                    enabled: false
-                }
+                quantity: 1
             }],
             mode: 'payment',
             customer_email: customerEmail,
@@ -589,10 +586,13 @@ async function handleCheckout(event, button) {
             cancel_url: `${window.location.origin}/produkte`,
             locale: language,
             metadata: {
-                productType: productType,
-                version: productTypeInfo.version,
-                memberstackUserId: memberstackUserId,
-                source: window.location.pathname
+                memberstackUserId,
+                productType,
+                type: productConfig.deliveryType,
+                language,
+                source: window.location.pathname,
+                planId: productConfig.memberstackPlanId,
+                requiresShipping: productConfig.requiresShipping
             }
         };
 
@@ -606,24 +606,15 @@ async function handleCheckout(event, button) {
             };
         }
 
-        console.log('Sending checkout data:', JSON.stringify(checkoutData, null, 2));
+        console.log('Creating checkout session:', checkoutData);
 
         // Create checkout session
-        const checkoutDataString = JSON.stringify(checkoutData, null, 2);
-        console.log('Sending checkout data (stringified):', checkoutDataString);
-        console.log('Checkout data structure:', {
-            hasLineItems: !!checkoutData.line_items,
-            lineItemsLength: checkoutData.line_items?.length,
-            firstLineItem: checkoutData.line_items?.[0],
-            priceId: checkoutData.line_items?.[0]?.price
-        });
-
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: checkoutDataString
+            body: JSON.stringify(checkoutData)
         });
 
         const responseText = await response.text();

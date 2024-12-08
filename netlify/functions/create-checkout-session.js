@@ -109,17 +109,10 @@ exports.handler = async function(event, context) {
         }
 
         // Parse the request body
-        console.log('Raw request body:', event.body);
         let data;
         try {
             data = JSON.parse(event.body);
-            console.log('Parsed data:', {
-                rawData: data,
-                hasLineItems: !!data.line_items,
-                lineItemsLength: data.line_items?.length,
-                firstLineItem: data.line_items?.[0],
-                firstLineItemPrice: data.line_items?.[0]?.price
-            });
+            console.log('Received checkout data:', data);
         } catch (e) {
             console.error('Failed to parse request body:', e);
             return {
@@ -129,18 +122,9 @@ exports.handler = async function(event, context) {
             };
         }
 
-        // Validate the request has required fields
-        if (!data.line_items) {
-            console.error('Missing line_items array');
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Missing line_items array' })
-            };
-        }
-
-        if (!Array.isArray(data.line_items) || data.line_items.length === 0) {
-            console.error('line_items must be a non-empty array');
+        // Validate required fields according to Stripe's API
+        if (!data.line_items || !Array.isArray(data.line_items) || data.line_items.length === 0) {
+            console.error('Missing or invalid line_items:', data);
             return {
                 statusCode: 400,
                 headers,
@@ -149,18 +133,18 @@ exports.handler = async function(event, context) {
         }
 
         if (!data.line_items[0].price) {
-            console.error('First line item missing price:', data.line_items[0]);
+            console.error('Missing price in first line item:', data.line_items[0]);
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'First line item missing price field' })
+                body: JSON.stringify({ error: 'Price is required in line items' })
             };
         }
 
         try {
-            // Create session configuration - pass through most fields directly
+            // Create Stripe checkout session
             const sessionParams = {
-                mode: data.mode || 'payment',
+                mode: 'payment',
                 payment_method_types: ['card'],
                 line_items: data.line_items,
                 success_url: data.success_url,
@@ -176,9 +160,13 @@ exports.handler = async function(event, context) {
             if (data.shipping_options) {
                 sessionParams.shipping_options = data.shipping_options;
             }
+            if (data.shipping_address_collection) {
+                sessionParams.shipping_address_collection = data.shipping_address_collection;
+            }
 
-            console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
+            console.log('Creating Stripe session with params:', sessionParams);
             const session = await stripe.checkout.sessions.create(sessionParams);
+            console.log('Created Stripe session:', session.id);
             
             return {
                 statusCode: 200,
