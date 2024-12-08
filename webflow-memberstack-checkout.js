@@ -49,9 +49,7 @@ const PRODUCT_CONFIG = {
         productType: 'free-plan',
         deliveryType: 'digital',
         requiresShipping: false,
-        prices: {
-            
-        }
+        prices: {}
     }
 };
 

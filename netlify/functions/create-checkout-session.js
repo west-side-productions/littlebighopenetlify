@@ -10,32 +10,36 @@ const headers = {
 // Shipping rate configuration
 const SHIPPING_RATES = {
     'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-        price: 728, 
+        price: 7.28, 
         label: 'Österreich', 
         countries: ['AT']
     },
     'shr_1QScMXJRMXFic4sWih6q9v36': { 
-        price: 2072, 
+        price: 20.72, 
         label: 'Great Britain', 
         countries: ['GB']
     },
     'shr_1QScNqJRMXFic4sW3NVUUckl': { 
-        price: 3500, 
+        price: 36.53, 
         label: 'Singapore', 
         countries: ['SG']
     },
     'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
-        price: 2036, 
+        price: 20.36, 
         label: 'European Union', 
-        countries: ['BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
+        countries: [
+            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
+            'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
+            'SI', 'SK', 'FI', 'SE'
+        ]
     }
 };
 
 // Product Configuration
 const PRODUCT_CONFIG = {
     'course': {
-        productType: 'course',
-        deliveryType: 'digital',
+        id: 'prc_course_digital',
+        type: 'course',
         requiresShipping: false,
         prices: {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
@@ -45,8 +49,8 @@ const PRODUCT_CONFIG = {
         }
     },
     'book': {
-        productType: 'book',
-        deliveryType: 'physical',
+        id: 'prc_cookbook_physical',
+        type: 'book',
         requiresShipping: true,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
@@ -56,19 +60,19 @@ const PRODUCT_CONFIG = {
         }
     },
     'bundle': {
-        productType: 'bundle',
-        deliveryType: 'physical',
+        id: 'prc_bundle_physical',
+        type: 'bundle',
         requiresShipping: true,
         prices: {
-            de: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
-            en: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
-            fr: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
-            it: 'price_1QTSNqJRMXFic4sWJYVWZlrp'
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
         }
     },
     'free-plan': {
-        productType: 'free-plan',
-        deliveryType: 'digital',
+        id: 'prc_free_digital',
+        type: 'free-plan',
         requiresShipping: false,
         prices: {}
     }
@@ -84,14 +88,13 @@ const validateShippingRate = (shippingRateId) => {
 };
 
 exports.handler = async function(event, context) {
-    console.log('=== Received Checkout Request ===');
-    
     // Log request details for debugging
     console.log('Incoming request details:', {
         method: event.httpMethod,
         path: event.path,
         headers: event.headers,
-        bodyExists: !!event.body
+        bodyExists: !!event.body,
+        bodyLength: event.body?.length
     });
 
     // Handle preflight requests
@@ -103,95 +106,115 @@ exports.handler = async function(event, context) {
         };
     }
 
+    // Only allow POST requests
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            headers,
+            body: JSON.stringify({ 
+                error: 'Method not allowed',
+                allowedMethods: ['POST', 'OPTIONS']
+            })
+        };
+    }
+
     try {
-        if (event.httpMethod !== 'POST') {
-            throw new Error('Method not allowed');
+        console.log('Raw event body:', event.body);
+        
+        if (!event.body) {
+            console.error('Request body is empty');
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Request body is required' })
+            };
         }
 
-        // Parse the request body
         let data;
         try {
             data = JSON.parse(event.body);
-            console.log('Received checkout data:', data);
         } catch (e) {
             console.error('Failed to parse request body:', e);
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Invalid JSON in request body: ' + e.message })
+                body: JSON.stringify({ error: 'Invalid JSON in request body' })
             };
         }
 
-        // Validate required fields according to Stripe's API
-        if (!data.line_items || !Array.isArray(data.line_items) || data.line_items.length === 0) {
-            console.error('Missing or invalid line_items:', data);
+        console.log('Received request data:', {
+            rawBody: event.body,
+            parsedData: data,
+            hasType: 'type' in data,
+            hasProductType: 'productType' in data,
+            type: data.type,
+            productType: data.productType
+        });
+
+        // Validate product type (check both type and productType)
+        const productType = data.metadata?.productType || data.metadata?.type || data.type;
+        if (!productType || !PRODUCT_CONFIG[productType]) {
+            console.error('Invalid or missing product type:', { 
+                productType,
+                metadata: data.metadata,
+                availableTypes: Object.keys(PRODUCT_CONFIG)
+            });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'line_items must be a non-empty array' })
+                body: JSON.stringify({ error: 'Invalid or missing product type' })
             };
         }
 
-        if (!data.line_items[0].price) {
-            console.error('Missing price in first line item:', data.line_items[0]);
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Price is required in line items' })
-            };
-        }
-
-        try {
-            // Create Stripe checkout session
-            const sessionParams = {
-                mode: 'payment',
-                payment_method_types: ['card'],
-                line_items: data.line_items,
-                success_url: data.success_url,
-                cancel_url: data.cancel_url,
-                customer_email: data.customer_email,
-                locale: data.locale || 'de',
-                allow_promotion_codes: true,
-                billing_address_collection: 'required',
-                metadata: data.metadata || {}
-            };
-
-            // Add shipping options if provided
-            if (data.shipping_options) {
-                sessionParams.shipping_options = data.shipping_options;
+        // Get product configuration
+        const productConfig = PRODUCT_CONFIG[productType];
+        
+        // Prepare Stripe session creation
+        const sessionParams = {
+            payment_method_types: ['card'],
+            line_items: [{
+                price: data.priceId,
+                quantity: 1
+            }],
+            mode: 'payment',
+            success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
+            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
+            metadata: {
+                ...data.metadata,
+                productType: productType,
+                language: data.language
             }
-            if (data.shipping_address_collection) {
-                sessionParams.shipping_address_collection = data.shipping_address_collection;
-            }
+        };
 
-            console.log('Creating Stripe session with params:', sessionParams);
-            const session = await stripe.checkout.sessions.create(sessionParams);
-            console.log('Created Stripe session:', session.id);
+        if (productConfig.requiresShipping) {
+            sessionParams.shipping_address_collection = {
+                allowed_countries: SHIPPING_RATES[data.shippingRateId]?.countries || []
+            };
             
-            return {
-                statusCode: 200,
-                headers,
-                body: JSON.stringify({
-                    sessionId: session.id
-                })
-            };
-        } catch (error) {
-            console.error('Stripe session creation error:', error);
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: error.message })
-            };
+            if (data.shippingRateId) {
+                sessionParams.shipping_options = [{
+                    shipping_rate: data.shippingRateId
+                }];
+            }
         }
+
+        console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
+        const session = await stripe.checkout.sessions.create(sessionParams);
+        console.log('Created Stripe session:', session);
+
+        // Return the complete session object
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify(session)
+        };
+
     } catch (error) {
         console.error('Error creating checkout session:', error);
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ 
-                error: 'Internal Server Error',
-                message: error.message 
-            })
+            body: JSON.stringify({ error: 'Internal Server Error' })
         };
     }
 };
