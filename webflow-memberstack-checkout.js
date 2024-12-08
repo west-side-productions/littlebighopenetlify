@@ -49,7 +49,9 @@ const PRODUCT_CONFIG = {
         productType: 'free-plan',
         deliveryType: 'digital',
         requiresShipping: false,
-        prices: {}
+        prices: {
+            
+        }
     }
 };
 
@@ -533,13 +535,12 @@ async function handleCheckout(event, button) {
         }
 
         // Get price ID for the current language
-        const priceId = STRIPE_PRICE_IDS[productType]?.[language] || STRIPE_PRICE_IDS[productType]?.['de'];
+        const priceId = productConfig.prices[language] || productConfig.prices['de'];
         if (!priceId) {
             console.error('Price lookup failed:', {
                 productType,
                 language,
-                availablePrices: STRIPE_PRICE_IDS[productType],
-                allPrices: STRIPE_PRICE_IDS
+                availablePrices: productConfig.prices
             });
             throw new Error(`No price found for ${productType} in ${language}`);
         }
