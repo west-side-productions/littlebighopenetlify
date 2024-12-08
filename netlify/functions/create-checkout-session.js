@@ -122,9 +122,10 @@ exports.handler = async function(event, context) {
         }
 
         console.log('Received data:', {
-            data: data,
             type: data.type,
-            availableTypes: Object.keys(PRODUCT_CONFIG)
+            email: data.email,
+            language: data.language,
+            metadata: data.metadata
         });
 
         // Validate product type
@@ -132,7 +133,6 @@ exports.handler = async function(event, context) {
         if (!productType || !PRODUCT_CONFIG[productType]) {
             console.error('Invalid product type:', { 
                 receivedType: productType,
-                receivedData: data,
                 availableTypes: Object.keys(PRODUCT_CONFIG)
             });
             return {
@@ -153,18 +153,16 @@ exports.handler = async function(event, context) {
                 price: data.priceId,
                 quantity: 1
             }],
-            metadata: {
-                productType: productType,
-                language: data.language || 'de',
-                customerEmail: data.customerEmail,
-                source: data.metadata?.source || 'checkout'
-            },
-            success_url: `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.SITE_URL}/cancel`,
+            success_url: data.successUrl || `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/cancel`,
+            customer_email: data.email,
+            locale: data.language || 'de',
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            locale: data.language || 'de',
-            customer_email: data.customerEmail
+            metadata: {
+                ...data.metadata,
+                productType: productType  // Add this for our reference
+            }
         };
 
         // Add shipping options for physical products

@@ -554,7 +554,7 @@ async function handleCheckout(event, button) {
             throw new Error(`Invalid product type: ${productType}`);
         }
 
-        console.log('Product Config:', productConfig);
+        console.log('Product Config:', { productConfig, productTypeInfo });
 
         // Get price ID for the current language
         const priceId = productConfig.prices[language] || productConfig.prices.de;
@@ -568,21 +568,20 @@ async function handleCheckout(event, button) {
 
         // Prepare checkout data
         const checkoutData = {
-            type: productType, // This is what the server expects for product type
+            type: productType,  // The server uses this for validation
             priceId: priceId,
             email: customerEmail,
+            language: language,
             successUrl: `${window.location.origin}/vielen-dank-email`,
             cancelUrl: `${window.location.origin}/produkte`,
             metadata: {
-                productType: productType,
-                version: productTypeInfo.version, // Use version from PRODUCT_TYPE_MAP
-                deliveryType: productConfig.deliveryType,
-                requiresShipping: productConfig.requiresShipping,
-                language: language,
                 memberstackUserId: memberstackUserId,
                 source: window.location.pathname,
                 countryCode: CONFIG.defaultCountry,
-                shippingClass: 'standard'
+                shippingClass: 'standard',
+                version: productTypeInfo.version,
+                language: language,
+                requiresShipping: productConfig.requiresShipping
             }
         };
 
