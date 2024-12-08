@@ -108,54 +108,43 @@ exports.handler = async function(event, context) {
             throw new Error('Method not allowed');
         }
 
-        // Parse the incoming request
-        let data;
-        try {
-            data = JSON.parse(event.body);
-        } catch (e) {
-            console.error('Failed to parse request body:', e);
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Invalid JSON in request body' })
-            };
-        }
-
+        // Parse the request body
+        const data = JSON.parse(event.body);
         console.log('Received data:', data);
 
         // Validate the request has required fields
-        if (!data.line_items || !data.line_items.length) {
+        if (!data.line_items || !data.line_items.length || !data.line_items[0].price) {
+            console.error('Missing or invalid line items:', data);
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Missing line items' })
+                body: JSON.stringify({ error: 'Missing or invalid line items' })
             };
         }
 
-        // Get the price ID from line items
-        const priceId = data.line_items[0].price;
-        
-        // Create session configuration - pass through most fields directly
-        const sessionParams = {
-            mode: 'payment',
-            payment_method_types: ['card'],
-            line_items: data.line_items,
-            success_url: data.success_url,
-            cancel_url: data.cancel_url,
-            customer_email: data.customer_email,
-            locale: data.locale || 'de',
-            allow_promotion_codes: true,
-            billing_address_collection: 'required',
-            metadata: data.metadata || {}
-        };
-
-        // Add shipping options if provided
-        if (data.shipping_options) {
-            sessionParams.shipping_options = data.shipping_options;
-        }
-
         try {
+            // Create session configuration - pass through most fields directly
+            const sessionParams = {
+                mode: data.mode || 'payment',
+                payment_method_types: ['card'],
+                line_items: data.line_items,
+                success_url: data.success_url,
+                cancel_url: data.cancel_url,
+                customer_email: data.customer_email,
+                locale: data.locale || 'de',
+                allow_promotion_codes: true,
+                billing_address_collection: 'required',
+                metadata: data.metadata || {}
+            };
+
+            // Add shipping options if provided
+            if (data.shipping_options) {
+                sessionParams.shipping_options = data.shipping_options;
+            }
+
+            console.log('Creating session with params:', JSON.stringify(sessionParams, null, 2));
             const session = await stripe.checkout.sessions.create(sessionParams);
+            
             return {
                 statusCode: 200,
                 headers,
