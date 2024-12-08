@@ -35,6 +35,7 @@ const SHIPPING_RATES = {
 const PRODUCT_CONFIG = {
     'course': {
         productType: 'course',
+        deliveryType: 'digital',
         requiresShipping: false,
         prices: {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
@@ -45,6 +46,7 @@ const PRODUCT_CONFIG = {
     },
     'book': {
         productType: 'book',
+        deliveryType: 'physical',
         requiresShipping: true,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
@@ -55,6 +57,7 @@ const PRODUCT_CONFIG = {
     },
     'bundle': {
         productType: 'bundle',
+        deliveryType: 'physical',
         requiresShipping: true,
         prices: {
             de: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
@@ -65,6 +68,7 @@ const PRODUCT_CONFIG = {
     },
     'free-plan': {
         productType: 'free-plan',
+        deliveryType: 'digital',
         requiresShipping: false,
         prices: {}
     }
@@ -119,12 +123,12 @@ exports.handler = async function(event, context) {
 
         console.log('Received data:', {
             data: data,
-            productType: data.type,
+            productType: data.productType,
             availableTypes: Object.keys(PRODUCT_CONFIG)
         });
 
         // Validate product type
-        const productType = data.type;
+        const productType = data.productType;
         if (!productType || !PRODUCT_CONFIG[productType]) {
             console.error('Invalid product type:', { 
                 receivedType: productType,
