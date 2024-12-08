@@ -913,47 +913,36 @@ async function getStripeInstance() {
 
 // Function to get user's preferred language
 async function getPreferredLanguage() {
+    console.log('Starting language detection...');
+    
     try {
-        // Try to get language from Memberstack if available
-        if (memberstackInitialized) {
-            try {
-                const member = await getCurrentMember();
-                if (member?.metadata?.language) {
-                    log('Using language from Memberstack:', member.metadata.language);
-                    return member.metadata.language;
-                }
-            } catch (e) {
-                console.warn('Error getting Memberstack language:', e);
-            }
+        // First check Memberstack
+        console.log('Checking Memberstack language...');
+        const member = await getCurrentMember();
+        if (member?.metadata?.language) {
+            const lang = member.metadata.language.toLowerCase();
+            console.log('Found language in Memberstack:', lang);
+            return lang;
         }
-
-        // Check Webflow locale
-        const webflowLocale = document.documentElement.getAttribute('lang');
-        if (webflowLocale && ['de', 'en', 'fr', 'it'].includes(webflowLocale)) {
-            log('Using language from Webflow:', webflowLocale);
-            return webflowLocale;
-        }
-
-        // Check URL path
-        const pathParts = window.location.pathname.split('/').filter(Boolean);
-        if (pathParts.length > 0 && ['de', 'en', 'fr', 'it'].includes(pathParts[0])) {
-            log('Using language from URL:', pathParts[0]);
-            return pathParts[0];
-        }
-
-        // Check browser language
-        const browserLang = navigator.language?.split('-')[0];
-        if (['de', 'en', 'fr', 'it'].includes(browserLang)) {
-            log('Using language from browser:', browserLang);
-            return browserLang;
-        }
-
-        // Default to German
-        log('Using default language:', CONFIG.defaultLanguage);
-        return CONFIG.defaultLanguage;
+        
+        // Fallback to browser language
+        const browserLang = navigator.language.split('-')[0].toLowerCase();
+        console.log('Using browser language:', browserLang);
+        
+        // Validate language is supported
+        const supportedLanguages = ['de', 'en', 'fr', 'it'];
+        const finalLang = supportedLanguages.includes(browserLang) ? browserLang : 'de';
+        
+        console.log('Language detection complete:', {
+            memberLang: member?.metadata?.language,
+            browserLang: browserLang,
+            finalLang: finalLang
+        });
+        
+        return finalLang;
     } catch (error) {
-        console.error('Error getting preferred language:', error);
-        return CONFIG.defaultLanguage;
+        console.error('Error detecting language:', error);
+        return 'de'; // Default to German
     }
 }
 
@@ -980,19 +969,19 @@ async function startCheckout(config) {
         }
         
         // Get price ID for the current language
-        const priceId = productConfig.prices[language] || productConfig.prices['de'];
+        const priceId = productConfig.prices[language];
         if (!priceId) {
+            console.error('No price found for language:', {
+                language: language,
+                productType: config.productType,
+                availablePrices: productConfig.prices
+            });
             throw new Error(`No price found for language: ${language}`);
         }
 
-        // Validate shipping for physical products
-        if (productConfig.requiresShipping && !config.shippingRateId) {
-            throw new Error('Shipping rate is required for physical products');
-        }
-        
         // Prepare checkout request data
         const requestData = {
-            productType: config.productType,  // Single source of truth for product type
+            productType: config.productType,
             priceId: priceId,
             language: language,
             customerEmail: config.customerEmail,
@@ -1005,7 +994,7 @@ async function startCheckout(config) {
             }
         };
         
-        log('Creating checkout session with data:', requestData);
+        console.log('Creating checkout session with data:', requestData);
 
         const response = await fetch('/.netlify/functions/create-checkout-session', {
             method: 'POST',
@@ -1016,12 +1005,17 @@ async function startCheckout(config) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Checkout session creation failed: ${errorData.error || 'Unknown error'}`);
+            const errorText = await response.text();
+            console.error('Checkout session creation failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorText: errorText
+            });
+            throw new Error(`Failed to create checkout session: ${response.status}`);
         }
 
         const responseData = await response.json();
-        log('Received session data:', responseData);
+        console.log('Received session data:', responseData);
 
         // Initialize Stripe
         const stripe = await getStripeInstance();
@@ -1035,7 +1029,7 @@ async function startCheckout(config) {
             throw new Error('No session ID returned from server');
         }
 
-        log('Redirecting to Stripe checkout...');
+        console.log('Redirecting to Stripe checkout...');
         const { error } = await stripe.redirectToCheckout({
             sessionId: responseData.sessionId
         });
@@ -1045,7 +1039,7 @@ async function startCheckout(config) {
             throw new Error(`Stripe redirect failed: ${error.message}`);
         }
     } catch (error) {
-        log('Checkout error:', error);
+        console.error('Checkout error:', error);
         throw error;
     }
 }
