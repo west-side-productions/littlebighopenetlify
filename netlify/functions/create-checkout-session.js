@@ -110,10 +110,12 @@ exports.handler = async function(event, context) {
 
         console.log('Processing checkout request:', data);
 
-        // Validate product type
-        if (!data.type || !PRODUCT_CONFIG[data.type]) {
+        // Get product type from either type or version field
+        const productType = data.type || data.version;
+        if (!productType || !PRODUCT_CONFIG[productType]) {
             console.error('Invalid product type:', { 
-                receivedType: data.type, 
+                receivedType: productType, 
+                receivedData: { type: data.type, version: data.version },
                 availableTypes: Object.keys(PRODUCT_CONFIG)
             });
             return {
@@ -124,7 +126,7 @@ exports.handler = async function(event, context) {
         }
 
         // Get product configuration
-        const productConfig = PRODUCT_CONFIG[data.type];
+        const productConfig = PRODUCT_CONFIG[productType];
         
         // Create session configuration
         const sessionParams = {
