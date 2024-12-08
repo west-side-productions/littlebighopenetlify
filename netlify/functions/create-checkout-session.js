@@ -1,103 +1,33 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// Configure CORS headers
 const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin, Authorization, X-Requested-With',
+    'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
 };
 
-// Shipping rate configuration
-const SHIPPING_RATES = {
-    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-        price: 7.28, 
-        label: 'Österreich', 
-        countries: ['AT']
-    },
-    'shr_1QScMXJRMXFic4sWih6q9v36': { 
-        price: 20.72, 
-        label: 'Great Britain', 
-        countries: ['GB']
-    },
-    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
-        price: 36.53, 
-        label: 'Singapore', 
-        countries: ['SG']
-    },
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
-        price: 20.36, 
-        label: 'European Union', 
-        countries: [
-            'BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
-            'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
-            'SI', 'SK', 'FI', 'SE'
-        ]
-    }
-};
-
-// Product Configuration
+// Product configuration
 const PRODUCT_CONFIG = {
-    'course': {
-        id: 'prc_course_digital',
-        type: 'course',
-        requiresShipping: false,
+    book: {
         prices: {
-            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
-        }
+            en: process.env.STRIPE_PRICE_ID_BOOK_EN,
+            de: process.env.STRIPE_PRICE_ID_BOOK_DE
+        },
+        requiresShipping: true
     },
-    'book': {
-        id: 'prc_cookbook_physical',
-        type: 'book',
-        requiresShipping: true,
+    ebook: {
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
-    },
-    'bundle': {
-        id: 'prc_bundle_physical',
-        type: 'bundle',
-        requiresShipping: true,
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
-    },
-    'free-plan': {
-        id: 'prc_free_digital',
-        type: 'free-plan',
-        requiresShipping: false,
-        prices: {}
+            en: process.env.STRIPE_PRICE_ID_EBOOK_EN,
+            de: process.env.STRIPE_PRICE_ID_EBOOK_DE
+        },
+        requiresShipping: false
     }
 };
 
-// Helper function to validate shipping rate against country
-const validateShippingRate = (shippingRateId) => {
-    const rate = SHIPPING_RATES[shippingRateId];
-    if (!rate) {
-        throw new Error(`Invalid shipping rate: ${shippingRateId}`);
-    }
-    return rate;
-};
-
-exports.handler = async function(event, context) {
-    // Log request details for debugging
-    console.log('Incoming request details:', {
-        method: event.httpMethod,
-        path: event.path,
-        headers: event.headers,
-        bodyExists: !!event.body,
-        bodyLength: event.body?.length
-    });
-
-    // Handle preflight requests
+exports.handler = async (event, context) => {
+    // Handle preflight OPTIONS request
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 200,
@@ -105,114 +35,87 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // Only allow POST requests
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            headers,
-            body: JSON.stringify({ 
-                error: 'Method not allowed',
-                allowedMethods: ['POST', 'OPTIONS']
-            })
-        };
-    }
-
     try {
-        console.log('Raw event body:', event.body);
-        
-        if (!event.body) {
-            console.error('Request body is empty');
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Request body is required' })
-            };
+        if (event.httpMethod !== 'POST') {
+            throw new Error('Method not allowed');
         }
 
-        let data;
-        try {
-            data = JSON.parse(event.body);
-            console.log('Parsed request data:', data);
-        } catch (e) {
-            console.error('Failed to parse request body:', e);
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Invalid JSON in request body' })
-            };
+        // Parse and validate the request body
+        const data = JSON.parse(event.body);
+        console.log('Received checkout request:', data);
+
+        if (!data.type || !data.language) {
+            throw new Error('Missing required fields: type and language are required');
         }
 
         // Validate product type
-        const productType = data.metadata?.productType || data.metadata?.type || data.type;
-        if (!productType || !PRODUCT_CONFIG[productType]) {
-            console.error('Invalid or missing product type:', { 
-                productType,
-                metadata: data.metadata,
-                availableTypes: Object.keys(PRODUCT_CONFIG)
-            });
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Invalid or missing product type' })
-            };
+        const product = PRODUCT_CONFIG[data.type];
+        if (!product) {
+            throw new Error(`Invalid product type: ${data.type}`);
         }
 
-        // Get product configuration
-        const productConfig = PRODUCT_CONFIG[productType];
-        
-        // Prepare Stripe session creation
+        // Validate language
+        if (!product.prices[data.language]) {
+            throw new Error(`Invalid language: ${data.language} for product type: ${data.type}`);
+        }
+
+        // Construct line items
+        const lineItems = [{
+            price: product.prices[data.language],
+            quantity: 1
+        }];
+
+        // Prepare session parameters
         const sessionParams = {
             payment_method_types: ['card'],
-            line_items: [{
-                price: data.priceId || productConfig.prices[data.language || 'de'],
-                quantity: 1
-            }],
+            line_items: lineItems,
             mode: 'payment',
-            success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
-            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
-            metadata: {
-                ...data.metadata,
-                productType: productType,
-                language: data.language
-            },
+            success_url: `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.SITE_URL}/cancel`,
             allow_promotion_codes: true,
-            billing_address_collection: 'required'
+            billing_address_collection: 'required',
+            metadata: {
+                productType: data.type,
+                language: data.language,
+                ...(data.metadata || {})
+            }
         };
 
         // Add shipping options if product requires shipping
-        if (productConfig.requiresShipping) {
-            const shippingRate = data.shippingRateId;
-            if (!shippingRate || !SHIPPING_RATES[shippingRate]) {
-                throw new Error('Valid shipping rate is required for physical products');
-            }
-
+        if (product.requiresShipping) {
             sessionParams.shipping_address_collection = {
-                allowed_countries: SHIPPING_RATES[shippingRate].countries
+                allowed_countries: ['DE', 'AT', 'CH', 'US', 'GB']
             };
             
-            sessionParams.shipping_options = [{
-                shipping_rate: shippingRate
-            }];
+            if (data.shippingRateId) {
+                sessionParams.shipping_options = [{
+                    shipping_rate: data.shippingRateId
+                }];
+            }
         }
 
-        console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
+        console.log('Creating checkout session with params:', sessionParams);
+
+        // Create the checkout session
         const session = await stripe.checkout.sessions.create(sessionParams);
-        console.log('Created Stripe session:', session.id);
+
+        console.log('Checkout session created:', session.id);
 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify(session)
+            body: JSON.stringify({
+                id: session.id
+            })
         };
 
     } catch (error) {
         console.error('Error creating checkout session:', error);
         return {
-            statusCode: 500,
+            statusCode: error.statusCode || 500,
             headers,
-            body: JSON.stringify({ 
-                error: 'Failed to create checkout session',
-                message: error.message 
+            body: JSON.stringify({
+                error: error.message
             })
         };
     }
