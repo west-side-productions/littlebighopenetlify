@@ -370,7 +370,10 @@ async function startCheckout(checkoutData) {
         }
 
         const requestData = {
-            priceId,
+            line_items: [{
+                price: priceId,
+                quantity: 1
+            }],
             customerEmail: member.email,
             metadata,
             shippingRateId,

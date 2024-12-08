@@ -99,13 +99,13 @@ exports.handler = async (event, context) => {
         const sessionParams = {
             customer_email: data.customerEmail,
             payment_method_types: ['card'],
-            line_items: [{
-                price: data.priceId,
-                quantity: 1,
+            line_items: data.line_items.map(item => ({
+                price: item.price,
+                quantity: item.quantity,
                 adjustable_quantity: {
                     enabled: false
                 }
-            }],
+            })),
             mode: 'payment',
             locale: data.metadata.language,
             submit_type: 'pay',
