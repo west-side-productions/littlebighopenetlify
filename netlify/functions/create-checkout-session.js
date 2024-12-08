@@ -105,19 +105,14 @@ exports.handler = async (event, context) => {
             mode: 'payment',
             success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
             cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
-            metadata: {
-                ...data.metadata,
-                memberstackUserId: data.memberstackUserId,
-                productType: data.productType,
-                type: data.type,
-                language: data.language
-            },
+            metadata: data.metadata,
             allow_promotion_codes: true,
-            billing_address_collection: 'required'
+            billing_address_collection: 'required',
+            customer_email: data.customerEmail
         };
 
         // Add shipping if required
-        if (data.requiresShipping) {
+        if (data.metadata.requiresShipping) {
             sessionParams.shipping_address_collection = {
                 allowed_countries: data.shippingRateId === 'shr_1QScOlJRMXFic4sW8MHW0kq7' 
                     ? ['BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SI', 'SK', 'FI', 'SE']
