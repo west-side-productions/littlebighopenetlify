@@ -434,17 +434,13 @@ async function handleCheckout(event, button) {
     log('Handling checkout for button:', button);
 
     try {
-        // Debugging log to verify button click
-        console.log('Button clicked:', button);
-        console.log('Data attributes:', button.dataset);
+        // Get product type from button using dataset
+        const productType = button.dataset.productType;
+        console.log('Button clicked with product type:', productType);
 
-        // Get product type from button
-        const productType = button.getAttribute('data-product-type');
         if (!productType) {
             throw new Error('No product type specified on button');
         }
-
-        console.log('Product type:', productType);
 
         // Get customer email
         const customerEmail = await getCustomerEmail();
@@ -518,128 +514,44 @@ function initializeCheckoutButtons() {
     console.log('=== Initializing checkout buttons ===');
     
     try {
-        // First, let's log all buttons we find
-        const allButtons = document.querySelectorAll('button');
-        console.log('All buttons on page:', Array.from(allButtons).map(b => ({
-            text: b.textContent.trim(),
-            type: b.dataset.productType,
-            classes: b.className
-        })));
-
-        // Now get our specific buttons
-        const buttons = document.querySelectorAll('button.checkout-button');
-        console.log('Found checkout buttons:', Array.from(buttons).map(b => ({
-            text: b.textContent.trim(),
-            type: b.dataset.productType,
-            classes: b.className
-        })));
+        // Get our specific buttons with both class and data attribute
+        const buttons = document.querySelectorAll('button[data-checkout-button][data-product-type]');
         
         if (buttons.length === 0) {
             console.warn('No checkout buttons found on page');
             return;
         }
 
-        // Remove any existing handlers
-        buttons.forEach(button => {
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
-        });
+        console.log(`Found ${buttons.length} checkout buttons`);
 
         // Add click handlers
-        buttons.forEach(button => {
-            console.log('Setting up button:', {
+        buttons.forEach((button, index) => {
+            const productType = button.dataset.productType;
+            console.log(`Setting up button ${index + 1}:`, {
                 text: button.textContent.trim(),
-                type: button.dataset.productType,
+                type: productType,
                 classes: button.className
             });
             
-            button.addEventListener('click', function(event) {
+            // Create a new button to replace the old one
+            const newButton = button.cloneNode(true);
+            
+            // Add the click handler to the new button
+            newButton.addEventListener('click', async function(event) {
                 event.preventDefault();
                 event.stopPropagation();
-                
-                console.log('=== BUTTON CLICKED ===');
-                console.log('Button details:', {
-                    text: this.textContent.trim(),
-                    type: this.dataset.productType,
-                    classes: this.className
-                });
-                console.log('Event target:', event.target);
-                console.log('Current target:', event.currentTarget);
-                
-                handleCheckout(event, this);
+                console.log(`Button ${index + 1} clicked with product type:`, this.dataset.productType);
+                await handleCheckout(event, this);
             });
+            
+            // Replace the old button with the new one
+            button.parentNode.replaceChild(newButton, button);
         });
 
         console.log('=== Button initialization complete ===');
 
     } catch (error) {
         console.error('Error initializing checkout buttons:', error);
-    }
-}
-
-// Handle checkout process
-async function handleCheckout(event, button) {
-    event.preventDefault();
-    console.log('=== Starting Checkout Process ===');
-    console.log('Button clicked:', {
-        text: button.textContent.trim(),
-        type: button.dataset.productType,
-        classes: button.className
-    });
-
-    try {
-        // Get product type from button
-        const productType = button.dataset.productType;
-        if (!productType) {
-            throw new Error('No product type specified on button');
-        }
-        console.log('Product type:', productType);
-
-        // Get customer email
-        const customerEmail = await getCustomerEmail();
-        if (!customerEmail) {
-            throw new Error('Customer email is required');
-        }
-
-        // Get the product configuration
-        const productConfig = PRODUCT_CONFIG[productType];
-        if (!productConfig) {
-            throw new Error(`Invalid product type: ${productType}`);
-        }
-        console.log('Product config:', productConfig);
-
-        // Get shipping rate for physical products
-        let shippingRateId = null;
-        if (productConfig.requiresShipping) {
-            const selectId = `shipping-rate-select-${productType}`;
-            const shippingSelect = document.getElementById(selectId);
-            if (!shippingSelect) {
-                throw new Error('Shipping country selection is required for physical products');
-            }
-            shippingRateId = shippingSelect.value;
-            console.log('Selected shipping rate:', shippingRateId);
-        }
-
-        // Create checkout config
-        const checkoutConfig = {
-            version: productType,
-            type: productType,
-            customerEmail: customerEmail,
-            shippingRateId: shippingRateId,
-            metadata: {
-                version: productType,
-                type: productType,
-                language: 'de',
-                source: window.location.pathname
-            }
-        };
-
-        console.log('Starting checkout with config:', checkoutConfig);
-        await startCheckout(checkoutConfig);
-
-    } catch (error) {
-        console.error('Checkout error:', error);
-        alert('Sorry, there was a problem starting the checkout. Please try again or contact support if the problem persists.');
     }
 }
 
@@ -668,7 +580,7 @@ function initializePriceElements() {
 
 // Initialize shipping selects
 function initializeShippingSelects() {
-    const shippingSelects = document.querySelectorAll('select[name="shipping-rate"]');
+    const shippingSelects = document.querySelectorAll('select[id^="shipping-rate-select-"]');
     log(`Found shipping selects: ${shippingSelects.length}`);
 
     shippingSelects.forEach(shippingSelect => {
@@ -900,8 +812,8 @@ async function initializeCheckoutSystem() {
         
         // Find all required elements
         const elements = {
-            checkoutButtons: document.querySelectorAll('button[data-product-type]'),
-            shippingSelects: document.querySelectorAll('select[name="shipping-rate"]'),
+            checkoutButtons: document.querySelectorAll('button[data-checkout-button][data-product-type]'),
+            shippingSelects: document.querySelectorAll('select[id^="shipping-rate-select-"]'),
             priceElements: document.querySelectorAll('[data-price-display]')
         };
         
@@ -918,10 +830,16 @@ async function initializeCheckoutSystem() {
             // Continue anyway as we might not need Memberstack for all operations
         }
         
-        // Initialize components
-        await initializeShippingSelects();
-        await initializeCheckoutButtons();
-        await initializePriceElements();
+        // Initialize components in the correct order
+        if (elements.checkoutButtons.length > 0) {
+            await initializeCheckoutButtons();
+        }
+        if (elements.shippingSelects.length > 0) {
+            await initializeShippingSelects();
+        }
+        if (elements.priceElements.length > 0) {
+            await initializePriceElements();
+        }
         
         systemInitialized = true;
         log('Checkout system initialized successfully');

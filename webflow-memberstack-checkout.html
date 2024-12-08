@@ -69,7 +69,6 @@
 
         <!-- Checkout Button -->
         <button 
-            class="checkout-button" 
             data-checkout-button
             data-product-type="course"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
@@ -88,7 +87,7 @@
         <!-- Shipping Country Selection -->
         <div class="shipping-selection" style="margin-bottom: 15px;">
             <label for="shipping-rate-select-book">Shipping Country:</label>
-            <select id="shipping-rate-select-book" name="Versand-nach" style="margin-left: 10px; padding: 5px;">
+            <select id="shipping-rate-select-book" style="margin-left: 10px; padding: 5px;">
                 <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
                 <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
                 <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
@@ -115,7 +114,6 @@
     
         <!-- Checkout Button -->
         <button 
-            class="checkout-button" 
             data-checkout-button
             data-product-type="book"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
@@ -134,7 +132,7 @@
         <!-- Shipping Country Selection -->
         <div class="shipping-selection" style="margin-bottom: 15px;">
             <label for="shipping-rate-select-bundle">Shipping Country:</label>
-            <select id="shipping-rate-select-bundle" name="Versand-nach" style="margin-left: 10px; padding: 5px;">
+            <select id="shipping-rate-select-bundle" style="margin-left: 10px; padding: 5px;">
                 <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
                 <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
                 <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
@@ -161,7 +159,6 @@
     
         <!-- Checkout Button -->
         <button 
-            class="checkout-button" 
             data-checkout-button
             data-product-type="bundle"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
@@ -174,10 +171,13 @@
     <div class="product-section">
         <h2>Free Access</h2>
         <p>Get started with our free content!</p>
-        <button class="checkout-button" data-checkout-button data-product-type="free">
+        <button 
+            data-checkout-button
+            data-product-type="free-plan"
+            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
             Start Free Access
         </button>
-        <div class="error-message" data-error-type="free"></div>
+        <div class="error-message"></div>
     </div>
 
     <script src="webflow-memberstack-checkout.js"></script>
