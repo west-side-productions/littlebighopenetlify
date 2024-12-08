@@ -595,12 +595,21 @@ async function handleCheckout(event, button) {
         console.log('Sending checkout data:', JSON.stringify(checkoutData, null, 2));
 
         // Create checkout session
+        const checkoutDataString = JSON.stringify(checkoutData, null, 2);
+        console.log('Sending checkout data (stringified):', checkoutDataString);
+        console.log('Checkout data structure:', {
+            hasLineItems: !!checkoutData.line_items,
+            lineItemsLength: checkoutData.line_items?.length,
+            firstLineItem: checkoutData.line_items?.[0],
+            priceId: checkoutData.line_items?.[0]?.price
+        });
+
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(checkoutData)
+            body: checkoutDataString
         });
 
         const responseText = await response.text();
