@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data:;">
     <title>Little Big Hope - Checkout</title>
     <script>
         // Environment variables
@@ -45,7 +46,7 @@
 </head>
 <body>
     <!-- Course Section -->
-    <div class="product-section">
+    <div class="product-section" id="course-section">
         <div class="product" data-product-type="course" data-base-price="99.99">
             <h2>Online Cooking Course</h2>
             <p>Price: €99.99</p>
@@ -71,23 +72,24 @@
         <button 
             data-checkout-button="true"
             data-product-type="course"
+            class="checkout-button"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
             Proceed to Checkout - Course (€99.99)
         </button>
-        <div class="error-message"></div>
+        <div class="error-message" id="error-message-course"></div>
     </div>
 
     <!-- Book Section -->
-    <div class="product-section">
+    <div class="product-section" id="book-section">
         <div class="product" data-product-type="book" data-base-price="29.99">
             <h2>Cookbook</h2>
             <p>Price: €29.99</p>
         </div>
     
         <!-- Shipping Country Selection -->
-        <div class="shipping-selection" style="margin-bottom: 15px;">
+        <div class="shipping-selection">
             <label for="shipping-rate-select-book">Shipping Country:</label>
-            <select id="shipping-rate-select-book" style="margin-left: 10px; padding: 5px;">
+            <select id="shipping-rate-select-book" name="shipping-rate-book" style="margin-left: 10px; padding: 5px;">
                 <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
                 <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
                 <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
@@ -109,30 +111,30 @@
                 <span>Total: €</span>
                 <span id="total-price-book">29.99</span>
             </div>
-            <p class="shipping-note">Shipping costs are calculated based on your selected country.</p>
         </div>
     
         <!-- Checkout Button -->
         <button 
             data-checkout-button="true"
             data-product-type="book"
+            class="checkout-button"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
             Proceed to Checkout - Book (€29.99)
         </button>
-        <div class="error-message"></div>
+        <div class="error-message" id="error-message-book"></div>
     </div>
 
     <!-- Bundle Section -->
-    <div class="product-section">
+    <div class="product-section" id="bundle-section">
         <div class="product" data-product-type="bundle" data-base-price="119.99">
             <h2>Course + Book Bundle</h2>
             <p>Price: €119.99</p>
         </div>
     
         <!-- Shipping Country Selection -->
-        <div class="shipping-selection" style="margin-bottom: 15px;">
+        <div class="shipping-selection">
             <label for="shipping-rate-select-bundle">Shipping Country:</label>
-            <select id="shipping-rate-select-bundle" style="margin-left: 10px; padding: 5px;">
+            <select id="shipping-rate-select-bundle" name="shipping-rate-bundle" style="margin-left: 10px; padding: 5px;">
                 <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
                 <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
                 <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
@@ -154,17 +156,17 @@
                 <span>Total: €</span>
                 <span id="total-price-bundle">119.99</span>
             </div>
-            <p class="shipping-note">Shipping costs are calculated based on your selected country.</p>
         </div>
     
         <!-- Checkout Button -->
         <button 
             data-checkout-button="true"
             data-product-type="bundle"
+            class="checkout-button"
             style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
             Proceed to Checkout - Bundle (€119.99)
         </button>
-        <div class="error-message"></div>
+        <div class="error-message" id="error-message-bundle"></div>
     </div>
 
     <!-- Free Plan Section -->
