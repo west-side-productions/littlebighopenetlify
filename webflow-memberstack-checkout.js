@@ -933,19 +933,19 @@ let stripeInstance = null;
 
 // Function to get or initialize Stripe instance
 async function getStripeInstance() {
-    if (stripeInstance) {
-        return stripeInstance;
-    }
-
     try {
-        if (!window.Stripe) {
-            throw new Error('Stripe.js not loaded');
+        console.log('Getting Stripe instance...');
+        if (typeof Stripe === 'undefined') {
+            console.error('Stripe is not loaded');
+            throw new Error('Stripe is not loaded. Please ensure the Stripe.js script is included.');
         }
-
-        stripeInstance = Stripe(CONFIG.stripePublicKey);
-        return stripeInstance;
+        
+        // Initialize Stripe with the publishable key
+        const stripePublicKey = 'pk_test_51QSXqTJRMXFic4sWqIfhA8MlmlTqGKRqhOiQlxJYX2f7QIazdlBqKNxQjWFRyuqDI6XZm8BNjkYYqUDLHh6Zy2wF00ORZHPGlL';
+        console.log('Initializing Stripe with public key');
+        return Stripe(stripePublicKey);
     } catch (error) {
-        console.error('Error initializing Stripe:', error);
+        console.error('Error getting Stripe instance:', error);
         throw error;
     }
 }
@@ -982,26 +982,29 @@ async function startCheckout(checkoutData) {
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('Server error:', errorData);
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
 
-        const session = await response.json();
-        console.log('Checkout session created:', session);
+        const sessionData = await response.json();
+        console.log('Checkout session created:', sessionData);
 
-        if (!session.id) {
+        if (!sessionData || !sessionData.id) {
+            console.error('Invalid session data:', sessionData);
             throw new Error('No session ID returned from server');
         }
 
         // Get Stripe instance
         const stripe = await getStripeInstance();
+        console.log('Got Stripe instance, redirecting to checkout with session ID:', sessionData.id);
         
-        // Redirect to Stripe checkout using the session ID
+        // Redirect to Stripe checkout using the correct method
         const { error } = await stripe.redirectToCheckout({
-            sessionId: session.id
+            sessionId: sessionData.id
         });
 
         if (error) {
-            console.error('Error redirecting to checkout:', error);
+            console.error('Stripe redirect error:', error);
             throw error;
         }
     } catch (error) {
