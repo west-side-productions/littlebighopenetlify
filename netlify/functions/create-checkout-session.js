@@ -95,20 +95,42 @@ exports.handler = async (event, context) => {
             throw new Error('Weight mismatch');
         }
 
-        // Prepare session parameters
+        // Prepare session parameters according to Stripe's documentation
         const sessionParams = {
+            customer_email: data.customerEmail,
             payment_method_types: ['card'],
             line_items: [{
                 price: data.priceId,
-                quantity: 1
+                quantity: 1,
+                adjustable_quantity: {
+                    enabled: false
+                }
             }],
             mode: 'payment',
+            locale: data.metadata.language,
+            submit_type: 'pay',
             success_url: data.successUrl,
             cancel_url: data.cancelUrl,
-            metadata: data.metadata,
+            metadata: {
+                memberstackUserId: data.metadata.memberstackUserId,
+                planId: data.metadata.planId,
+                productType: data.metadata.productType,
+                type: data.metadata.type,
+                language: data.metadata.language,
+                source: data.metadata.source,
+                totalWeight: data.metadata.totalWeight,
+                productWeight: data.metadata.productWeight,
+                packagingWeight: data.metadata.packagingWeight,
+                countryCode: data.metadata.countryCode,
+                requiresShipping: data.metadata.requiresShipping,
+                dimensions: data.metadata.dimensions,
+                shippingClass: data.metadata.shippingClass
+            },
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            customer_email: data.customerEmail
+            phone_number_collection: {
+                enabled: true
+            }
         };
 
         // Add shipping if required

@@ -346,7 +346,7 @@ async function startCheckout(checkoutData) {
             throw new Error('Price not found for language');
         }
 
-        // Prepare metadata with all required fields
+        // Prepare metadata according to Stripe's documentation
         const metadata = {
             memberstackUserId: member.id,
             planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
@@ -372,23 +372,42 @@ async function startCheckout(checkoutData) {
         const requestData = {
             priceId,
             customerEmail: member.email,
-            language,
             metadata,
-            requiresShipping: productConfig.requiresShipping,
             shippingRateId,
-            successUrl: window.location.origin + '/vielen-dank-email',
-            cancelUrl: window.location.origin + '/produkte'
+            successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: `${window.location.origin}/produkte`
         };
 
         console.log('Sending checkout request:', requestData);
 
-        const checkoutSessionResponse = await fetch('/.netlify/functions/create-checkout-session', {
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(requestData)
         });
 
-        await handleCheckout(checkoutSessionResponse);
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Checkout session creation failed:', errorData);
+            throw new Error(errorData.error || 'Failed to create checkout session');
+        }
+
+        const { id: sessionId } = await response.json();
+        if (!sessionId) {
+            throw new Error('No session ID returned from server');
+        }
+
+        console.log('Redirecting to checkout with session ID:', sessionId);
+        const { error } = await stripe.redirectToCheckout({
+            sessionId
+        });
+
+        if (error) {
+            console.error('Stripe redirect failed:', error);
+            throw error;
+        }
     } catch (error) {
         console.error('Checkout error:', error);
         alert('Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
