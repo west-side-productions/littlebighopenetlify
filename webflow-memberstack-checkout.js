@@ -53,38 +53,6 @@ const PRODUCT_CONFIG = {
     }
 };
 
-// Configuration for the checkout buttons
-const CHECKOUT_BUTTON_IDS = {
-    book: {
-        de: '#checkout-button-book-de',
-        en: '#checkout-button-book-en'
-    },
-    course: {
-        de: '#checkout-button-course-de',
-        en: '#checkout-button-course-en'
-    },
-    coaching: {
-        de: '#checkout-button-coaching-de',
-        en: '#checkout-button-coaching-en'
-    }
-};
-
-// Stripe price IDs for each product type and language
-const STRIPE_PRICE_IDS = {
-    book: {
-        de: 'price_1OGNVeF5zGhwkwfcPPJUxXxR',
-        en: 'price_1OGNVeF5zGhwkwfcPPJUxXxR'
-    },
-    course: {
-        de: 'price_1OGNVeF5zGhwkwfcPPJUxXxR',
-        en: 'price_1OGNVeF5zGhwkwfcPPJUxXxR'
-    },
-    coaching: {
-        de: 'price_1OGNVeF5zGhwkwfcPPJUxXxR',
-        en: 'price_1OGNVeF5zGhwkwfcPPJUxXxR'
-    }
-};
-
 // Product type to version mapping
 const PRODUCT_TYPE_MAP = {
     'course': {
@@ -720,14 +688,21 @@ function initializeShippingSelects() {
         try {
             // Get product type from the select ID
             const selectId = shippingSelect.id;
-            const productType = selectId.replace('shipping-rate-select-', '');
-            
-            if (!productType) {
+            const match = selectId.match(/shipping-rate-select-(\w+)/);
+            if (!match || !match[1]) {
                 console.error('Could not determine product type from select ID:', selectId);
                 return;
             }
+            const productType = match[1];
 
-            // Verify product configuration exists
+            // Get product section and verify it exists
+            const productSection = shippingSelect.closest('.product-section');
+            if (!productSection) {
+                console.error(`No product section found for shipping select: ${selectId}`);
+                return;
+            }
+
+            // Get product configuration
             const productConfig = PRODUCT_CONFIG[productType];
             if (!productConfig) {
                 console.error(`No configuration found for product type: ${productType}`);
@@ -736,31 +711,51 @@ function initializeShippingSelects() {
 
             if (!productConfig.requiresShipping) {
                 console.warn(`Product ${productType} does not require shipping, but has shipping select`);
+                shippingSelect.closest('.shipping-selection').style.display = 'none';
                 return;
             }
 
             // Add change event listener
             shippingSelect.addEventListener('change', (e) => {
+                const newRate = e.target.value;
                 log('Shipping rate changed:', {
                     productType,
-                    newRate: e.target.value
+                    newRate,
+                    selectId
                 });
-                updateTotalPrice(productType, e.target.value);
+
+                // Show error if no shipping rate is selected
+                const errorDiv = productSection.querySelector('.error-message');
+                if (errorDiv) {
+                    errorDiv.style.display = newRate ? 'none' : 'block';
+                    errorDiv.textContent = 'Please select a shipping option';
+                }
+
+                updateTotalPrice(productType, newRate);
             });
 
-            // Set initial shipping rate if not already set
-            if (!shippingSelect.value && shippingSelect.options.length > 0) {
-                shippingSelect.value = shippingSelect.options[0].value;
+            // Set initial shipping rate
+            const defaultShippingRate = CONFIG.defaultShippingRate;
+            if (!shippingSelect.value && defaultShippingRate) {
+                // Try to find the default shipping rate in the options
+                const defaultOption = Array.from(shippingSelect.options).find(opt => opt.value === defaultShippingRate);
+                if (defaultOption) {
+                    shippingSelect.value = defaultShippingRate;
+                } else if (shippingSelect.options.length > 0) {
+                    // If default not found, use first option
+                    shippingSelect.value = shippingSelect.options[0].value;
+                }
             }
 
-            const initialShippingRate = shippingSelect.value;
-            log('Initial shipping rate:', {
-                productType,
-                rate: initialShippingRate
-            });
-            
-            if (initialShippingRate) {
-                updateTotalPrice(productType, initialShippingRate);
+            // Trigger initial price update
+            const initialRate = shippingSelect.value;
+            if (initialRate) {
+                log('Setting initial shipping rate:', {
+                    productType,
+                    rate: initialRate,
+                    selectId
+                });
+                updateTotalPrice(productType, initialRate);
             }
 
         } catch (error) {
@@ -793,94 +788,34 @@ function updateTotalPrice(version, shippingRateId = null) {
     }
 }
 
-// Wait for Memberstack to be ready
-async function waitForMemberstack(timeout = 5000) {
-    const start = Date.now();
-    
-    while (Date.now() - start < timeout) {
-        if (window.memberstack && window.memberstack.getCurrentMember) {
-            console.log('Memberstack is ready');
-            return true;
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    console.warn('Memberstack initialization timed out');
-    return false;
-}
-
-// Get preferred language synchronously
-function getPreferredLanguage() {
-    try {
-        // Check URL path first (most reliable)
-        const pathParts = window.location.pathname.split('/');
-        if (pathParts.length > 1) {
-            const possibleLang = pathParts[1].toLowerCase();
-            if (['de', 'en', 'fr', 'it'].includes(possibleLang)) {
-                return possibleLang;
-            }
-        }
-
-        // Then check Webflow locale
-        const htmlElement = document.documentElement;
-        if (htmlElement && htmlElement.lang) {
-            const lang = htmlElement.lang.toLowerCase();
-            if (['de', 'en', 'fr', 'it'].includes(lang)) {
-                return lang;
-            }
-        }
-
-        // Default to German
-        return 'de';
-    } catch (error) {
-        console.error('Error detecting language:', error);
-        return 'de';
-    }
-}
-
 // Initialize Memberstack
 async function initializeMemberstack() {
     try {
-        // Wait for Memberstack to be ready
-        await new Promise((resolve) => {
-            const checkMemberstack = setInterval(() => {
-                if (window.memberstack && window.memberstack.getCurrentMember) {
-                    clearInterval(checkMemberstack);
-                    resolve();
-                }
-            }, 100);
+        log('Initializing Memberstack...');
+        
+        // Wait for Memberstack to be available
+        const ms = await waitForMemberstack();
+        if (!ms) {
+            throw new Error('Memberstack failed to initialize');
+        }
 
-            // Also listen for the ready event as a backup
-            document.addEventListener('memberstack.ready', () => {
-                clearInterval(checkMemberstack);
-                resolve();
-            });
+        // Store Memberstack instance globally
+        window.$memberstackDom = ms;
+        memberstackInitialized = true;
+        
+        log('Memberstack initialized successfully');
 
-            // Set a timeout to avoid infinite waiting
-            setTimeout(() => {
-                clearInterval(checkMemberstack);
-                resolve();
-            }, 5000);
+        // Set up auth state listener
+        window.$memberstackDom.getCurrentMember().then(({ data: member }) => {
+            if (member) {
+                log('Member logged in:', member.id);
+            } else {
+                log('No member logged in');
+            }
+        }).catch(error => {
+            console.error('Error getting current member:', error);
         });
 
-        // Ensure memberstack is available before proceeding
-        if (!window.memberstack) {
-            console.warn('Memberstack not available after initialization');
-            return false;
-        }
-
-        // Add member update listener
-        if (typeof window.memberstack.listen === 'function') {
-            window.memberstack.listen('member.update', (event) => {
-                log('Member updated:', event);
-                // Additional logic for member updates
-            });
-        } else {
-            console.warn('Memberstack listen method not available');
-        }
-
-        log('Memberstack initialized');
-        memberstackInitialized = true;
         return true;
     } catch (error) {
         console.error('Error initializing Memberstack:', error);
@@ -888,27 +823,40 @@ async function initializeMemberstack() {
     }
 }
 
+// Wait for Memberstack to be ready
+function waitForMemberstack(timeout = 5000) {
+    return new Promise((resolve) => {
+        if (window.$memberstackDom) {
+            resolve(window.$memberstackDom);
+            return;
+        }
+
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+            if (window.$memberstackDom) {
+                clearInterval(interval);
+                resolve(window.$memberstackDom);
+                return;
+            }
+
+            if (Date.now() - startTime > timeout) {
+                clearInterval(interval);
+                console.error('Memberstack initialization timed out');
+                resolve(null);
+            }
+        }, 100);
+    });
+}
+
 // Get current member
 async function getCurrentMember() {
     try {
-        // Wait for Memberstack to be ready
-        await new Promise((resolve) => {
-            if (window.memberstack) {
-                resolve();
-            } else {
-                document.addEventListener('memberstack.ready', resolve);
-            }
-        });
-
-        // Check which API is available
-        if (typeof window.memberstack?.getCurrentMember === 'function') {
-            return await window.memberstack.getCurrentMember();
-        } else if (typeof window.MemberStack?.getMember === 'function') {
-            return await window.MemberStack.getMember();
-        } else {
-            console.warn('No Memberstack member retrieval method available');
-            return null;
+        if (!window.$memberstackDom) {
+            throw new Error('Memberstack not initialized');
         }
+
+        const { data: member } = await window.$memberstackDom.getCurrentMember();
+        return member;
     } catch (error) {
         console.error('Error getting current member:', error);
         return null;
@@ -917,54 +865,48 @@ async function getCurrentMember() {
 
 // Initialize checkout system
 async function initializeCheckoutSystem() {
-    if (systemInitialized) {
-        console.log('Checkout system already initialized');
-        return true;
-    }
-
     try {
         log('Initializing checkout system...');
         
-        // Check if we're on membershome
+        // Check if we're on the members home page
         const path = window.location.pathname;
-        log(`Is on membershome: ${path.includes('membershome')} Path: ${path}`);
-        
-        // Find all required elements
+        const isOnMembersHome = path === '/members-home';
+        log('Is on membershome:', isOnMembersHome, 'Path:', path);
+
+        // Get all required elements
         const elements = {
-            checkoutButtons: document.querySelectorAll('button[data-checkout-button][data-product-type]'),
-            shippingSelects: document.querySelectorAll('select[id^="shipping-rate-select-"]'),
+            checkoutButtons: document.querySelectorAll('[data-checkout-button]'),
+            shippingSelects: document.querySelectorAll('select[id="shipping-rate-select"]'),
             priceElements: document.querySelectorAll('[data-price-element]')
         };
         
         log('Found elements:', elements);
-        
-        // Load Memberstack and Stripe
+
+        // Initialize Memberstack and Stripe
         log('Loading Memberstack and Stripe...');
         
-        try {
-            await waitForMemberstack();
-            log('Memberstack and Stripe loaded successfully');
-        } catch (error) {
-            console.warn('Failed to initialize Memberstack:', error);
-            // Continue anyway as we might not need Memberstack for all operations
+        const [memberstackInitialized, stripeInstance] = await Promise.all([
+            initializeMemberstack(),
+            getStripeInstance()
+        ]);
+
+        if (!memberstackInitialized || !stripeInstance) {
+            throw new Error('Failed to initialize required services');
         }
-        
-        // Initialize components in the correct order
-        if (elements.checkoutButtons.length > 0) {
-            await initializeCheckoutButtons();
-        }
-        if (elements.shippingSelects.length > 0) {
-            await initializeShippingSelects();
-        }
-        if (elements.priceElements.length > 0) {
-            await initializePriceElements();
-        }
-        
-        systemInitialized = true;
+
+        log('Memberstack and Stripe loaded successfully');
+
+        // Initialize UI components
+        initializeShippingSelects();
+        initializeLanguageSelects();
+        initializeCheckoutButtons();
+
         log('Checkout system initialized successfully');
+        systemInitialized = true;
+        
         return true;
     } catch (error) {
-        console.error('Failed to initialize checkout system:', error);
+        console.error('Error initializing checkout system:', error);
         return false;
     }
 }
