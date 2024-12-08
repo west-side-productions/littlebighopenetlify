@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data:;">
+    <title>Little Big Hope - Products</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://js.stripe.com/v3/"></script>
+    <script 
+        data-memberstack-app="app_cm24j3get009s0spw6w6wz49psh" 
+        src="https://static.memberstack.com/scripts/v1/memberstack.js" 
+        type="text/javascript"
+        async
+    ></script>
+</head>
+<body>
+    <header>
+        <h1>Our Products</h1>
+    </header>
+    <main>
+        <div class="product-list">
+            <!-- Example Product -->
+            <div class="product-item" data-product-type="book" data-base-price="29.99">
+                <h2>Cookbook</h2>
+                <p>Price: €29.99</p>
+                <div class="shipping-selection" id="shipping-rate-select-book">
+                    <label for="shipping-rate-select">Shipping Country:</label>
+                    <select id="shipping-rate-select" name="shipping-rate" style="margin-left: 10px; padding: 5px;">
+                        <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
+                        <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
+                        <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
+                        <option value="shr_1QScOlJRMXFic4sW8MHW0kq7">European Union</option>
+                    </select>
+                </div>
+                <button 
+                    class="checkout-button" 
+                    data-checkout-button="true"
+                    data-product-type="book"
+                    data-price="29.99"
+                >
+                    Buy Now
+                </button>
+            </div>
+            <!-- Add more products as needed -->
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2024 Little Big Hope</p>
+    </footer>
+    <script src="webflow-memberstack-checkout.js"></script>
+    <script>
+        // Initialize product prices and other dynamic elements
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePrices();
+            showShippingSections();
+        });
+    </script>
+</body>
+</html>

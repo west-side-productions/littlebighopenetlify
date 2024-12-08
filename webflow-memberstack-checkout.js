@@ -237,6 +237,10 @@ async function handleCheckout(event, button) {
             throw new Error('Price not found for language');
         }
 
+        // Calculate total weight
+        const totalWeight = productConfig.type === 'digital' ? 0 : calculateTotalWeight(productConfig);
+        console.log('Calculated total weight:', totalWeight);
+
         const payload = {
             priceId: priceId,
             customerEmail: member.data.auth.email,
@@ -251,7 +255,7 @@ async function handleCheckout(event, button) {
                 source: window.location.pathname,
                 planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
                 requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle',
-                totalWeight: calculateTotalWeight(productConfig), // Use calculateTotalWeight function
+                totalWeight: totalWeight, // Use calculated total weight
                 productWeight: productConfig.weight,
                 packagingWeight: productConfig.packagingWeight || 0,
                 dimensions: productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null,
@@ -271,26 +275,7 @@ async function handleCheckout(event, button) {
             body: JSON.stringify(payload)
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Checkout session creation failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText,
-                payload: payload
-            });
-            throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
-        }
-
-        const session = await response.json();
-        const stripe = await loadStripe(CONFIG.stripePublicKey);
-        const { error } = await stripe.redirectToCheckout({
-            sessionId: session.sessionId
-        });
-
-        if (error) {
-            throw error;
-        }
+        await handleCheckout(response);
     } catch (error) {
         console.error('Checkout error:', {
             message: error.message,
@@ -315,6 +300,36 @@ async function handleCheckout(event, button) {
     }
 }
 
+async function handleCheckout(checkoutSessionResponse) {
+    try {
+        if (!checkoutSessionResponse.ok) {
+            const errorData = await checkoutSessionResponse.json();
+            console.error('Checkout session creation failed:', errorData);
+            throw new Error(errorData.error || 'Failed to create checkout session');
+        }
+
+        const session = await checkoutSessionResponse.json();
+        console.log('Checkout session created:', session);
+
+        if (!session.id) {
+            throw new Error('No session ID returned from server');
+        }
+
+        const stripe = await getStripeInstance();
+        const { error } = await stripe.redirectToCheckout({
+            sessionId: session.id
+        });
+
+        if (error) {
+            console.error('Stripe redirect failed:', error);
+            throw error;
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        alert('Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
+    }
+}
+
 async function startCheckout(checkoutData) {
     try {
         const { version, productConfig, member, shippingRateId } = checkoutData;
@@ -331,23 +346,26 @@ async function startCheckout(checkoutData) {
             throw new Error('Price not found for language');
         }
 
-        // Prepare metadata with weight information
+        // Prepare metadata with all required fields
         const metadata = {
             memberstackUserId: member.id,
+            planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
             type: productConfig.type,
             language,
             source: window.location.pathname,
-            requiresShipping: productConfig.requiresShipping
+            requiresShipping: productConfig.requiresShipping,
+            countryCode: shippingRateId === 'shr_1QScOlJRMXFic4sW8MHW0kq7' ? 'EU' : 'AT',
+            totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
+            productWeight: productConfig.weight,
+            packagingWeight: productConfig.packagingWeight || 0
         };
 
-        // Add weight and shipping information for physical products
-        if (productConfig.requiresShipping) {
-            metadata.totalWeight = productConfig.weight + (productConfig.packagingWeight || 0);
-            metadata.productWeight = productConfig.weight;
-            metadata.packagingWeight = productConfig.packagingWeight || 0;
-            metadata.dimensions = productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null;
-            metadata.shippingClass = productConfig.shippingClass || 'standard';
-            metadata.shippingRateId = shippingRateId;
+        // Add optional metadata
+        if (productConfig.dimensions) {
+            metadata.dimensions = JSON.stringify(productConfig.dimensions);
+        }
+        if (productConfig.shippingClass) {
+            metadata.shippingClass = productConfig.shippingClass;
         }
 
         const checkoutSessionResponse = await fetch('/.netlify/functions/create-checkout-session', {
@@ -356,9 +374,14 @@ async function startCheckout(checkoutData) {
             body: JSON.stringify({
                 priceId,
                 memberstackUserId: member.id,
+                productType: productConfig.type,
+                type: productConfig.type,
+                language,
                 requiresShipping: productConfig.requiresShipping,
                 shippingRateId,
-                metadata
+                metadata,
+                successUrl: window.location.origin + '/vielen-dank-email',
+                cancelUrl: window.location.origin + '/produkte'
             })
         });
 
@@ -368,6 +391,7 @@ async function startCheckout(checkoutData) {
         }
 
         const { id: sessionId } = await checkoutSessionResponse.json();
+        console.log('Session ID:', sessionId);
         const { error } = await stripe.redirectToCheckout({ sessionId });
         
         if (error) {
