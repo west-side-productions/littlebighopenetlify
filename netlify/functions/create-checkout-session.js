@@ -78,6 +78,23 @@ exports.handler = async (event, context) => {
         const data = JSON.parse(event.body);
         console.log('Received checkout request:', data);
 
+        // Validate required metadata fields
+        const requiredMetadataFields = ['memberstackUserId', 'planId', 'countryCode', 'totalWeight', 'productWeight', 'packagingWeight'];
+        requiredMetadataFields.forEach(field => {
+            if (!data.metadata[field]) {
+                throw new Error(`Missing required metadata field: ${field}`);
+            }
+        });
+
+        // Validate weight consistency
+        const totalWeight = Number(data.metadata.totalWeight);
+        const productWeight = Number(data.metadata.productWeight);
+        const packagingWeight = Number(data.metadata.packagingWeight);
+
+        if (totalWeight !== (productWeight + packagingWeight)) {
+            throw new Error('Weight mismatch');
+        }
+
         // Prepare session parameters
         const sessionParams = {
             payment_method_types: ['card'],
@@ -126,7 +143,11 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error('Error creating checkout session:', error);
+        console.error('Error creating checkout session:', {
+            message: error.message,
+            stack: error.stack,
+            input: event.body
+        });
         return {
             statusCode: error.statusCode || 500,
             headers,
