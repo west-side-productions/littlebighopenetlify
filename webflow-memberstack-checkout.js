@@ -949,3 +949,42 @@ async function getStripeInstance() {
         throw error;
     }
 }
+
+// Function to start checkout
+async function startCheckout(checkoutData) {
+    try {
+        console.log('Creating checkout session:', checkoutData);
+        
+        // Create checkout session via your server endpoint
+        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(checkoutData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const session = await response.json();
+        console.log('Checkout session created:', session);
+
+        // Get Stripe instance
+        const stripe = await getStripeInstance();
+        
+        // Redirect to Stripe checkout using the session ID
+        const { error } = await stripe.redirectToCheckout({
+            sessionId: session.id
+        });
+
+        if (error) {
+            console.error('Error redirecting to checkout:', error);
+            throw error;
+        }
+    } catch (error) {
+        console.error('Error creating checkout session:', error);
+        throw error;
+    }
+}

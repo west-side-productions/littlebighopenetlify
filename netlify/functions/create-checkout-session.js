@@ -100,9 +100,8 @@ exports.handler = async function(event, context) {
     // Handle preflight requests
     if (event.httpMethod === 'OPTIONS') {
         return {
-            statusCode: 204,
-            headers,
-            body: ''
+            statusCode: 200,
+            headers
         };
     }
 
@@ -133,6 +132,7 @@ exports.handler = async function(event, context) {
         let data;
         try {
             data = JSON.parse(event.body);
+            console.log('Parsed request data:', data);
         } catch (e) {
             console.error('Failed to parse request body:', e);
             return {
@@ -142,16 +142,7 @@ exports.handler = async function(event, context) {
             };
         }
 
-        console.log('Received request data:', {
-            rawBody: event.body,
-            parsedData: data,
-            hasType: 'type' in data,
-            hasProductType: 'productType' in data,
-            type: data.type,
-            productType: data.productType
-        });
-
-        // Validate product type (check both type and productType)
+        // Validate product type
         const productType = data.metadata?.productType || data.metadata?.type || data.type;
         if (!productType || !PRODUCT_CONFIG[productType]) {
             console.error('Invalid or missing product type:', { 
@@ -173,7 +164,7 @@ exports.handler = async function(event, context) {
         const sessionParams = {
             payment_method_types: ['card'],
             line_items: [{
-                price: data.priceId,
+                price: data.priceId || productConfig.prices[data.language || 'de'],
                 quantity: 1
             }],
             mode: 'payment',
@@ -183,26 +174,31 @@ exports.handler = async function(event, context) {
                 ...data.metadata,
                 productType: productType,
                 language: data.language
-            }
+            },
+            allow_promotion_codes: true,
+            billing_address_collection: 'required'
         };
 
+        // Add shipping options if product requires shipping
         if (productConfig.requiresShipping) {
+            const shippingRate = data.shippingRateId;
+            if (!shippingRate || !SHIPPING_RATES[shippingRate]) {
+                throw new Error('Valid shipping rate is required for physical products');
+            }
+
             sessionParams.shipping_address_collection = {
-                allowed_countries: SHIPPING_RATES[data.shippingRateId]?.countries || []
+                allowed_countries: SHIPPING_RATES[shippingRate].countries
             };
             
-            if (data.shippingRateId) {
-                sessionParams.shipping_options = [{
-                    shipping_rate: data.shippingRateId
-                }];
-            }
+            sessionParams.shipping_options = [{
+                shipping_rate: shippingRate
+            }];
         }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
         const session = await stripe.checkout.sessions.create(sessionParams);
-        console.log('Created Stripe session:', session);
+        console.log('Created Stripe session:', session.id);
 
-        // Return the complete session object
         return {
             statusCode: 200,
             headers,
@@ -214,7 +210,10 @@ exports.handler = async function(event, context) {
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: 'Internal Server Error' })
+            body: JSON.stringify({ 
+                error: 'Failed to create checkout session',
+                message: error.message 
+            })
         };
     }
 };
