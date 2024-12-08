@@ -34,43 +34,20 @@ const SHIPPING_RATES = {
 // Product Configuration
 const PRODUCT_CONFIG = {
     'course': {
-        id: 'prc_course_digital',
         type: 'course',
-        requiresShipping: false,
-        prices: {
-            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
-        }
+        requiresShipping: false
     },
     'book': {
-        id: 'prc_cookbook_physical',
         type: 'book',
-        requiresShipping: true,
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
+        requiresShipping: true
     },
     'bundle': {
-        id: 'prc_bundle_physical',
         type: 'bundle',
-        requiresShipping: true,
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        }
+        requiresShipping: true
     },
     'free-plan': {
-        id: 'prc_free_digital',
         type: 'free-plan',
-        requiresShipping: false,
-        prices: {}
+        requiresShipping: false
     }
 };
 
@@ -134,9 +111,11 @@ exports.handler = async function(event, context) {
         console.log('Processing checkout request:', data);
 
         // Validate product type
-        const productType = data.type;
-        if (!productType || !PRODUCT_CONFIG[productType]) {
-            console.error('Invalid product type:', { productType, availableTypes: Object.keys(PRODUCT_CONFIG) });
+        if (!data.type || !PRODUCT_CONFIG[data.type]) {
+            console.error('Invalid product type:', { 
+                receivedType: data.type, 
+                availableTypes: Object.keys(PRODUCT_CONFIG)
+            });
             return {
                 statusCode: 400,
                 headers,
@@ -145,7 +124,7 @@ exports.handler = async function(event, context) {
         }
 
         // Get product configuration
-        const productConfig = PRODUCT_CONFIG[productType];
+        const productConfig = PRODUCT_CONFIG[data.type];
         
         // Create session configuration
         const sessionParams = {
@@ -156,7 +135,7 @@ exports.handler = async function(event, context) {
                 quantity: 1
             }],
             metadata: {
-                type: productType,
+                type: data.type,
                 language: data.language || 'de',
                 customerEmail: data.customerEmail,
                 source: data.metadata?.source || 'checkout'
