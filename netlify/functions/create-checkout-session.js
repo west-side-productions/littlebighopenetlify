@@ -78,6 +78,15 @@ exports.handler = async (event, context) => {
         const data = JSON.parse(event.body);
         console.log('Received checkout request:', data);
 
+        // Create line items array from priceId if not provided
+        const line_items = data.line_items || [{
+            price: data.priceId,
+            quantity: 1,
+            adjustable_quantity: {
+                enabled: false
+            }
+        }];
+
         // Validate required metadata fields
         const requiredMetadataFields = ['memberstackUserId', 'planId', 'productType', 'type', 'language', 'countryCode', 'totalWeight', 'productWeight', 'packagingWeight'];
         requiredMetadataFields.forEach(field => {
@@ -99,13 +108,7 @@ exports.handler = async (event, context) => {
         const sessionParams = {
             customer_email: data.customerEmail,
             payment_method_types: ['card'],
-            line_items: data.line_items.map(item => ({
-                price: item.price,
-                quantity: item.quantity,
-                adjustable_quantity: {
-                    enabled: false
-                }
-            })),
+            line_items,
             mode: 'payment',
             locale: data.metadata.language,
             submit_type: 'pay',
@@ -148,17 +151,27 @@ exports.handler = async (event, context) => {
 
         console.log('Creating checkout session with params:', sessionParams);
 
-        const session = await stripe.checkout.sessions.create(sessionParams);
-        console.log('Checkout session created:', session.id);
+        try {
+            const session = await stripe.checkout.sessions.create(sessionParams);
+            console.log('Checkout session created:', session.id);
 
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-                id: session.id
-            })
-        };
-
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                    id: session.id
+                })
+            };
+        } catch (error) {
+            console.error('Error creating checkout session:', error);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({
+                    error: error.message
+                })
+            };
+        }
     } catch (error) {
         console.error('Error creating checkout session:', {
             message: error.message,

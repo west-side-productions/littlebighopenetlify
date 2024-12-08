@@ -369,11 +369,16 @@ async function startCheckout(checkoutData) {
             metadata.shippingClass = productConfig.shippingClass;
         }
 
+        // Prepare line items according to Stripe's documentation
+        const line_items = [{
+            price: priceId,
+            quantity: 1
+        }];
+
+        console.log('Line items:', line_items);
+
         const requestData = {
-            line_items: [{
-                price: priceId,
-                quantity: 1
-            }],
+            line_items,
             customerEmail: member.email,
             metadata,
             shippingRateId,
