@@ -428,24 +428,92 @@ async function sendOrderNotificationEmail(session) {
     }
 }
 
+// Initialize checkout buttons
+async function initializeCheckoutButtons() {
+    console.log('=== Initializing checkout buttons ===');
+    
+    try {
+        // Remove any existing event listeners
+        document.querySelectorAll('.checkout-button').forEach(button => {
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+        });
+
+        // Initialize each button individually
+        const buttonConfigs = [
+            { id: 'checkout-button-course', type: 'course', price: 99.99 },
+            { id: 'checkout-button-book', type: 'book', price: 29.99 },
+            { id: 'checkout-button-bundle', type: 'bundle', price: 119.99 }
+        ];
+
+        for (const config of buttonConfigs) {
+            const button = document.getElementById(config.id);
+            if (!button) {
+                console.warn(`Button not found: ${config.id}`);
+                continue;
+            }
+
+            console.log(`Initializing button: ${config.id}`, {
+                buttonElement: button,
+                productType: config.type,
+                price: config.price,
+                dataset: button.dataset
+            });
+
+            button.addEventListener('click', async function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                console.log(`Button clicked: ${config.id}`, {
+                    productType: config.type,
+                    price: config.price,
+                    buttonElement: this,
+                    dataset: this.dataset
+                });
+
+                try {
+                    await handleCheckout(event, this);
+                } catch (error) {
+                    console.error(`Checkout error for ${config.id}:`, error);
+                    const errorDiv = document.getElementById(`error-message-${config.type}`);
+                    if (errorDiv) {
+                        errorDiv.textContent = error.message;
+                        errorDiv.style.display = 'block';
+                    }
+                }
+            });
+        }
+
+        console.log('=== Button initialization complete ===');
+
+    } catch (error) {
+        console.error('Error initializing checkout buttons:', error);
+    }
+}
+
 // Checkout Functions
 async function handleCheckout(event, button) {
-    event.preventDefault();
     console.log('=== Starting Checkout Process ===');
-    console.log('Button clicked:', {
-        button: button,
+    console.log('Button details:', {
+        id: button.id,
         dataset: button.dataset,
-        productType: button.dataset.productType,
-        html: button.outerHTML
+        productType: button.dataset.productType
     });
 
     try {
-        // Get product type from button using dataset
+        // Get product type from button
         const productType = button.dataset.productType;
-        console.log('Product type from button:', productType);
-
         if (!productType) {
             throw new Error('No product type specified on button');
+        }
+
+        // Validate product type
+        if (!PRODUCT_CONFIG[productType]) {
+            console.error('Invalid product type:', {
+                receivedType: productType,
+                availableTypes: Object.keys(PRODUCT_CONFIG)
+            });
+            throw new Error(`Invalid product type: ${productType}`);
         }
 
         // Get customer email
@@ -454,44 +522,40 @@ async function handleCheckout(event, button) {
             throw new Error('Customer email is required');
         }
 
-        // Get the product configuration
-        const productConfig = PRODUCT_CONFIG[productType];
-        console.log('Product config found:', {
-            productType: productType,
-            config: productConfig,
-            availableTypes: Object.keys(PRODUCT_CONFIG)
-        });
-
         // Get shipping rate for physical products
         let shippingRateId = null;
-        if (productConfig.requiresShipping) {
+        if (PRODUCT_CONFIG[productType].requiresShipping) {
             const selectId = `shipping-rate-select-${productType}`;
             const shippingSelect = document.getElementById(selectId);
             if (!shippingSelect) {
                 throw new Error('Shipping country selection is required for physical products');
             }
             shippingRateId = shippingSelect.value;
-            console.log('Selected shipping rate:', shippingRateId);
         }
 
         // Create checkout config
         const checkoutConfig = {
-            productType: productType,            // Required: course, book, or bundle
+            productType: productType,
             customerEmail: customerEmail,
-            shippingRateId: shippingRateId,  // Only for physical products
+            shippingRateId: shippingRateId,
             metadata: {
-                productType: productType,        // Required in metadata
-                language: 'de',              // Will be updated in startCheckout
+                productType: productType,
                 source: window.location.pathname
             }
         };
         
-        log('Starting checkout with config:', checkoutConfig);
+        console.log('Starting checkout with config:', checkoutConfig);
         await startCheckout(checkoutConfig);
 
     } catch (error) {
         console.error('Checkout error:', error);
-        alert('Sorry, there was a problem starting the checkout. Please try again or contact support if the problem persists.');
+        // Show error in the appropriate error div
+        const errorDiv = document.getElementById(`error-message-${button.dataset.productType}`);
+        if (errorDiv) {
+            errorDiv.textContent = error.message;
+            errorDiv.style.display = 'block';
+        }
+        throw error;
     }
 }
 
@@ -512,69 +576,6 @@ async function getCustomerEmail() {
     } catch (error) {
         console.warn('Failed to get member email:', error);
         return '';
-    }
-}
-
-// Initialize checkout buttons
-function initializeCheckoutButtons() {
-    console.log('=== Initializing checkout buttons ===');
-    
-    try {
-        // Get our specific buttons with both class and data attribute
-        const buttons = document.querySelectorAll('button[data-checkout-button][data-product-type]');
-        
-        if (buttons.length === 0) {
-            console.warn('No checkout buttons found on page');
-            return;
-        }
-
-        console.log(`Found ${buttons.length} checkout buttons`);
-
-        // Add click handlers
-        buttons.forEach((button, index) => {
-            const productType = button.dataset.productType;
-            console.log(`Setting up button ${index + 1}:`, {
-                text: button.textContent.trim(),
-                productType: productType,
-                html: button.outerHTML,
-                dataset: button.dataset
-            });
-            
-            // Remove any existing click handlers
-            const newButton = button.cloneNode(true);
-            
-            // Add the click handler to the new button
-            newButton.addEventListener('click', async function(event) {
-                event.preventDefault();
-                event.stopPropagation();
-                
-                const clickedType = this.dataset.productType;
-                console.log('Button clicked:', {
-                    index: index,
-                    productType: clickedType,
-                    dataset: this.dataset,
-                    html: this.outerHTML
-                });
-                
-                if (!clickedType || !PRODUCT_CONFIG[clickedType]) {
-                    console.error('Invalid product type on button:', {
-                        productType: clickedType,
-                        availableTypes: Object.keys(PRODUCT_CONFIG)
-                    });
-                    return;
-                }
-                
-                await handleCheckout(event, this);
-            });
-            
-            // Replace the old button with the new one
-            button.parentNode.replaceChild(newButton, button);
-        });
-
-        console.log('=== Button initialization complete ===');
-
-    } catch (error) {
-        console.error('Error initializing checkout buttons:', error);
     }
 }
 
