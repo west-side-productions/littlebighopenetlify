@@ -963,8 +963,10 @@ async function startCheckout(checkoutData) {
             },
             body: JSON.stringify({
                 priceId: checkoutData.priceId,
-                type: checkoutData.productType,
                 language: checkoutData.language,
+                customerEmail: checkoutData.customerEmail,
+                successUrl: checkoutData.successUrl,
+                cancelUrl: checkoutData.cancelUrl,
                 shippingRateId: checkoutData.shippingRateId,
                 metadata: {
                     memberstackUserId: checkoutData.memberstackUserId,
@@ -972,7 +974,8 @@ async function startCheckout(checkoutData) {
                     type: checkoutData.type,
                     language: checkoutData.language,
                     source: window.location.pathname,
-                    requiresShipping: checkoutData.requiresShipping
+                    requiresShipping: checkoutData.requiresShipping,
+                    ...checkoutData.metadata
                 }
             })
         });

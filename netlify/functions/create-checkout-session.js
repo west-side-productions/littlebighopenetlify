@@ -44,24 +44,28 @@ exports.handler = async (event, context) => {
         const data = JSON.parse(event.body);
         console.log('Received checkout request:', data);
 
-        if (!data.type || !data.language) {
-            throw new Error('Missing required fields: type and language are required');
+        // Extract type from metadata if not directly provided
+        const productType = data.type || data.metadata?.productType;
+        const language = data.language;
+
+        if (!productType || !language) {
+            throw new Error('Missing required fields: productType and language are required');
         }
 
         // Validate product type
-        const product = PRODUCT_CONFIG[data.type];
+        const product = PRODUCT_CONFIG[productType];
         if (!product) {
-            throw new Error(`Invalid product type: ${data.type}`);
+            throw new Error(`Invalid product type: ${productType}`);
         }
 
         // Validate language
-        if (!product.prices[data.language]) {
-            throw new Error(`Invalid language: ${data.language} for product type: ${data.type}`);
+        if (!product.prices[language]) {
+            throw new Error(`Invalid language: ${language} for product type: ${productType}`);
         }
 
         // Construct line items
         const lineItems = [{
-            price: product.prices[data.language],
+            price: data.priceId || product.prices[language],
             quantity: 1
         }];
 
@@ -70,14 +74,15 @@ exports.handler = async (event, context) => {
             payment_method_types: ['card'],
             line_items: lineItems,
             mode: 'payment',
-            success_url: `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.SITE_URL}/cancel`,
+            success_url: data.successUrl || `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/cancel`,
+            customer_email: data.customerEmail,
             allow_promotion_codes: true,
             billing_address_collection: 'required',
             metadata: {
-                productType: data.type,
-                language: data.language,
-                ...(data.metadata || {})
+                ...data.metadata,
+                productType,
+                language
             }
         };
 
