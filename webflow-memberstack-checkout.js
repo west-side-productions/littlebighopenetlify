@@ -27,6 +27,13 @@ const PRODUCT_CONFIG = {
         productType: 'book',
         deliveryType: 'physical',
         requiresShipping: true,
+        weight: 1005,
+        packagingWeight: 152,
+        dimensions: {
+            length: 25,
+            width: 20,
+            height: 2
+        },
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
@@ -491,99 +498,63 @@ async function initializeCheckoutButtons() {
 
 // Handle checkout process
 async function handleCheckout(event, button) {
-    const productType = button.dataset.productType;
-    console.log('=== Starting Checkout Process ===', { productType });
-
     try {
-        // Get customer email
-        const customerEmail = await getCustomerEmail();
-        if (!customerEmail) {
-            throw new Error('Customer email is required');
+        event.preventDefault();
+        
+        // Check if user is logged in
+        const member = await getCurrentMember();
+        if (!member) {
+            window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+            return;
         }
 
-        // Get shipping rate if needed
-        let shippingRateId = null;
-        if (productType === 'book' || productType === 'bundle') {
-            const selectId = `shipping-rate-select-${productType}`;
-            const shippingSelect = document.getElementById(selectId);
-            if (!shippingSelect) {
-                throw new Error('Shipping country selection is required for physical products');
-            }
-            if (!shippingSelect.value) {
-                throw new Error('Please select a shipping option');
-            }
-            shippingRateId = shippingSelect.value;
-            console.log('Using shipping rate:', shippingRateId);
-        }
-
-        // Get language from URL path
-        const language = getPreferredLanguage(); // Use our dedicated function
-
-        // Get product configuration and version
+        const productType = button.getAttribute('data-product-type');
         const productConfig = PRODUCT_CONFIG[productType];
+        
         if (!productConfig) {
-            throw new Error(`Invalid product type: ${productType}`);
+            throw new Error('Invalid product type');
         }
 
-        console.log('Product Config:', { productConfig, requiresShipping: productConfig.requiresShipping });
+        // Get selected country and shipping rate
+        const countrySelect = document.querySelector('.shipping-country-select');
+        const selectedCountry = countrySelect ? countrySelect.value : null;
+        const shippingRateId = productConfig.requiresShipping ? 
+            getShippingRateForCountry(selectedCountry) : null;
 
-        // Validate shipping for physical products
         if (productConfig.requiresShipping && !shippingRateId) {
-            throw new Error('Please select a shipping option');
+            throw new Error('Please select a valid shipping country');
         }
 
-        // Get price ID for the current language
-        const priceId = productConfig.prices[language] || productConfig.prices['de'];
-        if (!priceId) {
-            console.error('Price lookup failed:', {
-                productType,
-                language,
-                availablePrices: productConfig.prices
-            });
-            throw new Error(`No price found for ${productType} in ${language}`);
-        }
-
-        console.log('Using price ID:', { productType, language, priceId });
-
-        // Get current member for metadata
-        const member = await $memberstackDom?.getCurrentMember();
-        const memberstackUserId = member?.id || null;
-
-        // Prepare checkout data according to Stripe's API
         const checkoutData = {
-            line_items: [{
-                price: priceId,
-                quantity: 1
-            }],
-            mode: 'payment',
-            customer_email: customerEmail,
-            success_url: `${window.location.origin}/vielen-dank-email`,
-            cancel_url: `${window.location.origin}/produkte`,
-            locale: language,
+            priceId: productConfig.prices[getCurrentLanguage()],
+            productType: productConfig.productType,
+            type: productConfig.deliveryType,
+            language: getCurrentLanguage(),
+            memberstackUserId: member.id,
+            requiresShipping: productConfig.requiresShipping,
+            shippingRateId: shippingRateId,
             metadata: {
-                memberstackUserId,
-                productType,
-                type: productConfig.deliveryType,
-                language,
-                source: window.location.pathname,
-                planId: productConfig.memberstackPlanId,
-                requiresShipping: productConfig.requiresShipping
+                totalWeight: productConfig.weight + productConfig.packagingWeight,
+                productWeight: productConfig.weight,
+                packagingWeight: productConfig.packagingWeight,
+                dimensions: JSON.stringify(productConfig.dimensions),
+                shippingClass: 'standard',
+                countryCode: selectedCountry
             }
         };
 
-        // Add shipping info if needed
-        if (productConfig.requiresShipping && shippingRateId) {
-            checkoutData.shipping_options = [{
-                shipping_rate: shippingRateId
-            }];
-            checkoutData.shipping_address_collection = {
-                allowed_countries: ['DE', 'AT', 'CH', 'IT', 'FR']
-            };
-        }
+        await startCheckout(checkoutData);
 
-        console.log('Creating checkout session:', checkoutData);
+    } catch (error) {
+        console.error('Error in checkout:', error);
+        // Handle error appropriately
+    }
+}
 
-        // Create checkout session
+async function startCheckout(checkoutData) {
+    try {
+        console.log('Starting checkout process with data:', checkoutData);
+        
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
             method: 'POST',
             headers: {
@@ -592,45 +563,35 @@ async function handleCheckout(event, button) {
             body: JSON.stringify(checkoutData)
         });
 
-        const responseText = await response.text();
-        console.log('Server response:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: responseText
-        });
-
         if (!response.ok) {
-            throw new Error(`Failed to create checkout session: ${response.status} - ${responseText}`);
+            const errorData = await response.json();
+            console.error('Server error:', errorData);
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
 
-        let sessionData;
-        try {
-            sessionData = JSON.parse(responseText);
-        } catch (e) {
-            throw new Error(`Invalid JSON response: ${responseText}`);
-        }
+        const sessionData = await response.json();
+        console.log('Checkout session created:', sessionData);
 
-        if (!sessionData.sessionId) {
+        if (!sessionData || !sessionData.id) {
+            console.error('Invalid session data:', sessionData);
             throw new Error('No session ID returned from server');
         }
 
-        // Initialize Stripe and redirect
+        // Get Stripe instance
         const stripe = await getStripeInstance();
-        const { error } = await stripe.redirectToCheckout({ 
-            sessionId: sessionData.sessionId 
-        });
+        console.log('Got Stripe instance, redirecting to checkout with session ID:', sessionData.id);
         
+        // Redirect to Stripe checkout
+        const { error } = await stripe.redirectToCheckout({
+            sessionId: sessionData.id
+        });
+
         if (error) {
+            console.error('Stripe redirect error:', error);
             throw error;
         }
-
     } catch (error) {
-        console.error('Checkout error:', error);
-        const errorDiv = document.querySelector(`[data-error-message="${productType}"]`);
-        if (errorDiv) {
-            errorDiv.textContent = error.message;
-            errorDiv.style.display = 'block';
-        }
+        console.error('Error in checkout process:', error);
         throw error;
     }
 }
@@ -946,69 +907,6 @@ async function getStripeInstance() {
         return Stripe(stripePublicKey);
     } catch (error) {
         console.error('Error getting Stripe instance:', error);
-        throw error;
-    }
-}
-
-// Function to start checkout
-async function startCheckout(checkoutData) {
-    try {
-        console.log('Starting checkout process with data:', checkoutData);
-        
-        // Create checkout session via your server endpoint
-        const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                priceId: checkoutData.priceId,
-                language: checkoutData.language,
-                customerEmail: checkoutData.customerEmail,
-                successUrl: checkoutData.successUrl,
-                cancelUrl: checkoutData.cancelUrl,
-                shippingRateId: checkoutData.shippingRateId,
-                metadata: {
-                    memberstackUserId: checkoutData.memberstackUserId,
-                    productType: checkoutData.productType,
-                    type: checkoutData.type,
-                    language: checkoutData.language,
-                    source: window.location.pathname,
-                    requiresShipping: checkoutData.requiresShipping,
-                    ...checkoutData.metadata
-                }
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Server error:', errorData);
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        }
-
-        const sessionData = await response.json();
-        console.log('Checkout session created:', sessionData);
-
-        if (!sessionData || !sessionData.id) {
-            console.error('Invalid session data:', sessionData);
-            throw new Error('No session ID returned from server');
-        }
-
-        // Get Stripe instance
-        const stripe = await getStripeInstance();
-        console.log('Got Stripe instance, redirecting to checkout with session ID:', sessionData.id);
-        
-        // Redirect to Stripe checkout using the correct method
-        const { error } = await stripe.redirectToCheckout({
-            sessionId: sessionData.id
-        });
-
-        if (error) {
-            console.error('Stripe redirect error:', error);
-            throw error;
-        }
-    } catch (error) {
-        console.error('Error in checkout process:', error);
         throw error;
     }
 }
