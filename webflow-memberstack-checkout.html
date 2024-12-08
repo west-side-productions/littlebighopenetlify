@@ -45,42 +45,7 @@
     </style>
 </head>
 <body>
-    <!-- Course Section -->
-    <div class="product-section" id="course-section">
-        <div class="product" data-product-type="course" data-base-price="99.99">
-            <h2>Online Cooking Course</h2>
-            <p>Price: €99.99</p>
-        </div>
-
-        <!-- Price Summary -->
-        <div class="price-summary">
-            <div class="price-display">
-                <span>Subtotal: €</span>
-                <span id="subtotal-price-course">99.99</span>
-            </div>
-            <div class="price-display">
-                <span>Shipping: €</span>
-                <span id="shipping-price-course">0.00</span>
-            </div>
-            <div class="price-display total">
-                <span>Total: €</span>
-                <span id="total-price-course">99.99</span>
-            </div>
-        </div>
-
-        <!-- Checkout Button -->
-        <button 
-            id="checkout-button-course"
-            data-checkout-button="true"
-            data-product-type="course"
-            data-price="99.99"
-            class="checkout-button"
-            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-            Proceed to Checkout - Course (€99.99)
-        </button>
-        <div class="error-message" id="error-message-course"></div>
-    </div>
-
+   
     <!-- Book Section -->
     <div class="product-section" id="book-section">
         <div class="product" data-product-type="book" data-base-price="29.99">
@@ -89,7 +54,7 @@
         </div>
     
         <!-- Shipping Country Selection -->
-        <div class="shipping-selection">
+        <div class="shipping-selection" id="shipping-rate-select">
             <label for="shipping-rate-select-book">Shipping Country:</label>
             <select id="shipping-rate-select-book" name="shipping-rate-book" style="margin-left: 10px; padding: 5px;">
                 <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
@@ -126,67 +91,6 @@
             Proceed to Checkout - Book (€29.99)
         </button>
         <div class="error-message" id="error-message-book"></div>
-    </div>
-
-    <!-- Bundle Section -->
-    <div class="product-section" id="bundle-section">
-        <div class="product" data-product-type="bundle" data-base-price="119.99">
-            <h2>Course + Book Bundle</h2>
-            <p>Price: €119.99</p>
-        </div>
-    
-        <!-- Shipping Country Selection -->
-        <div class="shipping-selection">
-            <label for="shipping-rate-select-bundle">Shipping Country:</label>
-            <select id="shipping-rate-select-bundle" name="shipping-rate-bundle" style="margin-left: 10px; padding: 5px;">
-                <option value="shr_1QScKFJRMXFic4sW9e80ABBp">Österreich</option>
-                <option value="shr_1QScMXJRMXFic4sWih6q9v36">Great Britain</option>
-                <option value="shr_1QScNqJRMXFic4sW3NVUUckl">Singapore</option>
-                <option value="shr_1QScOlJRMXFic4sW8MHW0kq7">European Union</option>
-            </select>
-        </div>
-    
-        <!-- Price Summary -->
-        <div class="price-summary">
-            <div class="price-display">
-                <span>Subtotal: €</span>
-                <span id="subtotal-price-bundle">119.99</span>
-            </div>
-            <div class="price-display">
-                <span>Shipping: €</span>
-                <span id="shipping-price-bundle">0.00</span>
-            </div>
-            <div class="price-display total">
-                <span>Total: €</span>
-                <span id="total-price-bundle">119.99</span>
-            </div>
-        </div>
-    
-        <!-- Checkout Button -->
-        <button 
-            id="checkout-button-bundle"
-            data-checkout-button="true"
-            data-product-type="bundle"
-            data-price="119.99"
-            class="checkout-button"
-            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-            Proceed to Checkout - Bundle (€119.99)
-        </button>
-        <div class="error-message" id="error-message-bundle"></div>
-    </div>
-
-    <!-- Free Plan Section -->
-    <div class="product-section">
-        <h2>Free Access</h2>
-        <p>Get started with our free content!</p>
-        <button 
-            id="checkout-button-free"
-            data-checkout-button
-            data-product-type="free-plan"
-            style="margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-            Start Free Access
-        </button>
-        <div class="error-message"></div>
     </div>
 
     <script src="webflow-memberstack-checkout.js"></script>

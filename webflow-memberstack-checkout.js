@@ -541,7 +541,11 @@ async function handleCheckout(event, button) {
             if (!shippingSelect) {
                 throw new Error('Shipping country selection is required for physical products');
             }
+            if (!shippingSelect.value) {
+                throw new Error('Please select a shipping option');
+            }
             shippingRateId = shippingSelect.value;
+            console.log('Using shipping rate:', shippingRateId);
         }
 
         // Get language from URL path
@@ -549,12 +553,16 @@ async function handleCheckout(event, button) {
 
         // Get product configuration and version
         const productConfig = PRODUCT_CONFIG[productType];
-        const productTypeInfo = PRODUCT_TYPE_MAP[productType];
-        if (!productConfig || !productTypeInfo) {
+        if (!productConfig) {
             throw new Error(`Invalid product type: ${productType}`);
         }
 
-        console.log('Product Config:', { productConfig, productTypeInfo });
+        console.log('Product Config:', { productConfig, requiresShipping: productConfig.requiresShipping });
+
+        // Validate shipping for physical products
+        if (productConfig.requiresShipping && !shippingRateId) {
+            throw new Error('Please select a shipping option');
+        }
 
         // Get price ID for the current language
         const priceId = STRIPE_PRICE_IDS[productType]?.[language] || STRIPE_PRICE_IDS[productType]?.['de'];
@@ -710,23 +718,50 @@ function initializeShippingSelects() {
 
     shippingSelects.forEach(shippingSelect => {
         try {
-            const productSection = shippingSelect.closest('[data-product-type]');
-            const version = productSection?.querySelector('[data-product-type]')?.getAttribute('data-product-type') || 'physical';
+            // Get product type from the select ID
+            const selectId = shippingSelect.id;
+            const productType = selectId.replace('shipping-rate-select-', '');
+            
+            if (!productType) {
+                console.error('Could not determine product type from select ID:', selectId);
+                return;
+            }
 
-            // Set unique ID and data attribute
-            shippingSelect.id = `shipping-rate-select-${version}`;
-            shippingSelect.setAttribute('data-shipping-select', version);
+            // Verify product configuration exists
+            const productConfig = PRODUCT_CONFIG[productType];
+            if (!productConfig) {
+                console.error(`No configuration found for product type: ${productType}`);
+                return;
+            }
+
+            if (!productConfig.requiresShipping) {
+                console.warn(`Product ${productType} does not require shipping, but has shipping select`);
+                return;
+            }
 
             // Add change event listener
             shippingSelect.addEventListener('change', (e) => {
-                log('Shipping rate changed:', e.target.value);
-                updateTotalPrice(version, e.target.value);
+                log('Shipping rate changed:', {
+                    productType,
+                    newRate: e.target.value
+                });
+                updateTotalPrice(productType, e.target.value);
             });
 
-            // Set initial shipping rate
+            // Set initial shipping rate if not already set
+            if (!shippingSelect.value && shippingSelect.options.length > 0) {
+                shippingSelect.value = shippingSelect.options[0].value;
+            }
+
             const initialShippingRate = shippingSelect.value;
-            log('Initial shipping rate:', initialShippingRate);
-            updateTotalPrice(version, initialShippingRate);
+            log('Initial shipping rate:', {
+                productType,
+                rate: initialShippingRate
+            });
+            
+            if (initialShippingRate) {
+                updateTotalPrice(productType, initialShippingRate);
+            }
 
         } catch (error) {
             console.error('Error initializing shipping select:', error);
