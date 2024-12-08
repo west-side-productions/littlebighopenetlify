@@ -36,10 +36,10 @@ const PRODUCT_CONFIG = {
         type: 'bundle',
         requiresShipping: true,
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+            de: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
+            en: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
+            fr: 'price_1QTSNqJRMXFic4sWJYVWZlrp',
+            it: 'price_1QTSNqJRMXFic4sWJYVWZlrp'
         }
     },
     'free-plan': {
