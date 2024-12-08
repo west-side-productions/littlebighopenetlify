@@ -109,16 +109,51 @@ exports.handler = async function(event, context) {
         }
 
         // Parse the request body
-        const data = JSON.parse(event.body);
-        console.log('Received data:', data);
-
-        // Validate the request has required fields
-        if (!data.line_items || !data.line_items.length || !data.line_items[0].price) {
-            console.error('Missing or invalid line items:', data);
+        console.log('Raw request body:', event.body);
+        let data;
+        try {
+            data = JSON.parse(event.body);
+            console.log('Parsed data:', {
+                rawData: data,
+                hasLineItems: !!data.line_items,
+                lineItemsLength: data.line_items?.length,
+                firstLineItem: data.line_items?.[0],
+                firstLineItemPrice: data.line_items?.[0]?.price
+            });
+        } catch (e) {
+            console.error('Failed to parse request body:', e);
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Missing or invalid line items' })
+                body: JSON.stringify({ error: 'Invalid JSON in request body: ' + e.message })
+            };
+        }
+
+        // Validate the request has required fields
+        if (!data.line_items) {
+            console.error('Missing line_items array');
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Missing line_items array' })
+            };
+        }
+
+        if (!Array.isArray(data.line_items) || data.line_items.length === 0) {
+            console.error('line_items must be a non-empty array');
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'line_items must be a non-empty array' })
+            };
+        }
+
+        if (!data.line_items[0].price) {
+            console.error('First line item missing price:', data.line_items[0]);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'First line item missing price field' })
             };
         }
 
@@ -142,7 +177,7 @@ exports.handler = async function(event, context) {
                 sessionParams.shipping_options = data.shipping_options;
             }
 
-            console.log('Creating session with params:', JSON.stringify(sessionParams, null, 2));
+            console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
             const session = await stripe.checkout.sessions.create(sessionParams);
             
             return {

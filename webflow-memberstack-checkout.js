@@ -557,10 +557,18 @@ async function handleCheckout(event, button) {
         console.log('Product Config:', { productConfig, productTypeInfo });
 
         // Get price ID for the current language
-        const priceId = productConfig.prices[language] || productConfig.prices.de;
+        const priceId = STRIPE_PRICE_IDS[productType]?.[language] || STRIPE_PRICE_IDS[productType]?.['de'];
         if (!priceId) {
-            throw new Error(`No price found for language ${language}`);
+            console.error('Price lookup failed:', {
+                productType,
+                language,
+                availablePrices: STRIPE_PRICE_IDS[productType],
+                allPrices: STRIPE_PRICE_IDS
+            });
+            throw new Error(`No price found for ${productType} in ${language}`);
         }
+
+        console.log('Using price ID:', { productType, language, priceId });
 
         // Get current member for metadata
         const member = await $memberstackDom?.getCurrentMember();
@@ -570,7 +578,10 @@ async function handleCheckout(event, button) {
         const checkoutData = {
             line_items: [{
                 price: priceId,
-                quantity: 1
+                quantity: 1,
+                adjustable_quantity: {
+                    enabled: false
+                }
             }],
             mode: 'payment',
             customer_email: customerEmail,
@@ -590,6 +601,9 @@ async function handleCheckout(event, button) {
             checkoutData.shipping_options = [{
                 shipping_rate: shippingRateId
             }];
+            checkoutData.shipping_address_collection = {
+                allowed_countries: ['DE', 'AT', 'CH', 'IT', 'FR']
+            };
         }
 
         console.log('Sending checkout data:', JSON.stringify(checkoutData, null, 2));
