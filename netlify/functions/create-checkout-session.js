@@ -80,6 +80,8 @@ const validateShippingRate = (shippingRateId) => {
 };
 
 exports.handler = async function(event, context) {
+    console.log('=== Received Checkout Request ===');
+    
     // Log request details for debugging
     console.log('Incoming request details:', {
         method: event.httpMethod,
@@ -97,24 +99,12 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // Only allow POST requests
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            headers,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
-    }
-
     try {
-        if (!event.body) {
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Request body is required' })
-            };
+        if (event.httpMethod !== 'POST') {
+            throw new Error('Method not allowed');
         }
 
+        // Parse the incoming request
         let data;
         try {
             data = JSON.parse(event.body);
@@ -127,7 +117,11 @@ exports.handler = async function(event, context) {
             };
         }
 
-        console.log('Processing checkout request:', data);
+        console.log('Received data:', {
+            data: data,
+            productType: data.productType,
+            availableTypes: Object.keys(PRODUCT_CONFIG)
+        });
 
         // Validate product type
         const productType = data.productType;

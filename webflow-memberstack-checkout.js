@@ -431,12 +431,18 @@ async function sendOrderNotificationEmail(session) {
 // Checkout Functions
 async function handleCheckout(event, button) {
     event.preventDefault();
-    log('Handling checkout for button:', button);
+    console.log('=== Starting Checkout Process ===');
+    console.log('Button clicked:', {
+        button: button,
+        dataset: button.dataset,
+        productType: button.dataset.productType,
+        html: button.outerHTML
+    });
 
     try {
         // Get product type from button using dataset
         const productType = button.dataset.productType;
-        console.log('Button clicked with product type:', productType);
+        console.log('Product type from button:', productType);
 
         if (!productType) {
             throw new Error('No product type specified on button');
@@ -450,9 +456,11 @@ async function handleCheckout(event, button) {
 
         // Get the product configuration
         const productConfig = PRODUCT_CONFIG[productType];
-        if (!productConfig) {
-            throw new Error(`Invalid product type: ${productType}`);
-        }
+        console.log('Product config found:', {
+            productType: productType,
+            config: productConfig,
+            availableTypes: Object.keys(PRODUCT_CONFIG)
+        });
 
         // Get shipping rate for physical products
         let shippingRateId = null;
@@ -527,18 +535,35 @@ function initializeCheckoutButtons() {
             const productType = button.dataset.productType;
             console.log(`Setting up button ${index + 1}:`, {
                 text: button.textContent.trim(),
-                type: productType,
-                classes: button.className
+                productType: productType,
+                html: button.outerHTML,
+                dataset: button.dataset
             });
             
-            // Create a new button to replace the old one
+            // Remove any existing click handlers
             const newButton = button.cloneNode(true);
             
             // Add the click handler to the new button
             newButton.addEventListener('click', async function(event) {
                 event.preventDefault();
                 event.stopPropagation();
-                console.log(`Button ${index + 1} clicked with product type:`, this.dataset.productType);
+                
+                const clickedType = this.dataset.productType;
+                console.log('Button clicked:', {
+                    index: index,
+                    productType: clickedType,
+                    dataset: this.dataset,
+                    html: this.outerHTML
+                });
+                
+                if (!clickedType || !PRODUCT_CONFIG[clickedType]) {
+                    console.error('Invalid product type on button:', {
+                        productType: clickedType,
+                        availableTypes: Object.keys(PRODUCT_CONFIG)
+                    });
+                    return;
+                }
+                
                 await handleCheckout(event, this);
             });
             
@@ -935,14 +960,21 @@ async function getPreferredLanguage() {
 // Function to start checkout process
 async function startCheckout(config) {
     try {
-        log('Starting checkout process with config:', config);
+        console.log('=== Starting Checkout Session Creation ===');
+        console.log('Initial config:', config);
         
         // Get language for price selection
         const language = await getPreferredLanguage();
-        log('Using language:', language);
+        console.log('Language detected:', language);
         
         // Get product configuration
         const productConfig = PRODUCT_CONFIG[config.productType];
+        console.log('Product configuration:', {
+            requestedType: config.productType,
+            foundConfig: productConfig,
+            availableConfigs: Object.keys(PRODUCT_CONFIG)
+        });
+        
         if (!productConfig) {
             throw new Error(`Invalid product type: ${config.productType}`);
         }
