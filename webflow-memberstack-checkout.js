@@ -953,7 +953,7 @@ async function getStripeInstance() {
 // Function to start checkout
 async function startCheckout(checkoutData) {
     try {
-        console.log('Creating checkout session:', checkoutData);
+        console.log('Starting checkout process with data:', checkoutData);
         
         // Create checkout session via your server endpoint
         const response = await fetch('https://lillebighopefunctions.netlify.app/.netlify/functions/create-checkout-session', {
@@ -961,15 +961,33 @@ async function startCheckout(checkoutData) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(checkoutData)
+            body: JSON.stringify({
+                priceId: checkoutData.priceId,
+                type: checkoutData.productType,
+                language: checkoutData.language,
+                shippingRateId: checkoutData.shippingRateId,
+                metadata: {
+                    memberstackUserId: checkoutData.memberstackUserId,
+                    productType: checkoutData.productType,
+                    type: checkoutData.type,
+                    language: checkoutData.language,
+                    source: window.location.pathname,
+                    requiresShipping: checkoutData.requiresShipping
+                }
+            })
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
 
         const session = await response.json();
         console.log('Checkout session created:', session);
+
+        if (!session.id) {
+            throw new Error('No session ID returned from server');
+        }
 
         // Get Stripe instance
         const stripe = await getStripeInstance();
@@ -984,7 +1002,7 @@ async function startCheckout(checkoutData) {
             throw error;
         }
     } catch (error) {
-        console.error('Error creating checkout session:', error);
+        console.error('Error in checkout process:', error);
         throw error;
     }
 }
