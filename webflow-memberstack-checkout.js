@@ -300,42 +300,10 @@ async function handleCheckout(event, button) {
     }
 }
 
-async function handleCheckout(response) {
-    try {
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Checkout session creation failed:', errorData);
-            throw new Error(errorData.error || 'Failed to create checkout session');
-        }
-
-        const { id } = await response.json();
-        if (!id) {
-            throw new Error('No session ID returned from server');
-        }
-
-        console.log('Redirecting to checkout with session ID:', id);
-        const stripe = await getStripeInstance();
-        const { error } = await stripe.redirectToCheckout({ sessionId: id });
-
-        if (error) {
-            console.error('Stripe redirect failed:', error);
-            throw error;
-        }
-    } catch (error) {
-        console.error('Checkout error:', error);
-        alert('Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
-    }
-}
-
 async function startCheckout(checkoutData) {
     try {
         const { version, productConfig, member, shippingRateId } = checkoutData;
-        const stripe = await getStripeInstance();
         
-        if (!stripe) {
-            throw new Error('Stripe not initialized');
-        }
-
         const language = document.documentElement.lang || CONFIG.defaultLanguage;
         const priceId = productConfig.prices[language];
         
@@ -375,7 +343,7 @@ async function startCheckout(checkoutData) {
             cancelUrl: `${window.location.origin}/produkte`
         };
 
-        console.log('Sending checkout request:', requestData);
+        console.log('Creating checkout session with data:', requestData);
 
         const response = await fetch('/.netlify/functions/create-checkout-session', {
             method: 'POST',
@@ -387,8 +355,70 @@ async function startCheckout(checkoutData) {
 
         await handleCheckout(response);
     } catch (error) {
+        console.error('Checkout process failed:', error);
+        alert('Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
+    }
+}
+
+// Stripe Functions
+let stripeInstance = null;
+
+async function getStripeInstance() {
+    if (!stripeInstance) {
+        try {
+            stripeInstance = await loadStripe(CONFIG.stripePublicKey);
+            if (!stripeInstance) {
+                throw new Error('Failed to initialize Stripe');
+            }
+        } catch (error) {
+            console.error('Error initializing Stripe:', error);
+            throw error;
+        }
+    }
+    return stripeInstance;
+}
+
+async function redirectToStripeCheckout(sessionId) {
+    try {
+        const stripe = await getStripeInstance();
+        if (!stripe) {
+            throw new Error('Stripe not initialized');
+        }
+
+        console.log('Redirecting to Stripe checkout with session ID:', sessionId);
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+
+        if (error) {
+            console.error('Stripe redirect error:', error);
+            throw error;
+        }
+    } catch (error) {
+        console.error('Redirect to Stripe failed:', error);
+        throw error;
+    }
+}
+
+async function handleCheckout(response) {
+    try {
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Checkout session creation failed:', errorData);
+            throw new Error(errorData.error || 'Failed to create checkout session');
+        }
+
+        const responseData = await response.json();
+        console.log('Server response:', responseData);
+
+        if (!responseData.id) {
+            console.error('Missing session ID in response:', responseData);
+            throw new Error('No session ID returned from server');
+        }
+
+        await redirectToStripeCheckout(responseData.id);
+    } catch (error) {
         console.error('Checkout error:', error);
         alert('Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
+        throw error;
     }
 }
 
@@ -412,24 +442,6 @@ async function waitForMemberstack(timeout = 5000) {
         await delay(100);
     }
     throw new Error('Memberstack initialization timeout');
-}
-
-// Stripe Functions
-let stripeInstance = null;
-
-async function getStripeInstance() {
-    if (stripeInstance) return stripeInstance;
-    
-    try {
-        if (!window.Stripe) {
-            await loadScript('https://js.stripe.com/v3/');
-        }
-        stripeInstance = Stripe(CONFIG.stripePublicKey);
-        return stripeInstance;
-    } catch (error) {
-        console.error('Error initializing Stripe:', error);
-        return null;
-    }
 }
 
 // System Initialization
