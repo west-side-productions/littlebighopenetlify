@@ -140,7 +140,9 @@ exports.handler = async (event, context) => {
         if (data.metadata.requiresShipping) {
             sessionParams.shipping_address_collection = {
                 allowed_countries: data.shippingRateId === 'shr_1QScOlJRMXFic4sW8MHW0kq7' 
-                    ? ['BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SI', 'SK', 'FI', 'SE']
+                    ? ['BE', 'BG', 'CZ', 'DK', 'DE', 'EE', 'IE', 'GR', 'ES', 'FR', 'HR', 
+                       'IT', 'CY', 'LV', 'LT', 'LU', 'HU', 'MT', 'NL', 'PL', 'PT', 'RO', 
+                       'SI', 'SK', 'FI', 'SE']
                     : [data.metadata.countryCode]
             };
             
@@ -158,17 +160,15 @@ exports.handler = async (event, context) => {
             return {
                 statusCode: 200,
                 headers,
-                body: JSON.stringify({
-                    id: session.id
-                })
+                body: JSON.stringify({ id: session.id })
             };
         } catch (error) {
-            console.error('Error creating checkout session:', error);
+            console.error('Error creating Stripe session:', error);
             return {
                 statusCode: 400,
                 headers,
                 body: JSON.stringify({
-                    error: error.message
+                    error: error.message || 'Failed to create checkout session'
                 })
             };
         }

@@ -300,25 +300,22 @@ async function handleCheckout(event, button) {
     }
 }
 
-async function handleCheckout(checkoutSessionResponse) {
+async function handleCheckout(response) {
     try {
-        if (!checkoutSessionResponse.ok) {
-            const errorData = await checkoutSessionResponse.json();
+        if (!response.ok) {
+            const errorData = await response.json();
             console.error('Checkout session creation failed:', errorData);
             throw new Error(errorData.error || 'Failed to create checkout session');
         }
 
-        const session = await checkoutSessionResponse.json();
-        console.log('Checkout session created:', session);
-
-        if (!session.id) {
+        const { id } = await response.json();
+        if (!id) {
             throw new Error('No session ID returned from server');
         }
 
+        console.log('Redirecting to checkout with session ID:', id);
         const stripe = await getStripeInstance();
-        const { error } = await stripe.redirectToCheckout({
-            sessionId: session.id
-        });
+        const { error } = await stripe.redirectToCheckout({ sessionId: id });
 
         if (error) {
             console.error('Stripe redirect failed:', error);
@@ -369,16 +366,8 @@ async function startCheckout(checkoutData) {
             metadata.shippingClass = productConfig.shippingClass;
         }
 
-        // Prepare line items according to Stripe's documentation
-        const line_items = [{
-            price: priceId,
-            quantity: 1
-        }];
-
-        console.log('Line items:', line_items);
-
         const requestData = {
-            line_items,
+            priceId,
             customerEmail: member.email,
             metadata,
             shippingRateId,
@@ -396,26 +385,7 @@ async function startCheckout(checkoutData) {
             body: JSON.stringify(requestData)
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Checkout session creation failed:', errorData);
-            throw new Error(errorData.error || 'Failed to create checkout session');
-        }
-
-        const { id: sessionId } = await response.json();
-        if (!sessionId) {
-            throw new Error('No session ID returned from server');
-        }
-
-        console.log('Redirecting to checkout with session ID:', sessionId);
-        const { error } = await stripe.redirectToCheckout({
-            sessionId
-        });
-
-        if (error) {
-            console.error('Stripe redirect failed:', error);
-            throw error;
-        }
+        await handleCheckout(response);
     } catch (error) {
         console.error('Checkout error:', error);
         alert('Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
