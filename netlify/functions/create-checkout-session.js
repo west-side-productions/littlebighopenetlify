@@ -79,7 +79,7 @@ exports.handler = async (event, context) => {
         console.log('Received checkout request:', data);
 
         // Validate required metadata fields
-        const requiredMetadataFields = ['memberstackUserId', 'planId', 'countryCode', 'totalWeight', 'productWeight', 'packagingWeight'];
+        const requiredMetadataFields = ['memberstackUserId', 'planId', 'productType', 'type', 'language', 'countryCode', 'totalWeight', 'productWeight', 'packagingWeight'];
         requiredMetadataFields.forEach(field => {
             if (!data.metadata[field]) {
                 throw new Error(`Missing required metadata field: ${field}`);
@@ -103,8 +103,8 @@ exports.handler = async (event, context) => {
                 quantity: 1
             }],
             mode: 'payment',
-            success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email`,
-            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/produkte`,
+            success_url: data.successUrl,
+            cancel_url: data.cancelUrl,
             metadata: data.metadata,
             allow_promotion_codes: true,
             billing_address_collection: 'required',
