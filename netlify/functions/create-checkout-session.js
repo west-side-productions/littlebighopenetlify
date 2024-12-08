@@ -89,8 +89,7 @@ exports.handler = async function(event, context) {
         method: event.httpMethod,
         path: event.path,
         headers: event.headers,
-        bodyExists: !!event.body,
-        bodyLength: event.body?.length
+        bodyExists: !!event.body
     });
 
     // Handle preflight requests
@@ -107,18 +106,12 @@ exports.handler = async function(event, context) {
         return {
             statusCode: 405,
             headers,
-            body: JSON.stringify({ 
-                error: 'Method not allowed',
-                allowedMethods: ['POST', 'OPTIONS']
-            })
+            body: JSON.stringify({ error: 'Method not allowed' })
         };
     }
 
     try {
-        console.log('Raw event body:', event.body);
-        
         if (!event.body) {
-            console.error('Request body is empty');
             return {
                 statusCode: 400,
                 headers,
@@ -138,34 +131,23 @@ exports.handler = async function(event, context) {
             };
         }
 
-        console.log('Received request data:', {
-            rawBody: event.body,
-            parsedData: data,
-            hasType: 'type' in data,
-            hasProductType: 'productType' in data,
-            type: data.type,
-            productType: data.productType
-        });
+        console.log('Processing checkout request:', data);
 
-        // Validate product type (check both type and productType)
-        const productType = data.metadata?.productType || data.metadata?.type || data.type;
+        // Validate product type
+        const productType = data.type;
         if (!productType || !PRODUCT_CONFIG[productType]) {
-            console.error('Invalid or missing product type:', { 
-                productType,
-                metadata: data.metadata,
-                availableTypes: Object.keys(PRODUCT_CONFIG)
-            });
+            console.error('Invalid product type:', { productType, availableTypes: Object.keys(PRODUCT_CONFIG) });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Invalid or missing product type' })
+                body: JSON.stringify({ error: 'Invalid product type' })
             };
         }
 
         // Get product configuration
         const productConfig = PRODUCT_CONFIG[productType];
         
-        // Create session configuration with shipping based on selection
+        // Create session configuration
         const sessionParams = {
             mode: 'payment',
             payment_method_types: ['card'],
@@ -174,30 +156,42 @@ exports.handler = async function(event, context) {
                 quantity: 1
             }],
             metadata: {
-                version: data.version,
-                ...data.metadata,
-                source: data.metadata?.source || 'checkout',
-                language: data.language || 'de'
+                type: productType,
+                language: data.language || 'de',
+                customerEmail: data.customerEmail,
+                source: data.metadata?.source || 'checkout'
             },
             success_url: `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${process.env.SITE_URL}/cancel`,
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            locale: data.language || 'de'
+            locale: data.language || 'de',
+            customer_email: data.customerEmail
         };
 
-        // Add shipping options based on selected shipping rate
-        if (productConfig.requiresShipping && data.shippingRateId) {
-            // Get shipping rate from configuration
-            const shippingRate = SHIPPING_RATES[data.shippingRateId];
-            if (!shippingRate) {
-                throw new Error(`Invalid shipping rate: ${data.shippingRateId}`);
+        // Add shipping options for physical products
+        if (productConfig.requiresShipping) {
+            if (!data.shippingRateId) {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ error: 'Shipping rate is required for physical products' })
+                };
             }
 
-            // Set shipping configuration based on selected rate
+            const shippingRate = SHIPPING_RATES[data.shippingRateId];
+            if (!shippingRate) {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ error: `Invalid shipping rate: ${data.shippingRateId}` })
+                };
+            }
+
             sessionParams.shipping_address_collection = {
                 allowed_countries: shippingRate.countries
             };
+            
             sessionParams.shipping_options = [{
                 shipping_rate_data: {
                     type: 'fixed_amount',
@@ -209,11 +203,13 @@ exports.handler = async function(event, context) {
                     delivery_estimate: {
                         minimum: {
                             unit: 'business_day',
-                            value: shippingRate.label === 'Singapore' ? 7 : shippingRate.label === 'Österreich' ? 3 : 5,
+                            value: shippingRate.label === 'Singapore' ? 7 : 
+                                   shippingRate.label === 'Österreich' ? 3 : 5,
                         },
                         maximum: {
                             unit: 'business_day',
-                            value: shippingRate.label === 'Singapore' ? 14 : shippingRate.label === 'Österreich' ? 5 : 7,
+                            value: shippingRate.label === 'Singapore' ? 14 : 
+                                   shippingRate.label === 'Österreich' ? 5 : 7,
                         },
                     }
                 }
@@ -221,6 +217,7 @@ exports.handler = async function(event, context) {
         }
 
         console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
+        
         const session = await stripe.checkout.sessions.create(sessionParams);
         console.log('Created Stripe session:', session.id);
         
@@ -238,7 +235,10 @@ exports.handler = async function(event, context) {
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: 'Internal Server Error' })
+            body: JSON.stringify({ 
+                error: 'Internal Server Error',
+                message: error.message 
+            })
         };
     }
 };

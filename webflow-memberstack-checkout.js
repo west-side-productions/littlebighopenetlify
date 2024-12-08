@@ -936,10 +936,10 @@ async function getPreferredLanguage() {
     }
 }
 
-/// Function to start checkout process
+// Function to start checkout process
 async function startCheckout(config) {
     try {
-        log('Starting checkout process');
+        log('Starting checkout process with config:', config);
         
         // Get language for price selection
         const language = await getPreferredLanguage();
@@ -955,49 +955,46 @@ async function startCheckout(config) {
         if (!priceId) {
             throw new Error(`No price found for language: ${language}`);
         }
+
+        // Validate shipping for physical products
+        if (productConfig.requiresShipping && !config.shippingRateId) {
+            throw new Error('Shipping rate is required for physical products');
+        }
         
-        log('Creating checkout session with data:', {
-            type: config.type,
+        // Prepare checkout request data
+        const requestData = {
+            type: config.type,  // Single source of truth for product type
             priceId: priceId,
             language: language,
-            memberEmail: config.customerEmail,
+            customerEmail: config.customerEmail,
             shippingRateId: config.shippingRateId,
             metadata: {
-                ...config.metadata,
-                productType: config.type,
-                memberEmail: config.customerEmail
+                type: config.type,
+                language: language,
+                customerEmail: config.customerEmail,
+                source: window.location.pathname
             }
-        });
+        };
+        
+        log('Creating checkout session with data:', requestData);
 
         const response = await fetch('/.netlify/functions/create-checkout-session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                type: config.type,
-                priceId: priceId,
-                language: language,
-                memberEmail: config.customerEmail,
-                shippingRateId: config.shippingRateId,
-                metadata: {
-                    ...config.metadata,
-                    productType: config.type,
-                    memberEmail: config.customerEmail
-                },
-                successUrl: `${window.location.origin}/vielen-dank-email`,
-                cancelUrl: `${window.location.origin}/produkte`
-            })
+            body: JSON.stringify(requestData)
         });
 
-        const responseData = await response.json();
-        log('Raw response data:', responseData);
-
         if (!response.ok) {
-            throw new Error(`Checkout session creation failed: ${responseData.error || 'Unknown error'}`);
+            const errorData = await response.json();
+            throw new Error(`Checkout session creation failed: ${errorData.error || 'Unknown error'}`);
         }
 
-        // Initialize Stripe if not already done
+        const responseData = await response.json();
+        log('Received session data:', responseData);
+
+        // Initialize Stripe
         const stripe = await getStripeInstance();
         if (!stripe) {
             throw new Error('Failed to initialize Stripe');
@@ -1009,12 +1006,7 @@ async function startCheckout(config) {
             throw new Error('No session ID returned from server');
         }
 
-        log('Starting checkout with session:', {
-            sessionId: responseData.sessionId,
-            publishableKey: responseData.publishableKey
-        });
-
-        // Redirect to Stripe checkout using the session ID
+        log('Redirecting to Stripe checkout...');
         const { error } = await stripe.redirectToCheckout({
             sessionId: responseData.sessionId
         });
