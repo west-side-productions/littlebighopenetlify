@@ -251,13 +251,15 @@ async function handleCheckout(event, button) {
                 source: window.location.pathname,
                 planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
                 requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle',
-                totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
+                totalWeight: calculateTotalWeight(productConfig), // Use calculateTotalWeight function
                 productWeight: productConfig.weight,
                 packagingWeight: productConfig.packagingWeight || 0,
                 dimensions: productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null,
                 shippingClass: productConfig.shippingClass || 'standard'
             }
         };
+
+        console.log('Checkout payload:', payload);
 
         if (shippingRateId) {
             payload.shippingRateId = shippingRateId;
