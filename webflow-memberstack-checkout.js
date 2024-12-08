@@ -433,46 +433,41 @@ async function initializeCheckoutButtons() {
     console.log('=== Initializing checkout buttons ===');
     
     try {
-        // Clear any existing event listeners by removing old buttons
-        const checkoutButtons = document.querySelectorAll('[data-checkout-button][data-product-type]');
-        checkoutButtons.forEach(button => {
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
+        // Remove any existing event listeners
+        const buttons = document.querySelectorAll('[data-checkout-button="true"]');
+        buttons.forEach(oldButton => {
+            const newButton = oldButton.cloneNode(true);
+            oldButton.parentNode.replaceChild(newButton, oldButton);
         });
 
-        // Initialize each button with its specific configuration
-        checkoutButtons.forEach(button => {
+        // Re-select buttons after replacement
+        const newButtons = document.querySelectorAll('[data-checkout-button="true"]');
+        
+        newButtons.forEach(button => {
             const productType = button.dataset.productType;
             
-            if (!PRODUCT_CONFIG[productType]) {
-                console.warn(`Invalid product type on button:`, {
-                    button: button,
-                    productType: productType,
+            if (!productType || !PRODUCT_CONFIG[productType]) {
+                console.warn('Invalid product type:', {
+                    button,
+                    productType,
                     availableTypes: Object.keys(PRODUCT_CONFIG)
                 });
                 return;
             }
 
-            console.log(`Initializing button for ${productType}:`, {
-                buttonElement: button,
-                productType: productType,
-                dataset: button.dataset
-            });
-
             button.addEventListener('click', async function(event) {
                 event.preventDefault();
                 event.stopPropagation();
 
-                // Clear any previous error messages
-                const errorElements = document.querySelectorAll('[id^="error-message-"]');
-                errorElements.forEach(el => {
+                // Clear all error messages
+                document.querySelectorAll('.error-message').forEach(el => {
                     el.textContent = '';
                     el.style.display = 'none';
                 });
 
                 console.log(`Button clicked for ${productType}:`, {
-                    productType: productType,
-                    buttonElement: this,
+                    button: this,
+                    productType,
                     dataset: this.dataset
                 });
 
@@ -487,9 +482,9 @@ async function initializeCheckoutButtons() {
                     }
                 }
             });
-        });
 
-        console.log('=== Button initialization complete ===');
+            console.log(`Initialized button for ${productType}`);
+        });
 
     } catch (error) {
         console.error('Error initializing checkout buttons:', error);
@@ -594,73 +589,151 @@ function updateTotalPrice(version, shippingRateId = null) {
     }
 }
 
-// Update metadata for checkout
-async function getCheckoutMetadata(version, config = {}) {
+// Get preferred language synchronously
+function getPreferredLanguage() {
     try {
-        // Get current member info
-        let memberstackUserId = '';
-        try {
-            const member = await $memberstackDom?.getCurrentMember();
-            memberstackUserId = member?.data?.id || '';
-        } catch (error) {
-            console.warn('Failed to get member ID:', error);
+        // First check Memberstack
+        if (window.$memberstackDom && window.$memberstackDom.getCurrentMember()) {
+            const member = window.$memberstackDom.getCurrentMember();
+            if (member && member.language) {
+                return member.language;
+            }
         }
 
-        // Get product configuration
-        const productConfig = PRODUCT_CONFIG[version];
-        if (!productConfig) {
-            throw new Error(`Invalid version: ${version}`);
+        // Then check Webflow locale
+        const htmlElement = document.documentElement;
+        if (htmlElement && htmlElement.lang) {
+            return htmlElement.lang;
         }
 
-        // Build metadata
-        const metadata = {
-            memberstackUserId,
-            version,  // Include version in metadata
-            language: (await getPreferredLanguage()).detected || 'de',
-            source: window.location.pathname,
-            planId: 'pln_kostenloser-zugang-84l80t3u',
-            requiresShipping: productConfig.requiresShipping || false,
-            totalWeight: productConfig.totalWeight || null,
-            packagingWeight: productConfig.packagingWeight || 0,
-            dimensions: productConfig.dimensions || null,
-            shippingClass: productConfig.shippingClass || 'standard',
-            countryCode: 'DE'  // Default to DE
+        // Finally check URL path
+        const pathParts = window.location.pathname.split('/');
+        if (pathParts.length > 1) {
+            const possibleLang = pathParts[1].toLowerCase();
+            if (['de', 'en', 'fr', 'it'].includes(possibleLang)) {
+                return possibleLang;
+            }
+        }
+
+        // Default to German if no language is found
+        return 'de';
+    } catch (error) {
+        console.error('Error detecting language:', error);
+        return 'de';
+    }
+}
+
+// Handle checkout process
+async function handleCheckout(event, button) {
+    const productType = button.dataset.productType;
+    console.log('=== Starting Checkout Process ===', { productType });
+
+    try {
+        if (!productType || !PRODUCT_CONFIG[productType]) {
+            throw new Error(`Invalid product type: ${productType}`);
+        }
+
+        const customerEmail = await getCustomerEmail();
+        if (!customerEmail) {
+            throw new Error('Customer email is required');
+        }
+
+        let shippingRateId = null;
+        if (PRODUCT_CONFIG[productType].requiresShipping) {
+            const selectId = `shipping-rate-select-${productType}`;
+            const shippingSelect = document.getElementById(selectId);
+            if (!shippingSelect) {
+                throw new Error('Shipping country selection is required for physical products');
+            }
+            shippingRateId = shippingSelect.value;
+        }
+
+        const language = getPreferredLanguage();
+        console.log('Using language for checkout:', language);
+
+        const checkoutConfig = {
+            productType,
+            customerEmail,
+            shippingRateId,
+            language,
+            metadata: {
+                productType,
+                language,
+                source: window.location.pathname
+            }
         };
 
-        log('Generated checkout metadata:', metadata);
-        return metadata;
+        console.log('Starting checkout with config:', checkoutConfig);
+        await startCheckout(checkoutConfig);
+
     } catch (error) {
-        console.error('Error generating metadata:', error);
+        console.error('Checkout error:', error);
         throw error;
     }
 }
 
-// Handle membershome functionality
-async function handleMembershome() {
-    log('Handling membershome...');
-    const member = await getCurrentMember();
-    
-    if (member?.data && window.location.pathname === '/membershome') {
-        const storedConfig = localStorage.getItem('checkoutConfig');
-        const redirectUrl = localStorage.getItem('checkoutRedirectUrl');
+// Start checkout process
+async function startCheckout(config) {
+    try {
+        const language = config.language || getPreferredLanguage();
+        const productConfig = PRODUCT_CONFIG[config.productType];
         
-        if (storedConfig) {
-            try {
-                const config = JSON.parse(storedConfig);
-                log('Found stored checkout config:', config);
-                
-                // Clear stored data
-                localStorage.removeItem('checkoutConfig');
-                localStorage.removeItem('checkoutRedirectUrl');
-                
-                // Start checkout with stored configuration
-                await startCheckout(config);
-            } catch (error) {
-                console.error('Error processing stored checkout:', error);
-                // Redirect back to products page on error
-                window.location.href = redirectUrl || '/produkte';
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${config.productType}`);
+        }
+
+        const priceId = productConfig.prices[language];
+        if (!priceId) {
+            console.warn(`No price found for language ${language}, using default language de`);
+            if (!productConfig.prices.de) {
+                throw new Error('No default price found');
             }
         }
+
+        const requestData = {
+            productType: config.productType,
+            priceId: priceId || productConfig.prices.de,
+            language: language,
+            customerEmail: config.customerEmail,
+            shippingRateId: config.shippingRateId,
+            metadata: config.metadata
+        };
+
+        console.log('Creating checkout session:', requestData);
+
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Checkout session creation failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorText
+            });
+            throw new Error(`Failed to create checkout session: ${errorText || response.status}`);
+        }
+
+        const { sessionId } = await response.json();
+        if (!sessionId) {
+            throw new Error('No session ID returned from server');
+        }
+
+        const stripe = await getStripeInstance();
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        
+        if (error) {
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error creating checkout session:', error);
+        throw error;
     }
 }
 
@@ -845,139 +918,6 @@ async function getStripeInstance() {
         return stripeInstance;
     } catch (error) {
         console.error('Error initializing Stripe:', error);
-        throw error;
-    }
-}
-
-// Function to get user's preferred language
-async function getPreferredLanguage() {
-    console.log('Starting language detection...');
-    
-    try {
-        // First check Memberstack
-        console.log('Checking Memberstack language...');
-        const member = await getCurrentMember();
-        if (member?.metadata?.language) {
-            const lang = member.metadata.language.toLowerCase();
-            console.log('Found language in Memberstack:', lang);
-            return lang;
-        }
-        
-        // Fallback to browser language
-        const browserLang = navigator.language.split('-')[0].toLowerCase();
-        console.log('Using browser language:', browserLang);
-        
-        // Validate language is supported
-        const supportedLanguages = ['de', 'en', 'fr', 'it'];
-        const finalLang = supportedLanguages.includes(browserLang) ? browserLang : 'de';
-        
-        console.log('Language detection complete:', {
-            memberLang: member?.metadata?.language,
-            browserLang: browserLang,
-            finalLang: finalLang
-        });
-        
-        return finalLang;
-    } catch (error) {
-        console.error('Error detecting language:', error);
-        return 'de'; // Default to German
-    }
-}
-
-// Function to start checkout process
-async function startCheckout(config) {
-    try {
-        console.log('=== Starting Checkout Session Creation ===');
-        console.log('Initial config:', config);
-        
-        // Get language for price selection
-        const language = await getPreferredLanguage();
-        console.log('Language detected:', language);
-        
-        // Get product configuration
-        const productConfig = PRODUCT_CONFIG[config.productType];
-        console.log('Product configuration:', {
-            requestedType: config.productType,
-            foundConfig: productConfig,
-            availableConfigs: Object.keys(PRODUCT_CONFIG)
-        });
-        
-        if (!productConfig) {
-            throw new Error(`Invalid product type: ${config.productType}`);
-        }
-        
-        // Get price ID for the current language
-        const priceId = productConfig.prices[language];
-        if (!priceId) {
-            console.error('No price found for language:', {
-                language: language,
-                productType: config.productType,
-                availablePrices: productConfig.prices
-            });
-            throw new Error(`No price found for language: ${language}`);
-        }
-
-        // Prepare checkout request data
-        const requestData = {
-            productType: config.productType,
-            priceId: priceId,
-            language: language,
-            customerEmail: config.customerEmail,
-            shippingRateId: config.shippingRateId,
-            metadata: {
-                productType: config.productType,
-                language: language,
-                customerEmail: config.customerEmail,
-                source: window.location.pathname
-            }
-        };
-        
-        console.log('Creating checkout session with data:', requestData);
-
-        const response = await fetch('/.netlify/functions/create-checkout-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestData)
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Checkout session creation failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                errorText: errorText
-            });
-            throw new Error(`Failed to create checkout session: ${response.status}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Received session data:', responseData);
-
-        // Initialize Stripe
-        const stripe = await getStripeInstance();
-        if (!stripe) {
-            throw new Error('Failed to initialize Stripe');
-        }
-
-        // Validate the session ID
-        if (!responseData || !responseData.sessionId) {
-            console.error('Invalid session response:', responseData);
-            throw new Error('No session ID returned from server');
-        }
-
-        console.log('Redirecting to Stripe checkout...');
-        const { error } = await stripe.redirectToCheckout({
-            sessionId: responseData.sessionId
-        });
-
-        if (error) {
-            console.error('Stripe redirect error:', error);
-            throw new Error(`Stripe redirect failed: ${error.message}`);
-        }
-    } catch (error) {
-        console.error('Checkout error:', error);
         throw error;
     }
 }
