@@ -58,14 +58,12 @@ exports.handler = async (event, context) => {
             throw new Error(`Invalid product type: ${productType}`);
         }
 
-        // Validate language
-        if (!product.prices[language]) {
-            throw new Error(`Invalid language: ${language} for product type: ${productType}`);
-        }
+        // Use the provided priceId directly if it exists
+        const priceId = data.priceId || product.prices[language];
 
         // Construct line items
         const lineItems = [{
-            price: data.priceId || product.prices[language],
+            price: priceId,
             quantity: 1
         }];
 
