@@ -939,6 +939,7 @@ async function startCheckout(config) {
         
         // Get language for price selection
         const language = await getPreferredLanguage();
+        log('Using language:', language);
         
         // Get product configuration
         const productConfig = PRODUCT_CONFIG[config.productType];

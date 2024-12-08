@@ -35,19 +35,38 @@ const SHIPPING_RATES = {
 const PRODUCT_CONFIG = {
     'course': {
         type: 'course',
-        requiresShipping: false
+        requiresShipping: false,
+        prices: {
+            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
+            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
+        }
     },
     'book': {
         type: 'book',
-        requiresShipping: true
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+        }
     },
     'bundle': {
         type: 'bundle',
-        requiresShipping: true
+        requiresShipping: true,
+        prices: {
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            en: 'price_1QT214JRMXFic4sWr5OXetuw',
+            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+        }
     },
     'free-plan': {
         type: 'free-plan',
-        requiresShipping: false
+        requiresShipping: false,
+        prices: {}
     }
 };
 
