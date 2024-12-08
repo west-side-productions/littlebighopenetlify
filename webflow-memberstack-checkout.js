@@ -566,28 +566,30 @@ async function handleCheckout(event, button) {
         const member = await $memberstackDom?.getCurrentMember();
         const memberstackUserId = member?.id || null;
 
-        // Prepare checkout data
+        // Prepare checkout data according to Stripe's API
         const checkoutData = {
-            type: productType,  // The server uses this for validation
-            priceId: priceId,
-            email: customerEmail,
-            language: language,
-            successUrl: `${window.location.origin}/vielen-dank-email`,
-            cancelUrl: `${window.location.origin}/produkte`,
+            line_items: [{
+                price: priceId,
+                quantity: 1
+            }],
+            mode: 'payment',
+            customer_email: customerEmail,
+            success_url: `${window.location.origin}/vielen-dank-email`,
+            cancel_url: `${window.location.origin}/produkte`,
+            locale: language,
             metadata: {
-                memberstackUserId: memberstackUserId,
-                source: window.location.pathname,
-                countryCode: CONFIG.defaultCountry,
-                shippingClass: 'standard',
+                productType: productType,
                 version: productTypeInfo.version,
-                language: language,
-                requiresShipping: productConfig.requiresShipping
+                memberstackUserId: memberstackUserId,
+                source: window.location.pathname
             }
         };
 
         // Add shipping info if needed
         if (productConfig.requiresShipping && shippingRateId) {
-            checkoutData.metadata.shippingRateId = shippingRateId;
+            checkoutData.shipping_options = [{
+                shipping_rate: shippingRateId
+            }];
         }
 
         console.log('Sending checkout data:', JSON.stringify(checkoutData, null, 2));

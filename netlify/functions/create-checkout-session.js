@@ -121,111 +121,56 @@ exports.handler = async function(event, context) {
             };
         }
 
-        console.log('Received data:', {
-            type: data.type,
-            email: data.email,
-            language: data.language,
-            metadata: data.metadata
-        });
+        console.log('Received data:', data);
 
-        // Validate product type
-        const productType = data.type;
-        if (!productType || !PRODUCT_CONFIG[productType]) {
-            console.error('Invalid product type:', { 
-                receivedType: productType,
-                availableTypes: Object.keys(PRODUCT_CONFIG)
-            });
+        // Validate the request has required fields
+        if (!data.line_items || !data.line_items.length) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Invalid product type' })
+                body: JSON.stringify({ error: 'Missing line items' })
             };
         }
 
-        // Get product configuration
-        const productConfig = PRODUCT_CONFIG[productType];
+        // Get the price ID from line items
+        const priceId = data.line_items[0].price;
         
-        // Create session configuration
+        // Create session configuration - pass through most fields directly
         const sessionParams = {
             mode: 'payment',
             payment_method_types: ['card'],
-            line_items: [{
-                price: data.priceId,
-                quantity: 1
-            }],
-            success_url: data.successUrl || `${process.env.SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl || `${process.env.SITE_URL}/cancel`,
-            customer_email: data.email,
-            locale: data.language || 'de',
+            line_items: data.line_items,
+            success_url: data.success_url,
+            cancel_url: data.cancel_url,
+            customer_email: data.customer_email,
+            locale: data.locale || 'de',
             allow_promotion_codes: true,
             billing_address_collection: 'required',
-            metadata: {
-                ...data.metadata,
-                productType: productType  // Add this for our reference
-            }
+            metadata: data.metadata || {}
         };
 
-        // Add shipping options for physical products
-        if (productConfig.requiresShipping) {
-            if (!data.shippingRateId) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: 'Shipping rate is required for physical products' })
-                };
-            }
-
-            const shippingRate = SHIPPING_RATES[data.shippingRateId];
-            if (!shippingRate) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: `Invalid shipping rate: ${data.shippingRateId}` })
-                };
-            }
-
-            sessionParams.shipping_address_collection = {
-                allowed_countries: shippingRate.countries
-            };
-            
-            sessionParams.shipping_options = [{
-                shipping_rate_data: {
-                    type: 'fixed_amount',
-                    fixed_amount: {
-                        amount: shippingRate.price,
-                        currency: 'eur',
-                    },
-                    display_name: `Standard Shipping (${shippingRate.label})`,
-                    delivery_estimate: {
-                        minimum: {
-                            unit: 'business_day',
-                            value: shippingRate.label === 'Singapore' ? 7 : 
-                                   shippingRate.label === 'Österreich' ? 3 : 5,
-                        },
-                        maximum: {
-                            unit: 'business_day',
-                            value: shippingRate.label === 'Singapore' ? 14 : 
-                                   shippingRate.label === 'Österreich' ? 5 : 7,
-                        },
-                    }
-                }
-            }];
+        // Add shipping options if provided
+        if (data.shipping_options) {
+            sessionParams.shipping_options = data.shipping_options;
         }
 
-        console.log('Creating Stripe session with params:', JSON.stringify(sessionParams, null, 2));
-        
-        const session = await stripe.checkout.sessions.create(sessionParams);
-        console.log('Created Stripe session:', session.id);
-        
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({ 
-                sessionId: session.id,
-                publishableKey: process.env.STRIPE_PUBLISHABLE_KEY 
-            })
-        };
-
+        try {
+            const session = await stripe.checkout.sessions.create(sessionParams);
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                    sessionId: session.id
+                })
+            };
+        } catch (error) {
+            console.error('Stripe session creation error:', error);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: error.message })
+            };
+        }
     } catch (error) {
         console.error('Error creating checkout session:', error);
         return {
