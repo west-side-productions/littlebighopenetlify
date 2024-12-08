@@ -468,18 +468,16 @@ async function handleCheckout(event, button) {
 
         // Create checkout config
         const checkoutConfig = {
-            version: productType,            // Required: course, book, or bundle
-            type: productType,               // Product type
+            productType: productType,            // Required: course, book, or bundle
             customerEmail: customerEmail,
             shippingRateId: shippingRateId,  // Only for physical products
             metadata: {
-                version: productType,        // Required in metadata
-                type: productType,           // Correct type
+                productType: productType,        // Required in metadata
                 language: 'de',              // Will be updated in startCheckout
                 source: window.location.pathname
             }
         };
-
+        
         log('Starting checkout with config:', checkoutConfig);
         await startCheckout(checkoutConfig);
 
@@ -655,8 +653,6 @@ async function getCheckoutMetadata(version, config = {}) {
         const metadata = {
             memberstackUserId,
             version,  // Include version in metadata
-            productType: config.productType || version,
-            type: version,  // Use version as type
             language: (await getPreferredLanguage()).detected || 'de',
             source: window.location.pathname,
             planId: 'pln_kostenloser-zugang-84l80t3u',
@@ -945,9 +941,9 @@ async function startCheckout(config) {
         const language = await getPreferredLanguage();
         
         // Get product configuration
-        const productConfig = PRODUCT_CONFIG[config.type];
+        const productConfig = PRODUCT_CONFIG[config.productType];
         if (!productConfig) {
-            throw new Error(`Invalid product type: ${config.type}`);
+            throw new Error(`Invalid product type: ${config.productType}`);
         }
         
         // Get price ID for the current language
@@ -963,13 +959,13 @@ async function startCheckout(config) {
         
         // Prepare checkout request data
         const requestData = {
-            type: config.type,  // Single source of truth for product type
+            type: config.productType,
             priceId: priceId,
             language: language,
             customerEmail: config.customerEmail,
             shippingRateId: config.shippingRateId,
             metadata: {
-                type: config.type,
+                type: config.productType,
                 language: language,
                 customerEmail: config.customerEmail,
                 source: window.location.pathname
