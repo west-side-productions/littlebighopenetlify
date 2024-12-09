@@ -181,11 +181,12 @@ exports.handler = async (event) => {
                 }
                 
                 // Send confirmation email to customer
-                if (session.customer_details?.email) {
+                // Only send if this is a first-time purchase (check metadata)
+                if (session.customer_details?.email && session.metadata?.isFirstPurchase !== 'false') {
                     console.log('Sending confirmation email to:', session.customer_details.email);
                     await sendOrderConfirmationEmail(session.customer_details.email, session);
                 } else {
-                    console.log('⚠️ No customer email found in session');
+                    console.log('⚠️ Skipping confirmation email - not first purchase or no email');
                 }
 
                 // Send notification email to shipping company if it's a physical product

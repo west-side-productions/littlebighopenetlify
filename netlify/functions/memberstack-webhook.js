@@ -145,7 +145,7 @@ async function handleMemberCreated(data) {
 
 async function handleMemberVerified(data) {
     console.log('Handling member verified:', JSON.stringify(data, null, 2));
-    const { auth: { email }, customFields = {} } = data;
+    const { auth: { email }, customFields = {}, id: memberId } = data;
     
     const firstName = customFields['first-name'] || 
                      customFields['firstName'] || 
@@ -169,23 +169,27 @@ async function handleMemberVerified(data) {
     console.log('Using language:', language);
 
     try {
-        // Wait a moment to ensure language setting is updated
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Send welcome email first
-        await sendEmail({
-            to: email,
-            templateName: 'welcome',
-            language,
-            variables: {
-                firstName,
-                language
-            }
-        });
+        // Check if user has already made a purchase
+        const hasPurchase = customFields.hasPurchase === 'true' || 
+                           customFields.hasActiveSubscription === 'true';
         
-        console.log('Welcome email sent');
+        // Only send welcome email if user hasn't made a purchase
+        if (!hasPurchase) {
+            await sendEmail({
+                to: email,
+                templateName: 'welcome',
+                language,
+                variables: {
+                    firstName,
+                    language
+                }
+            });
+            console.log('Welcome email sent');
+        } else {
+            console.log('Skipping welcome email - user already has a purchase');
+        }
 
-        // Then send verification success email
+        // Always send verification success email
         await sendEmail({
             to: email,
             templateName: 'email_verified',
@@ -194,7 +198,6 @@ async function handleMemberVerified(data) {
                 firstName
             }
         });
-        
         console.log('Verification success email sent');
         
     } catch (error) {

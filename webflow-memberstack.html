@@ -306,8 +306,10 @@ window.$memberstackDom = {
     loadTimeout: 15000,
     customDomains: true,
     onReady() {
-        console.log("Memberstack ready, dispatching initialized event");
+        console.log("Memberstack ready");
+        window.$lbh.memberStackAvailable = true;
         window.dispatchEvent(new Event('memberstack:initialized'));
+        
         // Check if we need to redirect based on language
         if (!location.pathname.includes('/verify') && 
             !location.pathname.includes('/verification-success') && 
@@ -319,6 +321,7 @@ window.$memberstackDom = {
     },
     onError(error) {
         console.error("Memberstack initialization error:", error);
+        window.$lbh.memberStackAvailable = false;
         window.dispatchEvent(new CustomEvent('memberstack:error', { detail: error }));
     }
 };
@@ -331,44 +334,3 @@ window.$memberstackDom = {
     type="text/javascript"
     async
 ></script>
-
-<!-- Verification Handler -->
-<script>
-(async function init() {
-    try {
-        // Wait for Memberstack to be ready
-        if (!window.$memberstackDom?.getCurrentMember) {
-            console.log('Waiting for Memberstack...');
-            await new Promise((resolve) => {
-                window.addEventListener('memberstack:initialized', resolve);
-                setTimeout(resolve, 15000); // Timeout after 15s
-            });
-        }
-
-        // Handle verification success
-        if (location.pathname.includes('/verification-success')) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const email = urlParams.get('email');
-            const token = urlParams.get('token');
-            
-            if (email && token) {
-                console.log('Handling verification success...');
-                try {
-                    await $memberstackDom.verifyEmail({ email, token });
-                    console.log('Email verified successfully');
-                } catch (error) {
-                    console.error('Error verifying email:', error);
-                    location.href = '/verification-error';
-                }
-            } else {
-                console.warn('Missing email or token parameters');
-                location.href = '/verification-error';
-            }
-        }
-    } catch (error) {
-        console.error('Verification handler error:', error);
-        $lbh.memberStackAvailable = false;
-        console.warn("NO MEMBERSTACK AVAILABLE, using localStorage");
-    }
-})();
-</script>
