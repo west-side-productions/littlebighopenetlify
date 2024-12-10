@@ -52,11 +52,29 @@
   // Shipping Rates Structure
   const SHIPPING_RATES = {
       'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-          price: 7.28, 
+          price: 0, 
           label: 'Österreich', 
           countries: ['AT']
       },
-      // ... more rates
+      'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+          price: 20.36, 
+          label: 'Europe', 
+          countries: [
+              'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+              'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+              'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+          ]
+      },
+      'shr_1QScMXJRMXFic4sWih6q9v36': { 
+          price: 20.72, 
+          label: 'Great Britain', 
+          countries: ['GB']
+      },
+      'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+          price: 36.53, 
+          label: 'Singapore', 
+          countries: ['SG']
+      }
   };
   ```
 - **Error Handling**
@@ -478,14 +496,28 @@ const PRODUCT_CONFIG = {
    ```javascript
    const SHIPPING_RATES = {
        'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-           price: 7.28, 
+           price: 0, 
            label: 'Österreich', 
            countries: ['AT']
+       },
+       'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+           price: 20.36, 
+           label: 'Europe', 
+           countries: [
+               'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+               'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+               'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+           ]
        },
        'shr_1QScMXJRMXFic4sWih6q9v36': { 
            price: 20.72, 
            label: 'Great Britain', 
            countries: ['GB']
+       },
+       'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+           price: 36.53, 
+           label: 'Singapore', 
+           countries: ['SG']
        }
    };
    ```
@@ -634,3 +666,139 @@ project/
    - Review Memberstack settings
    - Check API key validity
    - Verify webhook signatures
+
+## Checkout System Documentation
+
+### Overview
+This document details the implementation of the Webflow + Memberstack + Stripe checkout system for Lille Big Hope. The system handles physical and digital products with country-specific shipping rates, tax calculations, and multi-language support.
+
+### Core Components
+
+#### 1. Frontend Implementation (`webflow-memberstack-checkout.js`)
+- Handles user interactions and checkout flow
+- Manages shipping rate selection
+- Integrates with Memberstack for user authentication
+- Communicates with Stripe for payment processing
+
+#### 2. Backend Implementation (`create-checkout-session.js`)
+- Serverless function hosted on Netlify
+- Creates Stripe checkout sessions
+- Handles shipping calculations
+- Manages tax rates and calculations
+
+### Key Features
+
+#### Shipping Rates Configuration
+```javascript
+const SHIPPING_RATES = {
+    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+        price: 0, 
+        label: 'Österreich', 
+        countries: ['AT']
+    },
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+        price: 20.36, 
+        label: 'Europe', 
+        countries: [
+            'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+            'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+            'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+        ]
+    },
+    'shr_1QScMXJRMXFic4sWih6q9v36': { 
+        price: 20.72, 
+        label: 'Great Britain', 
+        countries: ['GB']
+    },
+    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+        price: 36.53, 
+        label: 'Singapore', 
+        countries: ['SG']
+    }
+}
+```
+
+#### Multi-language Support
+- Detects user's preferred language from Memberstack
+- Supports DE, EN, FR, and IT
+- Falls back to default language (DE) if preferred language not available
+
+#### Product Configuration
+- Supports both digital (course) and physical (book) products
+- Each product type has specific configurations:
+  - Language-specific prices
+  - Shipping requirements
+  - Weight information for physical products
+
+### Recent Solutions
+
+#### 1. Email Retrieval Fix
+**Problem**: Checkout was failing due to incorrect email retrieval from Memberstack.
+**Solution**: Updated the email retrieval path to correctly access the auth email:
+```javascript
+const member = await window.$memberstackDom?.getCurrentMember();
+if (!member?.data) {
+    throw new Error('Please log in to continue');
+}
+const email = member.data.auth?.email;
+if (!email) {
+    throw new Error('No email found in member data');
+}
+```
+
+#### 2. European Shipping Countries Fix
+**Problem**: When selecting "Europe" as shipping option, only Belgium was available in the shipping address form.
+**Solution**: 
+1. Frontend Changes:
+```javascript
+// Updated shipping data handling
+if (config.requiresShipping) {
+    const countries = selectedRate.countries;
+    if (!Array.isArray(countries) || countries.length === 0) {
+        throw new Error('Invalid shipping countries configuration');
+    }
+    
+    checkoutData.shippingCountries = countries;
+    checkoutData.shippingRate = selectedRate.price;
+    checkoutData.shippingLabel = selectedRate.label;
+}
+```
+
+2. Backend Changes:
+```javascript
+shipping_address_collection: data.requiresShipping ? {
+    allowed_countries: data.shippingCountries
+} : undefined,
+```
+
+### Error Handling
+- Comprehensive error handling throughout the checkout process
+- Clear error messages for common issues:
+  - User not logged in
+  - Missing email
+  - Invalid shipping configuration
+  - Invalid product type
+
+### Testing Guidelines
+1. Test checkout with different shipping countries:
+   - Austria (free shipping)
+   - European countries (€20.36)
+   - Great Britain (€20.72)
+   - Singapore (€36.53)
+2. Verify language detection and pricing
+3. Test both digital and physical products
+4. Verify tax calculations for different countries
+
+### Security Considerations
+1. Email validation before checkout
+2. User authentication check
+3. Shipping country validation
+4. Secure API endpoint handling
+5. Protection against multiple form submissions
+
+### Future Improvements
+1. Add more detailed error logging
+2. Implement retry mechanism for failed checkouts
+3. Add support for more payment methods
+4. Enhance shipping rate management interface
+5. Implement order tracking system

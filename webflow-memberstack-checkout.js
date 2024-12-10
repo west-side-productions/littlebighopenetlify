@@ -339,12 +339,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             throw new Error('Invalid product type');
         }
 
-        // Get current member's email
+        // Get current member's email and ID
         const member = await window.$memberstackDom?.getCurrentMember();
         if (!member?.data) {
             throw new Error('Please log in to continue');
         }
         const email = member.data.auth?.email;
+        const memberstackUserId = member.data.id;
         if (!email) {
             throw new Error('No email found in member data');
         }
@@ -361,7 +362,8 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
             cancelUrl: window.location.href,
             metadata: {
-                productType: productType
+                productType: productType,
+                memberstackUserId: memberstackUserId
             }
         };
 
