@@ -39,13 +39,33 @@
       course: {
           id: 'prc_online-kochkurs-8b540kc2',
           type: 'digital',
-          prices: { /* language-specific prices */ }
+          prices: { 
+              de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+              en: 'price_1QT214JRMXFic4sWr5OXetuw',
+              fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+              it: 'price_1QT206JRMXFic4sW78d5dEDO'
+          },
+          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
       },
       book: {
           id: 'prc_cookbook_physical',
           type: 'physical',
-          prices: { /* language-specific prices */ },
-          requiresShipping: true
+          prices: { 
+              de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+              en: 'price_1QT214JRMXFic4sWr5OXetuw' 
+          },
+          requiresShipping: true,
+          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+      },
+      bundle: {
+          id: 'prc_cookbook_bundle',
+          type: 'bundle',
+          requiresShipping: true,
+          components: ['book', 'course'],
+          discountAmount: 1400, // €14 discount
+          weight: 450,
+          packagingWeight: 50,
+          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
       }
   };
 
@@ -77,14 +97,50 @@
       }
   };
   ```
-- **Error Handling**
-  - Retry mechanism with exponential backoff
-  - Comprehensive error logging
-  - User-friendly error messages
-- **Security Measures**
-  - Input validation
-  - XSS prevention
-  - Secure API calls
+
+### 3. Product and Plan Configuration
+- **Product Types**:
+  1. **Course (Digital)**
+     - No shipping required
+     - Memberstack Plan: `pln_kostenloser-zugang-84l80t3u`
+     - Available in multiple languages with different price points
+  
+  2. **Book (Physical)**
+     - Requires shipping
+     - Weight: 450g + 50g packaging
+     - Memberstack Plan: `pln_kostenloser-zugang-84l80t3u`
+     - Available in multiple languages
+  
+  3. **Bundle (Book + Course)**
+     - Requires shipping (includes physical book)
+     - Weight: Same as book (450g + 50g packaging)
+     - Automatic €14 discount applied
+     - Memberstack Plan: `prc_kurs-buch-s29u04fs`
+     - Combines both products with special pricing
+
+- **Shipping Configuration**:
+  - Rates vary by region:
+    - Austria: Free shipping
+    - Europe: €20.36
+    - Great Britain: €20.72
+    - Singapore: €36.53
+  - Each rate has specific country restrictions
+  - Weight-based calculations for physical products
+
+- **Checkout Process**:
+  1. User selects product (book, course, or bundle)
+  2. For physical products:
+     - Shipping country selection
+     - Shipping rate calculation
+  3. Stripe checkout session creation with:
+     - Product configuration
+     - Shipping details (if applicable)
+     - Tax calculation enabled
+     - Memberstack plan ID in metadata
+  4. On successful payment:
+     - Memberstack plan is assigned
+     - Confirmation emails sent
+     - For physical products, shipping notification sent
 
 ## Language Handling
 
@@ -438,7 +494,7 @@ const PRODUCT_CONFIG = {
           memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
       },
       'bundle': {
-          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
       }
   };
   ```
@@ -583,8 +639,17 @@ Required environment variables in Netlify:
            type: 'physical',
            weight: 1005,          // 1005g product weight
            packagingWeight: 152, // 152g packaging
-           prices: { de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ' },
-           dimensions: { length: 25, width: 20, height: 2 },
+           prices: {
+               de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+               en: 'price_1QT214JRMXFic4sWr5OXetuw',
+               fr: 'price_1QT214JRMXFic4sWr5OXetuw',
+               it: 'price_1QT206JRMXFic4sW78d5dEDO'
+           },
+           dimensions: {
+               length: 25,
+               width: 20,
+               height: 2
+           },
            shippingClass: 'standard'
        }
    };
