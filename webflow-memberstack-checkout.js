@@ -318,159 +318,70 @@ function getPreferredLanguage() {
 
 // Function to start checkout process
 async function startCheckout(shippingRateId = null, forcedProductType = null) {
-    console.log('Starting checkout process');
-    const button = document.querySelector('[data-checkout-button]');
-    const originalText = button ? button.textContent : '';
-    
     try {
-        if (button) {
-            button.textContent = 'Processing...';
-            button.disabled = true;
-        }
-
-        // Get current member
-        const member = await window.$memberstackDom.getCurrentMember();
-        if (!member?.data) {
-            // Store current URL for redirect after registration
-            const currentPath = window.location.pathname;
-            const queryParams = window.location.search;
-            
-            // Store checkout configuration
-            if (shippingRateId || forcedProductType) {
-                localStorage.setItem('checkoutConfig', JSON.stringify({
-                    productType: forcedProductType,
-                    shippingRateId: shippingRateId
-                }));
-            }
-            
-            localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
-            
-            // Special handling for membershome path
-            if (currentPath.includes('/membershome')) {
-                window.location.href = `/registrieren?returnUrl=${encodeURIComponent(currentPath + queryParams)}`;
-                return;
-            }
-            
-            window.location.href = '/registrieren';
-            return;
-        }
-
-        // Get the product type and corresponding configuration
-        const productElement = document.querySelector('[data-product-type]');
-        let productType = forcedProductType;
-        let productConfig = null;
+        const button = document.querySelector('.checkout-button');
+        if (!button) return;
         
-        // Special handling for membershome path
-        if (window.location.pathname.includes('/membershome')) {
-            console.log('Setting product type for membershome');
-            productType = forcedProductType || 'book';
-            productConfig = PRODUCT_CONFIG[productType];
-            
-            if ((productConfig.type === 'physical' || productConfig.type === 'bundle') && !shippingRateId) {
-                const shippingSelect = document.querySelector('#shipping-rate-select');
-                shippingRateId = shippingSelect?.value;
-                if (!shippingRateId) {
-                    throw new Error('Please select a shipping option');
-                }
-            }
-        } else {
-            productType = productType || productElement?.dataset.productType || 'course';
-            productConfig = PRODUCT_CONFIG[productType];
-            
-            if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
-                const shippingSelect = document.querySelector('#shipping-rate-select');
-                shippingRateId = shippingSelect?.value;
-                if (!shippingRateId) {
-                    throw new Error('Please select a shipping option');
-                }
-            }
+        // Disable button and show loading state
+        button.disabled = true;
+        button.textContent = 'Loading...';
+
+        // Get selected shipping rate
+        const selectedRate = SHIPPING_RATES[shippingRateId];
+        if (!selectedRate) {
+            throw new Error('Please select a shipping option');
         }
 
-        if (!productConfig) {
-            throw new Error(`Invalid product type: ${productType}`);
+        // Get product configuration
+        const productType = forcedProductType || getProductType();
+        const config = PRODUCT_CONFIG[productType];
+        if (!config) {
+            throw new Error('Invalid product type');
         }
 
-        console.log('Using product configuration:', {
-            type: productType,
-            config: productConfig,
-            shippingRequired: productConfig.type === 'physical' || productConfig.type === 'bundle',
-            shippingRate: shippingRateId
-        });
+        // Get current member's email
+        const member = await window.$memberstackDom?.getCurrentMember();
+        const email = member?.data?.email;
 
-        // Get shipping rate details if needed
-        let shippingRate = null;
-        if (shippingRateId) {
-            shippingRate = SHIPPING_RATES[shippingRateId];
-            if (!shippingRate) {
-                throw new Error('Invalid shipping rate selected');
-            }
-        }
+        // Get language
+        const language = await $lbh.language();
 
-        // Get the language and corresponding price ID
-        const language = getPreferredLanguage();
-        const priceId = productConfig.prices[language];
-        
-        if (!priceId) {
-            throw new Error(`No price found for language: ${language}`);
-        }
-
-        // Create checkout session payload
-        const payload = {
-            priceId: priceId,
-            customerEmail: member.data.auth.email,
+        // Prepare checkout data
+        const checkoutData = {
+            priceId: config.prices[language] || config.prices['de'],
+            email: email,
             language: language,
-            successUrl: window.location.origin + '/vielen-dank-email',
-            cancelUrl: window.location.origin + '/produkte',
+            requiresShipping: config.requiresShipping,
+            successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: window.location.href,
             metadata: {
-                memberstackUserId: member.data.id,
-                productType: productType,
-                type: productConfig.type,
-                language: language,
-                source: window.location.pathname,
-                planId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId,
-                requiresShipping: productConfig.type === 'physical' || productConfig.type === 'bundle',
-                totalWeight: productConfig.weight + (productConfig.packagingWeight || 0),
-                productWeight: productConfig.weight,
-                packagingWeight: productConfig.packagingWeight || 0,
-                dimensions: productConfig.dimensions ? JSON.stringify(productConfig.dimensions) : null,
-                shippingClass: productConfig.shippingClass || 'standard',
-                countryCode: shippingRate ? shippingRate.countries[0] : CONFIG.defaultCountry
+                productType: productType
             }
         };
 
-        // Add shipping rate if provided and required for physical products
-        if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
-            if (!shippingRateId) {
-                throw new Error('Shipping rate is required for physical products');
-            }
-            payload.shippingRateId = shippingRateId;
+        // Add shipping information if required
+        if (config.requiresShipping) {
+            checkoutData.shippingCountry = selectedRate.countries[0];
+            checkoutData.shippingRate = selectedRate.price;
+            checkoutData.shippingLabel = selectedRate.label;
         }
 
-        console.log('Creating checkout session:', payload);
-
         // Create checkout session
-        const response = await fetch(`${getBaseUrl()}/create-checkout-session`, {
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(checkoutData)
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Checkout session creation failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText
-            });
-            throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
+            throw new Error('Failed to create checkout session');
         }
 
         const session = await response.json();
-        console.log('Checkout session created:', session);
         
-        // Redirect to Stripe checkout
+        // Redirect to Stripe Checkout
         const stripe = await loadStripe(CONFIG.stripePublicKey);
         const { error } = await stripe.redirectToCheckout({
             sessionId: session.id
@@ -480,12 +391,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             throw error;
         }
     } catch (error) {
-        console.error('Error creating checkout session:', error);
+        console.error('Checkout error:', error);
+        const button = document.querySelector('.checkout-button');
         if (button) {
-            button.textContent = originalText;
             button.disabled = false;
+            button.textContent = 'Try again';
         }
-        throw error;
+        alert(error.message || 'Something went wrong. Please try again.');
     }
 }
 

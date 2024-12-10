@@ -125,29 +125,55 @@ exports.handler = async (event, context) => {
         if (!validateUrls(data.successUrl, data.cancelUrl)) throw new Error('Invalid URLs provided');
         if (!validateLocale(data.language)) throw new Error('Invalid language');
 
-        // Create checkout session
+        const lineItems = [{
+            price: data.priceId,
+            quantity: 1
+        }];
+
+        // Create checkout session with proper shipping and tax handling
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [{
-                price: data.priceId,
-                quantity: 1
-            }],
+            payment_method_types: ['card', 'sofort', 'giropay', 'eps'],
+            line_items: lineItems,
             mode: 'payment',
             success_url: data.successUrl,
             cancel_url: data.cancelUrl,
             customer_email: data.customerEmail,
-            locale: data.language,
+            locale: data.language || 'de',
             metadata: {
                 ...data.metadata,
                 language: data.language
             },
-            shipping_address_collection: {
-                allowed_countries: ['AT', 'GB', 'SG', 
-                    // EU countries for Europe shipping
-                    'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
-                    'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
-                    'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
-                ]
+            shipping_address_collection: data.requiresShipping ? {
+                allowed_countries: [data.shippingCountry] // Only allow the pre-selected country
+            } : undefined,
+            shipping_options: data.requiresShipping ? [
+                {
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: {
+                            amount: data.shippingRate * 100, // Convert to cents
+                            currency: 'eur',
+                        },
+                        display_name: data.shippingLabel || 'Standard shipping',
+                        tax_behavior: 'exclusive', // Tax will be calculated separately
+                        delivery_estimate: {
+                            minimum: {
+                                unit: 'business_day',
+                                value: 3,
+                            },
+                            maximum: {
+                                unit: 'business_day',
+                                value: 5,
+                            },
+                        },
+                    },
+                }
+            ] : undefined,
+            automatic_tax: {
+                enabled: true
+            },
+            tax_id_collection: {
+                enabled: true
             }
         });
 
