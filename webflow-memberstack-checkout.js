@@ -209,47 +209,60 @@ async function initializeDependencies() {
 
 // Initialize checkout button
 async function initializeCheckoutButton() {
-    console.log('Setting up checkout button...');
+    console.log('Setting up checkout buttons...');
     
     try {
-        const checkoutButtons = document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button]');
-        if (checkoutButtons.length === 0) {
-            console.log('No checkout buttons found');
-            return;
-        }
+        // Initialize each product type's button separately
+        const productTypes = ['book', 'course', 'bundle'];
+        
+        productTypes.forEach(productType => {
+            const button = document.querySelector(`#checkout-button-${productType}`);
+            if (!button) {
+                console.log(`No checkout button found for ${productType}`);
+                return;
+            }
 
-        checkoutButtons.forEach(button => {
-            // Remove any existing listeners
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
+            console.log(`Found button for ${productType}:`, button);
 
-            // Add click listener
-            newButton.addEventListener('click', async (event) => {
+            // Add click listener (no need to clone, just add listener)
+            button.addEventListener('click', async (event) => {
                 event.preventDefault();
-                console.log('Checkout button clicked');
+                event.stopPropagation();
+                console.log(`${productType} checkout button clicked`);
+                
                 try {
-                    await handleCheckout(event);
+                    // Get shipping rate if needed
+                    let shippingRateId = null;
+                    const config = PRODUCT_CONFIG[productType];
+                    
+                    if (config.requiresShipping || config.type === 'bundle') {
+                        const shippingContainer = document.querySelector(`#shipping-rate-select-${productType}`);
+                        const shippingSelect = shippingContainer?.querySelector('select');
+                        if (!shippingSelect?.value) {
+                            throw new Error('Please select a shipping option');
+                        }
+                        shippingRateId = shippingSelect.value;
+                    }
+
+                    await handleCheckout(event, productType, shippingRateId);
                 } catch (error) {
                     console.error('Error during checkout:', error);
                     alert(error.message || 'An error occurred during checkout');
                 }
             });
+            
+            console.log(`Initialized ${productType} checkout button`);
         });
 
-        console.log('Checkout button initialized');
+        console.log('All checkout buttons initialized');
     } catch (error) {
-        console.error('Error initializing checkout button:', error);
+        console.error('Error initializing checkout buttons:', error);
     }
 }
 
-// Get the base URL for API endpoints
-function getBaseUrl() {
-    return 'https://lillebighopefunctions.netlify.app/.netlify/functions';
-}
-
-async function handleCheckout(event) {
-    event.preventDefault();
-    console.log('Checkout button clicked');
+// Update handleCheckout to use the passed productType
+async function handleCheckout(event, productType, shippingRateId) {
+    console.log('Starting checkout for:', { productType, shippingRateId });
 
     try {
         // Get current member
@@ -257,26 +270,16 @@ async function handleCheckout(event) {
         console.log('Current member:', member?.data?.id || 'Not found');
 
         // Get product configuration
-        const productElement = document.querySelector('[data-product-type]');
-        const productType = productElement?.dataset.productType || 'book';
-        const productConfig = PRODUCT_CONFIG[productType];
-        
-        // Get shipping rate if available
-        const shippingSelect = document.querySelector('#shipping-rate-select');
-        let shippingRateId = null;
-
-        if (productConfig.type === 'physical' || productConfig.type === 'bundle') {
-            if (!shippingSelect?.value) {
-                throw new Error('Please select a shipping option');
-            }
-            shippingRateId = shippingSelect.value;
+        const config = PRODUCT_CONFIG[productType];
+        if (!config) {
+            throw new Error('Invalid product type');
         }
-
+        
         // Log configuration
         console.log('Using product configuration:', {
             type: productType,
-            config: productConfig,
-            shippingRequired: productConfig.type === 'physical' || productConfig.type === 'bundle',
+            config: config,
+            shippingRequired: config.requiresShipping || config.type === 'bundle',
             shippingRate: shippingRateId
         });
 
@@ -302,7 +305,7 @@ async function handleCheckout(event) {
         // Create checkout session
         console.log('Creating checkout session:', {
             productType,
-            productConfig,
+            config: config,
             language,
             memberEmail: member.data.auth.email
         });
@@ -311,7 +314,7 @@ async function handleCheckout(event) {
 
     } catch (error) {
         console.error('Checkout error:', error);
-        alert(error.message || 'An error occurred during checkout. Please try again.');
+        throw error;
     }
 }
 
@@ -480,58 +483,60 @@ function updatePriceDisplay() {
     }
 }
 
-// Update price display with shipping
-function updateTotalPrice(basePrice, shippingRateId) {
-    const shipping = SHIPPING_RATES[shippingRateId];
-    if (!shipping) return;
-
-    const total = basePrice + shipping.price;
-    const priceElement = document.querySelector('.product-price');
-    if (priceElement) {
-        priceElement.textContent = `€${total.toFixed(2)}`;
-    }
-}
-
 // Initialize shipping rate selection
 function initializeShippingSelects() {
-    const shippingSelects = document.querySelectorAll('#shipping-rate-select');
+    const productTypes = ['book', 'bundle'];  // Only physical products need shipping
     
-    shippingSelects.forEach(select => {
-        if (!select) return;
+    productTypes.forEach(productType => {
+        const shippingContainer = document.querySelector(`#shipping-rate-select-${productType}`);
+        if (!shippingContainer) {
+            console.log(`No shipping container found for ${productType}`);
+            return;
+        }
         
-        // Get the product type from the closest product item
-        const productItem = select.closest('[data-product-type]');
-        if (!productItem) return;
+        const select = shippingContainer.querySelector('select');
+        if (!select) {
+            console.log(`No shipping select found for ${productType}`);
+            return;
+        }
         
-        const productType = productItem.dataset.productType;
         const config = PRODUCT_CONFIG[productType];
         
         // Only show shipping selection for physical products and bundles
         const requiresShipping = config.type === 'physical' || config.type === 'bundle';
-        const shippingSelection = select.closest('.shipping-selection');
-        
-        if (shippingSelection) {
-            shippingSelection.style.display = requiresShipping ? 'block' : 'none';
-        }
+        shippingContainer.style.display = requiresShipping ? 'block' : 'none';
         
         if (!requiresShipping) return;
 
         // Get base price from the product item
-        const basePrice = parseFloat(productItem.dataset.basePrice) || 0;
+        const productItem = shippingContainer.closest('[data-product-type]');
+        const basePrice = parseFloat(productItem?.dataset.basePrice) || 0;
 
         // Update price when shipping option changes
         select.addEventListener('change', (event) => {
             const shippingRateId = event.target.value;
-            updateTotalPrice(basePrice, shippingRateId);
+            updateTotalPrice(basePrice, shippingRateId, productType);
         });
 
         // Set initial shipping rate and update price
         const defaultShippingRate = CONFIG.defaultShippingRate;
         if (defaultShippingRate) {
             select.value = defaultShippingRate;
-            updateTotalPrice(basePrice, defaultShippingRate);
+            updateTotalPrice(basePrice, defaultShippingRate, productType);
         }
     });
+}
+
+// Update price display with shipping
+function updateTotalPrice(basePrice, shippingRateId, productType) {
+    const shippingRate = SHIPPING_RATES[shippingRateId];
+    if (!shippingRate) return;
+
+    const totalPrice = basePrice + shippingRate.price;
+    const priceDisplay = document.querySelector(`[data-product-type="${productType}"] .price-display`);
+    if (priceDisplay) {
+        priceDisplay.textContent = `€${totalPrice.toFixed(2)}`;
+    }
 }
 
 // Wait for Memberstack to be available
