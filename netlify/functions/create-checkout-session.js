@@ -39,6 +39,7 @@ const PRODUCT_CONFIG = {
 };
 
 exports.handler = async function(event, context) {
+    // Handle OPTIONS request for CORS
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
@@ -48,37 +49,44 @@ exports.handler = async function(event, context) {
             throw new Error('Method not allowed');
         }
 
+        console.log('Received request body:', event.body);
         const data = JSON.parse(event.body);
-        const { email, language, productType, shippingRateId } = data;
+        console.log('Parsed request data:', data);
+
+        // Validate required fields
+        const requiredFields = ['email', 'language', 'productType'];
+        const missingFields = requiredFields.filter(field => !data[field]);
         
-        if (!email || !productType) {
-            throw new Error('Missing required fields');
+        if (missingFields.length > 0) {
+            console.error('Missing required fields:', missingFields);
+            throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
         }
 
-        const config = PRODUCT_CONFIG[productType];
+        const config = PRODUCT_CONFIG[data.productType];
         if (!config) {
-            throw new Error('Invalid product type');
+            throw new Error(`Invalid product type: ${data.productType}`);
         }
 
         // Prepare session parameters
         const sessionParams = {
-            customer_email: email,
+            customer_email: data.email,
             mode: 'payment',
-            success_url: `${data.successUrl || 'https://lillebighope.at/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: data.cancelUrl || 'https://lillebighope.at',
+            success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || process.env.SITE_URL,
             automatic_tax: { enabled: true },
             billing_address_collection: 'required',
             allow_promotion_codes: true,
             metadata: {
-                productType,
-                language
+                productType: data.productType,
+                language: data.language,
+                ...(data.metadata || {})
             }
         };
 
         // Handle shipping if required
-        if (config.requiresShipping && shippingRateId) {
+        if (config.requiresShipping && data.shippingRateId) {
             sessionParams.shipping_options = [{
-                shipping_rate: shippingRateId
+                shipping_rate: data.shippingRateId
             }];
             sessionParams.shipping_address_collection = {
                 allowed_countries: ['AT', 'DE', 'GB', 'SG']
@@ -99,7 +107,7 @@ exports.handler = async function(event, context) {
             sessionParams.line_items = config.components.map(componentType => {
                 const componentConfig = PRODUCT_CONFIG[componentType];
                 return {
-                    price: componentConfig.prices[language] || componentConfig.prices['de'],
+                    price: componentConfig.prices[data.language] || componentConfig.prices['de'],
                     quantity: 1,
                     adjustable_quantity: { enabled: false }
                 };
@@ -112,14 +120,15 @@ exports.handler = async function(event, context) {
         } else {
             // Single product
             sessionParams.line_items = [{
-                price: config.prices[language] || config.prices['de'],
+                price: config.prices[data.language] || config.prices['de'],
                 quantity: 1,
                 adjustable_quantity: { enabled: false }
             }];
         }
 
-        // Create checkout session
+        console.log('Creating Stripe session with params:', sessionParams);
         const session = await stripe.checkout.sessions.create(sessionParams);
+        console.log('Created session:', session.id);
 
         return {
             statusCode: 200,
@@ -132,7 +141,10 @@ exports.handler = async function(event, context) {
         return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ 
+                error: error.message,
+                details: error.stack
+            })
         };
     }
 };

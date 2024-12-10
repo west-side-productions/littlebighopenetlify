@@ -280,7 +280,7 @@ async function handleCheckout(event, productType, shippingRateId) {
         console.log('Using product configuration:', {
             type: productType,
             config: config,
-            shippingRequired: config.requiresShipping || config.type === 'bundle',
+            shippingRequired: config.requiresShipping,
             shippingRate: shippingRateId
         });
 
@@ -303,16 +303,68 @@ async function handleCheckout(event, productType, shippingRateId) {
         // Get language
         const language = getPreferredLanguage();
 
+        // Prepare checkout data
+        const checkoutData = {
+            email: member.data.auth.email,
+            language: language,
+            productType: productType,
+            shippingRateId: shippingRateId,
+            successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: window.location.href,
+            metadata: {
+                memberstackUserId: member.data.id,
+                productType: productType,
+                language: language
+            }
+        };
+
+        // Log the checkout data being sent
+        console.log('Sending checkout data:', checkoutData);
+
         // Create checkout session
-        console.log('Creating checkout session:', {
-            productType,
-            config: config,
-            language,
-            memberEmail: member.data.auth.email
+        await startCheckout(checkoutData);
+
+    } catch (error) {
+        console.error('Checkout error:', error);
+        throw error;
+    }
+}
+
+// Start checkout process
+async function startCheckout(checkoutData) {
+    console.log('Creating checkout session with data:', checkoutData);
+    
+    try {
+        const response = await fetch(`${getBaseUrl()}/create-checkout-session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(checkoutData)
         });
 
-        await startCheckout(shippingRateId, productType);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Checkout error response:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorData
+            });
+            throw new Error(`Checkout failed: ${errorData.error || response.statusText}`);
+        }
 
+        const session = await response.json();
+        
+        // Redirect to Stripe Checkout
+        const stripe = await loadStripe(CONFIG.stripePublicKey);
+        const { error } = await stripe.redirectToCheckout({
+            sessionId: session.id
+        });
+
+        if (error) {
+            console.error('Stripe redirect error:', error);
+            throw error;
+        }
     } catch (error) {
         console.error('Checkout error:', error);
         throw error;
@@ -342,137 +394,6 @@ function getPreferredLanguage() {
 // Get the base URL for API endpoints
 function getBaseUrl() {
     return 'https://lillebighopefunctions.netlify.app/.netlify/functions';
-}
-
-// Function to start checkout process
-async function startCheckout(shippingRateId = null, productType = null) {
-    console.log('Starting checkout with:', { shippingRateId, productType });
-    
-    try {
-        const button = document.querySelector(`#checkout-button-${productType}`);
-        if (button) {
-            // Disable button and show loading state
-            button.disabled = true;
-            button.textContent = 'Loading...';
-        }
-
-        // Get selected shipping rate if applicable
-        const selectedRate = shippingRateId ? SHIPPING_RATES[shippingRateId] : null;
-        if (shippingRateId && !selectedRate) {
-            throw new Error('Please select a shipping option');
-        }
-
-        // Get product configuration
-        const config = PRODUCT_CONFIG[productType];
-        if (!config) {
-            throw new Error('Invalid product type');
-        }
-
-        // Get current member's email and ID
-        const member = await window.$memberstackDom?.getCurrentMember();
-        if (!member?.data) {
-            throw new Error('Please log in to continue');
-        }
-        const email = member.data.auth?.email;
-        const memberstackUserId = member.data.id;
-        if (!email) {
-            throw new Error('No email found in member data');
-        }
-
-        // Get language
-        const language = getPreferredLanguage();
-
-        // Prepare checkout data
-        const checkoutData = {
-            email: email,
-            language: language,
-            requiresShipping: config.requiresShipping,
-            successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
-            cancelUrl: window.location.href,
-            metadata: {
-                productType: productType,
-                memberstackUserId: memberstackUserId,
-                memberstackPlanId: config.memberstackPlanId
-            }
-        };
-
-        // Handle bundle differently
-        if (config.type === 'bundle') {
-            // Add component information
-            checkoutData.metadata.isBundle = true;
-            checkoutData.metadata.components = JSON.stringify(config.components);
-            // Use the bundle price
-            checkoutData.priceId = config.prices[language] || config.prices['de'];
-        } else {
-            // For single products, use the standard price
-            checkoutData.priceId = config.prices[language] || config.prices['de'];
-        }
-
-        // Add shipping information if required
-        if (config.requiresShipping && selectedRate) {
-            // Get the countries array from the selected shipping rate
-            const countries = selectedRate.countries;
-            if (!Array.isArray(countries) || countries.length === 0) {
-                throw new Error('Invalid shipping countries configuration');
-            }
-            
-            checkoutData.shippingCountries = countries;
-            checkoutData.shippingRate = selectedRate.price;
-            checkoutData.shippingLabel = selectedRate.label;
-            checkoutData.shippingRateId = shippingRateId;
-            
-            // Add weight information for physical products
-            if (config.weight) {
-                checkoutData.metadata.productWeight = config.weight.toString();
-                checkoutData.metadata.packagingWeight = config.packagingWeight?.toString() || '0';
-                checkoutData.metadata.totalWeight = (config.weight + (config.packagingWeight || 0)).toString();
-            }
-        }
-
-        console.log('Creating checkout session with data:', checkoutData);
-
-        // Create checkout session
-        const response = await fetch(`${getBaseUrl()}/create-checkout-session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(checkoutData)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('Checkout error:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorData
-            });
-            throw new Error(`Checkout failed: ${errorData.error || response.statusText}`);
-        }
-
-        const session = await response.json();
-        
-        // Redirect to Stripe Checkout
-        const stripe = await loadStripe(CONFIG.stripePublicKey);
-        const { error } = await stripe.redirectToCheckout({
-            sessionId: session.id
-        });
-
-        if (error) {
-            throw error;
-        }
-    } catch (error) {
-        console.error('Checkout error:', error);
-        
-        // Reset button state if exists
-        const button = document.querySelector(`#checkout-button-${productType}`);
-        if (button) {
-            button.disabled = false;
-            button.textContent = 'Try again';
-        }
-        
-        throw error;
-    }
 }
 
 // Get shipping country from shipping rate ID
@@ -728,7 +649,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     
                     console.log('Starting checkout with config:', { productType, shippingRateId });
-                    await startCheckout(shippingRateId, productType).catch(error => {
+                    await startCheckout({ productType, shippingRateId }).catch(error => {
                         console.error('Error starting checkout:', error);
                     });
                 }
