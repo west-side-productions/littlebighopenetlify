@@ -34,7 +34,8 @@ const PRODUCT_CONFIG = {
         components: ['book', 'course'],
         discountAmount: 1400, // €14 discount
         weight: 450,
-        packagingWeight: 50
+        packagingWeight: 50,
+        memberstackPlanId: 'prc_kurs-buch-s29u04fs'
     }
 };
 
@@ -109,6 +110,9 @@ exports.handler = async function(event, context) {
             metadata: {
                 productType: data.productType,
                 language: data.language,
+                memberstackUserId: data.memberstackUserId,
+                memberstackPlanId: config.memberstackPlanId,
+                type: config.type,
                 ...(data.metadata || {})
             }
         };
