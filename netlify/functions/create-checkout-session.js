@@ -135,7 +135,8 @@ exports.handler = async (event, context) => {
         // Prepare line items
         const lineItems = [{
             price: data.priceId,
-            quantity: 1
+            quantity: 1,
+            tax_behavior: 'exclusive'
         }];
 
         // Create checkout session
@@ -188,7 +189,12 @@ exports.handler = async (event, context) => {
             },
             tax_id_collection: {
                 enabled: true
-            }
+            },
+            billing_address_collection: 'required',  
+            customer_tax_exempt: 'none',  
+            customer_tax_location: data.requiresShipping ? {
+                country: data.shippingCountries[0]  
+            } : undefined
         });
 
         console.log('Session created:', { id: session.id });

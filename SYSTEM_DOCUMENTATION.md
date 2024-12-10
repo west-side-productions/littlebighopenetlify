@@ -802,3 +802,51 @@ shipping_address_collection: data.requiresShipping ? {
 3. Add support for more payment methods
 4. Enhance shipping rate management interface
 5. Implement order tracking system
+
+### Tax Calculation System
+
+#### Overview
+The system uses Stripe's automatic tax calculation feature to handle VAT for different countries. Tax rates are automatically determined based on the customer's shipping address.
+
+#### Implementation
+```javascript
+// Stripe checkout session configuration
+const session = await stripe.checkout.sessions.create({
+    // ... other configuration
+    automatic_tax: {
+        enabled: true
+    },
+    tax_id_collection: {
+        enabled: true  // Allows customers to provide VAT IDs
+    }
+});
+```
+
+#### Tax Rates by Region
+1. **Austria**
+   - Standard VAT rate: 20%
+   - Applied automatically for Austrian addresses
+
+2. **European Union**
+   - Country-specific VAT rates
+   - Examples:
+     - Germany: 19%
+     - France: 20%
+     - Italy: 22%
+
+3. **Non-EU Countries**
+   - No VAT applied
+   - Handled automatically by Stripe
+
+#### VAT ID Collection
+- Business customers can provide VAT IDs
+- VAT exemption applied when valid VAT ID provided
+- Automatic validation through Stripe
+
+#### Tax Calculation Process
+1. Customer enters shipping address
+2. Stripe automatically determines applicable tax rate
+3. Tax is calculated on:
+   - Product price
+   - Shipping cost (tax_behavior: 'exclusive')
+4. Total is displayed including tax
