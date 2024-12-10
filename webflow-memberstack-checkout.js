@@ -358,7 +358,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             email: email,
             language: language,
             requiresShipping: config.requiresShipping,
-            successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+            successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
             cancelUrl: window.location.href,
             metadata: {
                 productType: productType
