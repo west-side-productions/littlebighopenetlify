@@ -131,6 +131,7 @@ exports.handler = async (event, context) => {
         }];
 
         // Create checkout session
+        const productConfig = PRODUCT_CONFIG[data.productType];
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card', 'sofort', 'giropay', 'eps'],
             line_items: lineItems,
@@ -140,8 +141,14 @@ exports.handler = async (event, context) => {
             customer_email: data.email,
             locale: data.language || 'de',
             metadata: {
-                ...data.metadata,
-                language: data.language
+                memberstackUserId: data.memberstackUserId,
+                language: data.language,
+                type: productConfig.type,
+                productType: data.productType,
+                productWeight: productConfig.weight?.toString() || '0',
+                packagingWeight: productConfig.packagingWeight?.toString() || '0',
+                totalWeight: ((productConfig.weight || 0) + (productConfig.packagingWeight || 0)).toString(),
+                isFirstPurchase: 'true'
             },
             shipping_address_collection: data.requiresShipping ? {
                 allowed_countries: data.shippingCountries
