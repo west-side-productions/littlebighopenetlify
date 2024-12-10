@@ -62,15 +62,34 @@ const PRODUCT_CONFIG = {
         shippingClass: 'standard'
     },
     bundle: {
+        id: 'prc_cookbook_bundle',
         type: 'bundle',
-        products: ['course', 'book'],
+        requiresShipping: true,
+        weight: 1005,  
+        packagingWeight: 152, 
+        components: {
+            book: {
+                priceMultiplier: 1,    
+                type: 'physical'
+            },
+            course: {
+                priceMultiplier: 0.5,  
+                type: 'digital'
+            }
+        },
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',  
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
             fr: 'price_1QT214JRMXFic4sWr5OXetuw',
             it: 'price_1QT206JRMXFic4sW78d5dEDO'
         },
-        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
+        dimensions: {
+            length: 25,
+            width: 20,
+            height: 2
+        },
+        shippingClass: 'standard'
     }
 };
 
@@ -355,7 +374,6 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
 
         // Prepare checkout data
         const checkoutData = {
-            priceId: config.prices[language] || config.prices['de'],
             email: email,
             language: language,
             requiresShipping: config.requiresShipping,
@@ -363,9 +381,22 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             cancelUrl: window.location.href,
             metadata: {
                 productType: productType,
-                memberstackUserId: memberstackUserId
+                memberstackUserId: memberstackUserId,
+                memberstackPlanId: config.memberstackPlanId
             }
         };
+
+        // Handle bundle differently
+        if (config.type === 'bundle') {
+            // Add component information
+            checkoutData.metadata.isBundle = true;
+            checkoutData.metadata.components = JSON.stringify(config.components);
+            // Use the bundle price
+            checkoutData.priceId = config.prices[language] || config.prices['de'];
+        } else {
+            // For single products, use the standard price
+            checkoutData.priceId = config.prices[language] || config.prices['de'];
+        }
 
         // Add shipping information if required
         if (config.requiresShipping) {
@@ -378,6 +409,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             checkoutData.shippingCountries = countries;
             checkoutData.shippingRate = selectedRate.price;
             checkoutData.shippingLabel = selectedRate.label;
+            
+            // Add weight information for physical products
+            if (config.weight) {
+                checkoutData.metadata.productWeight = config.weight.toString();
+                checkoutData.metadata.packagingWeight = config.packagingWeight?.toString() || '0';
+                checkoutData.metadata.totalWeight = (config.weight + (config.packagingWeight || 0)).toString();
+            }
         }
 
         // Create checkout session
@@ -455,50 +493,44 @@ function updateTotalPrice(basePrice, shippingRateId) {
 }
 
 // Initialize shipping rate selection
-const basePrice = 29.99; // Base product price
-
-// Initialize shipping selects
 function initializeShippingSelects() {
-    console.log('Initializing shipping selects...');
-    const shippingSelects = document.querySelectorAll('#shipping-rate-select, select[name="Versand-nach"]');
-    console.log('Found shipping selects:', shippingSelects.length);
-
-    if (shippingSelects.length === 0) return;
-
-    // Get current member's country if available
-    let defaultCountry = 'AT';  // Default to Austria
-    const member = window.$memberstackDom?.getCurrentMember();
-    if (member?.data?.customFields?.country) {
-        defaultCountry = member.data.customFields.country;
-    }
-
-    // Initialize each select
+    const shippingSelects = document.querySelectorAll('#shipping-rate-select');
+    
     shippingSelects.forEach(select => {
-        // Clear existing options
-        select.innerHTML = '';
+        if (!select) return;
+        
+        // Get the product type from the closest product item
+        const productItem = select.closest('[data-product-type]');
+        if (!productItem) return;
+        
+        const productType = productItem.dataset.productType;
+        const config = PRODUCT_CONFIG[productType];
+        
+        // Only show shipping selection for physical products and bundles
+        const requiresShipping = config.type === 'physical' || config.type === 'bundle';
+        const shippingSelection = select.closest('.shipping-selection');
+        
+        if (shippingSelection) {
+            shippingSelection.style.display = requiresShipping ? 'block' : 'none';
+        }
+        
+        if (!requiresShipping) return;
 
-        // Add placeholder
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Bitte wählen Sie ein Land';
-        placeholder.disabled = true;
-        placeholder.selected = true;
-        select.appendChild(placeholder);
+        // Get base price from the product item
+        const basePrice = parseFloat(productItem.dataset.basePrice) || 0;
 
-        // Add shipping rate options
-        Object.entries(SHIPPING_RATES).forEach(([rateId, rate]) => {
-            const option = document.createElement('option');
-            option.value = rateId;
-            option.textContent = `${rate.label} (${rate.price.toFixed(2)} €)`;
-            if (rate.countries.includes(defaultCountry)) {
-                option.selected = true;
-            }
-            select.appendChild(option);
+        // Update price when shipping option changes
+        select.addEventListener('change', (event) => {
+            const shippingRateId = event.target.value;
+            updateTotalPrice(basePrice, shippingRateId);
         });
 
-        // Store initial shipping rate
-        const initialRate = select.value;
-        console.log('Initial shipping rate:', initialRate);
+        // Set initial shipping rate and update price
+        const defaultShippingRate = CONFIG.defaultShippingRate;
+        if (defaultShippingRate) {
+            select.value = defaultShippingRate;
+            updateTotalPrice(basePrice, defaultShippingRate);
+        }
     });
 }
 
