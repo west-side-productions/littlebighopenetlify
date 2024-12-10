@@ -45,7 +45,7 @@
               fr: 'price_1QT214JRMXFic4sWr5OXetuw',
               it: 'price_1QT206JRMXFic4sW78d5dEDO'
           },
-          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+          memberstackPlanId: 'prc_online-kochkurs-8b540kc2'
       },
       book: {
           id: 'prc_cookbook_physical',
@@ -55,7 +55,9 @@
               en: 'price_1QT214JRMXFic4sWr5OXetuw' 
           },
           requiresShipping: true,
-          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+          weight: 1005,
+          packagingWeight: 156,
+          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
       },
       bundle: {
           id: 'prc_cookbook_bundle',
@@ -63,8 +65,8 @@
           requiresShipping: true,
           components: ['book', 'course'],
           discountAmount: 1400, // €14 discount
-          weight: 450,
-          packagingWeight: 50,
+          weight: 1005,
+          packagingWeight: 156,
           memberstackPlanId: 'prc_kurs-buch-s29u04fs'
       }
   };
@@ -102,18 +104,18 @@
 - **Product Types**:
   1. **Course (Digital)**
      - No shipping required
-     - Memberstack Plan: `pln_kostenloser-zugang-84l80t3u`
+     - Memberstack Plan: `prc_online-kochkurs-8b540kc2`
      - Available in multiple languages with different price points
   
   2. **Book (Physical)**
      - Requires shipping
-     - Weight: 450g + 50g packaging
-     - Memberstack Plan: `pln_kostenloser-zugang-84l80t3u`
+     - Weight: 1005g + 156g packaging
+     - Memberstack Plan: `prc_kurs-buch-s29u04fs`
      - Available in multiple languages
   
   3. **Bundle (Book + Course)**
      - Requires shipping (includes physical book)
-     - Weight: Same as book (450g + 50g packaging)
+     - Weight: Same as book (1005g + 156g packaging)
      - Automatic €14 discount applied
      - Memberstack Plan: `prc_kurs-buch-s29u04fs`
      - Combines both products with special pricing
@@ -488,10 +490,10 @@ const PRODUCT_CONFIG = {
   ```javascript
   const PRODUCT_CONFIG = {
       'course': {
-          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+          memberstackPlanId: 'prc_online-kochkurs-8b540kc2'
       },
       'book': {
-          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
       },
       'bundle': {
           memberstackPlanId: 'prc_kurs-buch-s29u04fs'
@@ -1114,3 +1116,5 @@ The system implements multiple layers of error handling:
 3. Implement proper error handling
 4. Log operations for debugging
 5. Handle offline scenarios gracefully
+
+```
