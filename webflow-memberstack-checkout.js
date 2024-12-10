@@ -4,7 +4,7 @@
 // Configuration
 const SHIPPING_RATES = {
     'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-        price: 0, 
+        price: 7.28, 
         label: 'Österreich', 
         countries: ['AT']
     },
