@@ -28,7 +28,7 @@ const PRODUCT_CONFIG = {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
             en: 'price_1QTSN6JRMXFic4sW9sklILhd'
         },
-        memberstackPlanId: 'pln_online-kochkurs-sl9z0w2q'
+        memberstackPlanId: 'prc_online-kochkurs-8b540kc2'
     },
     bundle: {
         type: 'bundle',
@@ -37,7 +37,7 @@ const PRODUCT_CONFIG = {
         discountAmount: 1400, // €14 discount
         weight: 1005,
         packagingWeight: 156,
-        memberstackPlanId: 'pln_online-kochkurs-sl9z0w2q'  // Use course plan ID for bundle
+        memberstackPlanId: 'prc_online-kochkurs-8b540kc2'  // Use course plan ID for bundle
     }
 };
 
