@@ -127,7 +127,7 @@ exports.handler = async (event, context) => {
 
         // Create checkout session
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card', 'sofort', 'giropay', 'eps'],
+            payment_method_types: ['card'],
             line_items: [{
                 price: data.priceId,
                 quantity: 1
@@ -141,31 +141,14 @@ exports.handler = async (event, context) => {
                 ...data.metadata,
                 language: data.language
             },
-            shipping_address_collection: data.requiresShipping ? {
-                allowed_countries: ['DE', 'AT', 'CH', 'IT', 'FR']
-            } : undefined,
-            shipping_options: data.requiresShipping ? [
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: 490,
-                            currency: 'eur',
-                        },
-                        display_name: 'Standard shipping',
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                        },
-                    },
-                }
-            ] : undefined
+            shipping_address_collection: {
+                allowed_countries: ['AT', 'GB', 'SG', 
+                    // EU countries for Europe shipping
+                    'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+                    'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+                    'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+                ]
+            }
         });
 
         console.log('Session created:', { id: session.id });
@@ -187,4 +170,3 @@ exports.handler = async (event, context) => {
         };
     }
 };
- 
