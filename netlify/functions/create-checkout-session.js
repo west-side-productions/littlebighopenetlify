@@ -8,12 +8,6 @@ const headers = {
     'Content-Type': 'application/json'
 };
 
-// Tax Rate Configuration - Using actual Stripe tax rate IDs
-const TAX_RATES = {
-    digital: 'txr_1QTSNDJRMXFic4sWXYZ123AB',  // Replace with your actual digital goods tax rate ID
-    physical: 'txr_1QTSNEJRMXFic4sWABC456CD'  // Replace with your actual physical goods tax rate ID
-};
-
 // Product Configuration
 const PRODUCT_CONFIG = {
     'course': {
@@ -166,7 +160,6 @@ exports.handler = async (event, context) => {
                 lineItems.push({
                     price: componentPrice,
                     quantity: 1,
-                    tax_rates: componentProduct.type === 'digital' ? [TAX_RATES.digital] : [TAX_RATES.physical],
                     adjustable_quantity: {
                         enabled: false
                     }
@@ -176,7 +169,10 @@ exports.handler = async (event, context) => {
             // For single products, use the standard price
             lineItems = [{
                 price: data.priceId,
-                quantity: 1
+                quantity: 1,
+                adjustable_quantity: {
+                    enabled: false
+                }
             }];
         }
 

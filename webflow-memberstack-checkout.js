@@ -216,6 +216,7 @@ async function initializeCheckoutButton() {
         const productTypes = ['book', 'course', 'bundle'];
         
         productTypes.forEach(productType => {
+            console.log(`Looking for button: #checkout-button-${productType}`);
             const button = document.querySelector(`#checkout-button-${productType}`);
             if (!button) {
                 console.log(`No checkout button found for ${productType}`);
@@ -224,8 +225,12 @@ async function initializeCheckoutButton() {
 
             console.log(`Found button for ${productType}:`, button);
 
-            // Add click listener (no need to clone, just add listener)
-            button.addEventListener('click', async (event) => {
+            // Remove any existing listeners to prevent duplicates
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+
+            // Add click listener
+            newButton.addEventListener('click', async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 console.log(`${productType} checkout button clicked`);
@@ -236,8 +241,7 @@ async function initializeCheckoutButton() {
                     const config = PRODUCT_CONFIG[productType];
                     
                     if (config.requiresShipping || config.type === 'bundle') {
-                        const shippingContainer = document.querySelector(`#shipping-rate-select-${productType}`);
-                        const shippingSelect = shippingContainer?.querySelector('select');
+                        const shippingSelect = document.querySelector(`#shipping-rate-select-${productType} select`);
                         if (!shippingSelect?.value) {
                             throw new Error('Please select a shipping option');
                         }
@@ -338,24 +342,30 @@ function getPreferredLanguage() {
     return CONFIG.defaultLanguage;
 }
 
-// Function to start checkout process
-async function startCheckout(shippingRateId = null, forcedProductType = null) {
-    try {
-        const button = document.querySelector('.checkout-button');
-        if (!button) return;
-        
-        // Disable button and show loading state
-        button.disabled = true;
-        button.textContent = 'Loading...';
+// Get the base URL for API endpoints
+function getBaseUrl() {
+    return 'https://lillebighopefunctions.netlify.app/.netlify/functions';
+}
 
-        // Get selected shipping rate
-        const selectedRate = SHIPPING_RATES[shippingRateId];
-        if (!selectedRate) {
+// Function to start checkout process
+async function startCheckout(shippingRateId = null, productType = null) {
+    console.log('Starting checkout with:', { shippingRateId, productType });
+    
+    try {
+        const button = document.querySelector(`#checkout-button-${productType}`);
+        if (button) {
+            // Disable button and show loading state
+            button.disabled = true;
+            button.textContent = 'Loading...';
+        }
+
+        // Get selected shipping rate if applicable
+        const selectedRate = shippingRateId ? SHIPPING_RATES[shippingRateId] : null;
+        if (shippingRateId && !selectedRate) {
             throw new Error('Please select a shipping option');
         }
 
         // Get product configuration
-        const productType = forcedProductType || getProductType();
         const config = PRODUCT_CONFIG[productType];
         if (!config) {
             throw new Error('Invalid product type');
@@ -373,7 +383,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         }
 
         // Get language
-        const language = await $lbh.language();
+        const language = getPreferredLanguage();
 
         // Prepare checkout data
         const checkoutData = {
@@ -402,7 +412,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         }
 
         // Add shipping information if required
-        if (config.requiresShipping) {
+        if (config.requiresShipping && selectedRate) {
             // Get the countries array from the selected shipping rate
             const countries = selectedRate.countries;
             if (!Array.isArray(countries) || countries.length === 0) {
@@ -412,6 +422,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
             checkoutData.shippingCountries = countries;
             checkoutData.shippingRate = selectedRate.price;
             checkoutData.shippingLabel = selectedRate.label;
+            checkoutData.shippingRateId = shippingRateId;
             
             // Add weight information for physical products
             if (config.weight) {
@@ -420,6 +431,8 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
                 checkoutData.metadata.totalWeight = (config.weight + (config.packagingWeight || 0)).toString();
             }
         }
+
+        console.log('Creating checkout session with data:', checkoutData);
 
         // Create checkout session
         const response = await fetch(`${getBaseUrl()}/create-checkout-session`, {
@@ -431,13 +444,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
+            const errorData = await response.json().catch(() => ({}));
             console.error('Checkout error:', {
                 status: response.status,
                 statusText: response.statusText,
-                error: errorText
+                error: errorData
             });
-            throw new Error(`Checkout failed: ${response.statusText}`);
+            throw new Error(`Checkout failed: ${errorData.error || response.statusText}`);
         }
 
         const session = await response.json();
@@ -453,12 +466,15 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         }
     } catch (error) {
         console.error('Checkout error:', error);
-        const button = document.querySelector('.checkout-button');
+        
+        // Reset button state if exists
+        const button = document.querySelector(`#checkout-button-${productType}`);
         if (button) {
             button.disabled = false;
             button.textContent = 'Try again';
         }
-        alert(error.message || 'Something went wrong. Please try again.');
+        
+        throw error;
     }
 }
 
