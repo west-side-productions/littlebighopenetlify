@@ -13,17 +13,14 @@ const emailTemplates = {
 // Function to add plan to member
 async function addPlanToMember(memberId, planId) {
     try {
-        // Use Memberstack V1 API endpoint
-        const url = `https://api.memberstack.com/v1/members/${memberId}/add-plan`;
+        const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
         const data = {
             planId: planId
         };
         const headers = {
-            "Authorization": process.env.MEMBERSTACK_SECRET_KEY,
-            "Content-Type": "application/json"
+            "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY
         };
 
-        console.log('Making request to Memberstack:', { url, planId, memberId });
         const response = await axios.post(url, data, { headers });
         console.log(`Successfully added plan ${planId} to member ${memberId}`, response.data);
     } catch (error) {
