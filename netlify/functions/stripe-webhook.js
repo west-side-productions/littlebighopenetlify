@@ -21,12 +21,39 @@ async function addPlanToMember(memberId, planId) {
             "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY
         };
 
+        console.log('Making request to Memberstack:', {
+            url,
+            memberId,
+            planId,
+            headers: {
+                ...headers,
+                "X-API-KEY": "REDACTED"
+            },
+            data
+        });
+
         const response = await axios.post(url, data, { headers });
+        console.log('Memberstack response:', {
+            status: response.status,
+            data: response.data
+        });
         console.log(`Successfully added plan ${planId} to member ${memberId}`, response.data);
     } catch (error) {
-        const errorMessage = error.response?.data || error.message || 'Unknown error';
-        console.error('Error adding plan to member:', errorMessage);
-        throw new Error(`Failed to add plan to member: ${errorMessage}`);
+        console.error('Error adding plan to member:', {
+            error: error.response?.data || error.message,
+            status: error.response?.status,
+            headers: error.response?.headers,
+            config: {
+                url: error.config?.url,
+                method: error.config?.method,
+                data: error.config?.data,
+                headers: {
+                    ...error.config?.headers,
+                    "X-API-KEY": "REDACTED"
+                }
+            }
+        });
+        throw new Error(`Failed to add plan to member: ${error.response?.data || error.message}`);
     }
 }
 
@@ -178,13 +205,26 @@ exports.handler = async (event) => {
                     if (!planId) {
                         throw new Error('No Memberstack plan ID found in session metadata');
                     }
-                    console.log('Adding plan to member:', {
-                        memberId: session.metadata.memberstackUserId,
-                        planId: planId,
-                        productType: session.metadata.productType
-                    });
-                    await addPlanToMember(session.metadata.memberstackUserId, planId);
-                    console.log('Successfully added plan to member');
+
+                    // If it's a bundle, add both the course and book plans
+                    if (session.metadata.type === 'bundle') {
+                        console.log('Processing bundle purchase - adding both plans');
+                        // Add course plan
+                        await addPlanToMember(session.metadata.memberstackUserId, 'prc_online-kochkurs-8b540kc2');
+                        console.log('Successfully added course plan');
+                        // Add book plan
+                        await addPlanToMember(session.metadata.memberstackUserId, 'pln_kostenloser-zugang-84l80t3u');
+                        console.log('Successfully added book plan');
+                    } else {
+                        // For single products, just add the specified plan
+                        console.log('Adding plan to member:', {
+                            memberId: session.metadata.memberstackUserId,
+                            planId: planId,
+                            productType: session.metadata.productType
+                        });
+                        await addPlanToMember(session.metadata.memberstackUserId, planId);
+                        console.log('Successfully added plan to member');
+                    }
                 } catch (error) {
                     console.error('Failed to add plan to member:', error);
                 }
