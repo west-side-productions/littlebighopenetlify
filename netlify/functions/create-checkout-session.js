@@ -28,7 +28,7 @@ const PRODUCT_CONFIG = {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
             en: 'price_1QTSN6JRMXFic4sW9sklILhd'
         },
-        memberstackPlanId: 'prc_lbh-kurs-buch-tjcb0624'
+        memberstackPlanId: 'pln_online-kochkurs-sl9z0w2q'
     },
     bundle: {
         type: 'bundle',
@@ -37,7 +37,7 @@ const PRODUCT_CONFIG = {
         discountAmount: 1400, // €14 discount
         weight: 1005,
         packagingWeight: 156,
-        memberstackPlanId: 'prc_lbh-kurs-buch-tjcb0624'
+        memberstackPlanId: 'pln_online-kochkurs-sl9z0w2q'
     }
 };
 
