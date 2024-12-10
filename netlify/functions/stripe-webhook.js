@@ -13,7 +13,8 @@ const emailTemplates = {
 // Function to add plan to member
 async function addPlanToMember(memberId, planId) {
     try {
-        const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
+        // Use Memberstack V1 API endpoint
+        const url = `https://api.memberstack.com/v1/members/${memberId}/add-plan`;
         const data = {
             planId: planId
         };
