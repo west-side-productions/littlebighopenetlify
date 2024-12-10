@@ -144,7 +144,7 @@ exports.handler = async (event, context) => {
                 language: data.language
             },
             shipping_address_collection: data.requiresShipping ? {
-                allowed_countries: [data.shippingCountry]
+                allowed_countries: data.shippingCountries
             } : undefined,
             shipping_options: data.requiresShipping ? [
                 {

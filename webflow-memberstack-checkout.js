@@ -341,7 +341,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
 
         // Get current member's email
         const member = await window.$memberstackDom?.getCurrentMember();
-        const email = member?.data?.email;
+        if (!member?.data) {
+            throw new Error('Please log in to continue');
+        }
+        const email = member.data.auth?.email;
+        if (!email) {
+            throw new Error('No email found in member data');
+        }
 
         // Get language
         const language = await $lbh.language();
@@ -361,7 +367,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
 
         // Add shipping information if required
         if (config.requiresShipping) {
-            checkoutData.shippingCountry = selectedRate.countries[0];
+            // Get the countries array from the selected shipping rate
+            const countries = selectedRate.countries;
+            if (!Array.isArray(countries) || countries.length === 0) {
+                throw new Error('Invalid shipping countries configuration');
+            }
+            
+            checkoutData.shippingCountries = countries;
             checkoutData.shippingRate = selectedRate.price;
             checkoutData.shippingLabel = selectedRate.label;
         }
