@@ -171,30 +171,13 @@ exports.handler = async (event, context) => {
                         },
                         display_name: data.shippingLabel,
                         tax_behavior: 'exclusive',  
-                        delivery_estimate: {
-                            minimum: {
-                                unit: 'business_day',
-                                value: 3,
-                            },
-                            maximum: {
-                                unit: 'business_day',
-                                value: 5,
-                            },
-                        },
                     },
                 }
             ] : undefined,
             automatic_tax: {
                 enabled: true
             },
-            tax_id_collection: {
-                enabled: true
-            },
             billing_address_collection: 'required',  
-            customer_tax_exempt: 'none',  
-            customer_tax_location: data.requiresShipping ? {
-                country: data.shippingCountries[0]  
-            } : undefined
         });
 
         console.log('Session created:', { id: session.id });
