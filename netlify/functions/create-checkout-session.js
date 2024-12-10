@@ -188,9 +188,7 @@ exports.handler = async (event, context) => {
             },
             tax_id_collection: {
                 enabled: true
-            },
-            customer_tax_ids: [],  
-            tax_calculation_description: 'Lille Big Hope Purchase'  
+            }
         });
 
         console.log('Session created:', { id: session.id });
