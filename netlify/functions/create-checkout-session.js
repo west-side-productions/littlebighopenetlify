@@ -18,7 +18,8 @@ const PRODUCT_CONFIG = {
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw'
-        }
+        },
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
     course: {
         type: 'digital',
@@ -26,7 +27,8 @@ const PRODUCT_CONFIG = {
         prices: {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
             en: 'price_1QTSN6JRMXFic4sW9sklILhd'
-        }
+        },
+        memberstackPlanId: 'prc_online-kochkurs-8b540kc2'
     },
     bundle: {
         type: 'bundle',
