@@ -10,229 +10,129 @@ const headers = {
 
 // Product Configuration
 const PRODUCT_CONFIG = {
-    'course': {
-        id: 'prc_online-kochkurs-8b540kc2',
-        type: 'digital',
-        weight: 0,
-        packagingWeight: 0,
-        requiresShipping: false,
-        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
-        prices: {
-            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
-        }
-    },
-    'book': {
-        id: 'prc_cookbook_physical',
+    book: {
         type: 'physical',
-        weight: 1005,
-        packagingWeight: 152,
         requiresShipping: true,
-        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
-        dimensions: {
-            length: 25,
-            width: 20,
-            height: 2
-        },
-        shippingClass: 'standard',
+        weight: 450, // in grams
+        packagingWeight: 50, // in grams
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+            de: 'price_1QScHkJRMXFic4sWXYZ123AB', // €49
+            en: 'price_1QScHkJRMXFic4sWABC456CD'
         }
     },
-    'bundle': {
-        id: 'prc_cookbook_bundle',
-        type: 'bundle',
-        weight: 1157,
-        packagingWeight: 200,
-        requiresShipping: true,
-        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
-        dimensions: {
-            length: 25,
-            width: 20,
-            height: 2
-        },
-        shippingClass: 'standard',
-        components: {
-            book: {
-                priceMultiplier: 1    // Full price for book
-            },
-            course: {
-                priceMultiplier: 0.5  // 50% off for course when in bundle
-            }
-        },
+    course: {
+        type: 'digital',
+        requiresShipping: false,
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+            de: 'price_1QScIpJRMXFic4sWDEF789GH', // €60
+            en: 'price_1QScIpJRMXFic4sWIJK012LM'
         }
+    },
+    bundle: {
+        type: 'bundle',
+        requiresShipping: true,
+        components: ['book', 'course'],
+        discountAmount: 1400, // €14 discount (to make total €95 instead of €109)
+        weight: 450,
+        packagingWeight: 50
     }
 };
 
-// Validation functions
-function validateEmail(email) {
-    return email && email.includes('@') && email.includes('.');
-}
-
-function validateLocale(locale) {
-    return ['de', 'en', 'fr', 'it'].includes(locale);
-}
-
-function validateUrls(successUrl, cancelUrl) {
-    try {
-        new URL(successUrl);
-        new URL(cancelUrl);
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
-
-const CONFIG = {};
-
-exports.handler = async (event, context) => {
-    // Log request details (excluding sensitive data)
-    console.log('Request:', {
-        method: event.httpMethod,
-        path: event.path,
-        headers: event.headers
-    });
-
-    // Handle CORS preflight
+exports.handler = async function(event, context) {
     if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 204,
-            headers
-        };
-    }
-
-    // Ensure POST method
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            headers,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
+        return { statusCode: 200, headers };
     }
 
     try {
-        // Parse request body
-        const data = JSON.parse(event.body);
-        console.log('Received data:', {
-            priceId: data.priceId,
-            language: data.language,
-            requiresShipping: data.requiresShipping,
-            metadata: data.metadata,
-            productType: data.metadata?.productType
-        });
-
-        // Validate required fields
-        if (!data.priceId) throw new Error('Price ID is required');
-        if (!data.email) throw new Error('Email is required');
-        if (!validateEmail(data.email)) throw new Error('Invalid email format');
-        if (!validateLocale(data.language)) throw new Error('Invalid language');
-        if (!validateUrls(data.successUrl, data.cancelUrl)) throw new Error('Invalid URLs');
-        if (!data.metadata?.productType) throw new Error('Product type is required');
-
-        // Get product configuration
-        const productConfig = PRODUCT_CONFIG[data.metadata.productType];
-        if (!productConfig) {
-            throw new Error(`Invalid product type: ${data.metadata.productType}`);
+        if (event.httpMethod !== 'POST') {
+            throw new Error('Method not allowed');
         }
 
-        // Prepare line items
-        let lineItems = [];
-        if (productConfig.type === 'bundle') {
-            // For bundles, create separate line items for each component
-            for (const [componentType, config] of Object.entries(productConfig.components)) {
-                const componentProduct = PRODUCT_CONFIG[componentType];
-                const componentPrice = componentProduct.prices[data.language];
-                
-                // Get the price object to calculate discounted amount
-                const price = await stripe.prices.retrieve(componentPrice);
-                const discountedAmount = Math.round(price.unit_amount * config.priceMultiplier);
-                
-                lineItems.push({
-                    price: componentPrice,
-                    quantity: 1,
-                    adjustable_quantity: {
-                        enabled: false
-                    }
-                });
+        const data = JSON.parse(event.body);
+        const { email, language, productType, shippingRateId } = data;
+        
+        if (!email || !productType) {
+            throw new Error('Missing required fields');
+        }
+
+        const config = PRODUCT_CONFIG[productType];
+        if (!config) {
+            throw new Error('Invalid product type');
+        }
+
+        // Prepare session parameters
+        const sessionParams = {
+            customer_email: email,
+            mode: 'payment',
+            success_url: `${data.successUrl || 'https://lillebighope.at/vielen-dank-email'}?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: data.cancelUrl || 'https://lillebighope.at',
+            automatic_tax: { enabled: true },
+            billing_address_collection: 'required',
+            allow_promotion_codes: true,
+            metadata: {
+                productType,
+                language
             }
+        };
+
+        // Handle shipping if required
+        if (config.requiresShipping && shippingRateId) {
+            sessionParams.shipping_options = [{
+                shipping_rate: shippingRateId
+            }];
+            sessionParams.shipping_address_collection = {
+                allowed_countries: ['AT', 'DE', 'GB', 'SG']
+            };
+        }
+
+        // Handle bundle vs single product
+        if (config.type === 'bundle') {
+            // Create a discount for the bundle
+            const discount = await stripe.coupons.create({
+                amount_off: config.discountAmount,
+                currency: 'eur',
+                name: 'Bundle Discount',
+                duration: 'once'
+            });
+
+            // Add both products
+            sessionParams.line_items = config.components.map(componentType => {
+                const componentConfig = PRODUCT_CONFIG[componentType];
+                return {
+                    price: componentConfig.prices[language] || componentConfig.prices['de'],
+                    quantity: 1,
+                    adjustable_quantity: { enabled: false }
+                };
+            });
+
+            // Apply the discount
+            sessionParams.discounts = [{
+                coupon: discount.id
+            }];
         } else {
-            // For single products, use the standard price
-            lineItems = [{
-                price: data.priceId,
+            // Single product
+            sessionParams.line_items = [{
+                price: config.prices[language] || config.prices['de'],
                 quantity: 1,
-                adjustable_quantity: {
-                    enabled: false
-                }
+                adjustable_quantity: { enabled: false }
             }];
         }
 
         // Create checkout session
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card', 'sofort', 'giropay', 'eps'],
-            line_items: lineItems,
-            mode: 'payment',
-            success_url: data.successUrl,
-            cancel_url: data.cancelUrl,
-            customer_email: data.email,
-            locale: data.language || 'de',
-            metadata: {
-                memberstackUserId: data.metadata.memberstackUserId,
-                language: data.language,
-                type: productConfig.type,
-                productType: data.metadata.productType,
-                productWeight: productConfig.weight?.toString() || '0',
-                packagingWeight: productConfig.packagingWeight?.toString() || '0',
-                totalWeight: ((productConfig.weight || 0) + (productConfig.packagingWeight || 0)).toString(),
-                isFirstPurchase: 'true',
-                memberstackPlanId: productConfig.memberstackPlanId
-            },
-            shipping_address_collection: data.requiresShipping ? {
-                allowed_countries: data.shippingCountries
-            } : undefined,
-            shipping_options: data.requiresShipping ? [
-                {
-                    shipping_rate_data: {
-                        type: 'fixed_amount',
-                        fixed_amount: {
-                            amount: Math.round(data.shippingRate * 100),
-                            currency: 'eur',
-                        },
-                        display_name: data.shippingLabel,
-                        tax_behavior: 'exclusive',  
-                    },
-                }
-            ] : undefined,
-            automatic_tax: {
-                enabled: true
-            },
-            billing_address_collection: 'required',  
-        });
-
-        console.log('Session created:', { id: session.id });
+        const session = await stripe.checkout.sessions.create(sessionParams);
 
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({ id: session.id })
         };
+
     } catch (error) {
         console.error('Error:', error);
         return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ 
-                error: error.message || 'Failed to create checkout session' 
-            })
+            body: JSON.stringify({ error: error.message })
         };
     }
 };
