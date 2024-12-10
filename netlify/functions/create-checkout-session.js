@@ -13,33 +13,32 @@ const PRODUCT_CONFIG = {
     book: {
         type: 'physical',
         requiresShipping: true,
-        weight: 450, // in grams
-        packagingWeight: 50, // in grams
+        weight: 450,
+        packagingWeight: 50,
         prices: {
-            de: 'price_1QScHkJRMXFic4sWXYZ123AB', // €49
-            en: 'price_1QScHkJRMXFic4sWABC456CD'
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ', 
+            en: 'price_1QT214JRMXFic4sWr5OXetuw'
         }
     },
     course: {
         type: 'digital',
         requiresShipping: false,
         prices: {
-            de: 'price_1QScIpJRMXFic4sWDEF789GH', // €60
-            en: 'price_1QScIpJRMXFic4sWIJK012LM'
+            de: 'price_1QTSN6JRMXFic4sW9sklILhd', 
+            en: 'price_1QTSN6JRMXFic4sW9sklILhd'
         }
     },
     bundle: {
         type: 'bundle',
         requiresShipping: true,
         components: ['book', 'course'],
-        discountAmount: 1400, // €14 discount (to make total €95 instead of €109)
+        discountAmount: 1400, 
         weight: 450,
         packagingWeight: 50
     }
 };
 
 exports.handler = async function(event, context) {
-    // Handle OPTIONS request for CORS
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
@@ -75,7 +74,6 @@ exports.handler = async function(event, context) {
             cancel_url: data.cancelUrl || process.env.SITE_URL,
             automatic_tax: { enabled: true },
             billing_address_collection: 'required',
-            allow_promotion_codes: true,
             metadata: {
                 productType: data.productType,
                 language: data.language,
@@ -95,14 +93,6 @@ exports.handler = async function(event, context) {
 
         // Handle bundle vs single product
         if (config.type === 'bundle') {
-            // Create a discount for the bundle
-            const discount = await stripe.coupons.create({
-                amount_off: config.discountAmount,
-                currency: 'eur',
-                name: 'Bundle Discount',
-                duration: 'once'
-            });
-
             // Add both products
             sessionParams.line_items = config.components.map(componentType => {
                 const componentConfig = PRODUCT_CONFIG[componentType];
@@ -113,10 +103,14 @@ exports.handler = async function(event, context) {
                 };
             });
 
-            // Apply the discount
-            sessionParams.discounts = [{
-                coupon: discount.id
-            }];
+            // Create and apply fixed amount coupon
+            const coupon = await stripe.coupons.create({
+                amount_off: config.discountAmount,
+                currency: 'eur',
+                name: 'Bundle Discount',
+                duration: 'once'
+            });
+            sessionParams.discounts = [{ coupon: coupon.id }];
         } else {
             // Single product
             sessionParams.line_items = [{
@@ -124,6 +118,8 @@ exports.handler = async function(event, context) {
                 quantity: 1,
                 adjustable_quantity: { enabled: false }
             }];
+            // Allow promotion codes only for non-bundle products
+            sessionParams.allow_promotion_codes = true;
         }
 
         console.log('Creating Stripe session with params:', sessionParams);
