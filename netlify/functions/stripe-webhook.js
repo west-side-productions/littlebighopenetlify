@@ -10,9 +10,29 @@ const emailTemplates = {
     de: require('./email-templates/de')
 };
 
+// Function to list all plans
+async function listPlans() {
+    try {
+        const url = 'https://admin.memberstack.com/plans';
+        const headers = {
+            "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY
+        };
+        console.log('Fetching all plans from Memberstack');
+        const response = await axios.get(url, { headers });
+        console.log('Available plans:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching plans:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
 // Function to add plan to member
 async function addPlanToMember(memberId, planId) {
     try {
+        // First, list all available plans
+        await listPlans();
+
         const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
         const data = {
             planId: planId
