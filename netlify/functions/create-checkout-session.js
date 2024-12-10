@@ -13,8 +13,8 @@ const PRODUCT_CONFIG = {
     book: {
         type: 'physical',
         requiresShipping: true,
-        weight: 450,
-        packagingWeight: 50,
+        weight: 1005,
+        packagingWeight: 156,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw'
@@ -35,8 +35,8 @@ const PRODUCT_CONFIG = {
         requiresShipping: true,
         components: ['book', 'course'],
         discountAmount: 1400, // €14 discount
-        weight: 450,
-        packagingWeight: 50,
+        weight: 1005,
+        packagingWeight: 156,
         memberstackPlanId: 'prc_kurs-buch-s29u04fs'
     }
 };
