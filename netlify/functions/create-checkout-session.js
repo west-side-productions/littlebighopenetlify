@@ -135,8 +135,7 @@ exports.handler = async (event, context) => {
         // Prepare line items
         const lineItems = [{
             price: data.priceId,
-            quantity: 1,
-            tax_behavior: 'exclusive'
+            quantity: 1
         }];
 
         // Create checkout session
