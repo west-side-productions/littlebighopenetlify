@@ -32,73 +32,28 @@
   2. Shipping Calculator
   3. Stripe Integration
   4. Error Handling
-- **Implementation Details**
-  ```javascript
-  // Product Configuration
-  const PRODUCT_CONFIG = {
-      course: {
-          id: 'prc_online-kochkurs-8b540kc2',
-          type: 'digital',
-          prices: { 
-              de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-              en: 'price_1QT214JRMXFic4sWr5OXetuw',
-              fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-              it: 'price_1QT206JRMXFic4sW78d5dEDO'
-          },
-          memberstackPlanId: 'prc_online-kochkurs-8b540kc2'
-      },
-      book: {
-          id: 'prc_cookbook_physical',
-          type: 'physical',
-          prices: { 
-              de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-              en: 'price_1QT214JRMXFic4sWr5OXetuw' 
-          },
-          requiresShipping: true,
-          weight: 1005,
-          packagingWeight: 156,
-          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
-      },
-      bundle: {
-          id: 'prc_cookbook_bundle',
-          type: 'bundle',
-          requiresShipping: true,
-          components: ['book', 'course'],
-          discountAmount: 1400, // €14 discount
-          weight: 1005,
-          packagingWeight: 156,
-          memberstackPlanId: 'prc_lbh-kurs-buch-tjcb0624'
-      }
-  };
 
-  // Shipping Rates Structure
-  const SHIPPING_RATES = {
-      'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-          price: 0, 
-          label: 'Österreich', 
-          countries: ['AT']
-      },
-      'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
-          price: 20.36, 
-          label: 'Europe', 
-          countries: [
-              'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
-              'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
-              'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
-          ]
-      },
-      'shr_1QScMXJRMXFic4sWih6q9v36': { 
-          price: 20.72, 
-          label: 'Great Britain', 
-          countries: ['GB']
-      },
-      'shr_1QScNqJRMXFic4sW3NVUUckl': { 
-          price: 36.53, 
-          label: 'Singapore', 
-          countries: ['SG']
-      }
-  };
-  ```
+### 3. Memberstack Plan Configuration
+- **Plan Structure**
+  - We use free Memberstack plans because all payments are handled through Stripe
+  - Current plan IDs:
+    - Book Access: `pln_kostenloser-zugang-84l80t3u` (free plan)
+    - Course/Bundle Access: `pln_bundle-rd004n7` (free plan)
+
+- **Plan Assignment**
+  1. Single Product Purchase:
+     - Book: Gets the free book plan
+     - Course: Gets the free bundle plan
+  2. Bundle Purchase:
+     - Customer pays through Stripe (with bundle discount)
+     - System adds both free plans via webhook:
+       - Book plan (`pln_kostenloser-zugang-84l80t3u`)
+       - Bundle plan (`pln_bundle-rd004n7`)
+
+- **Important Notes**
+  - Always use free Memberstack plans to avoid conflicts with their payment system
+  - All payments are processed through Stripe
+  - Memberstack is used solely for access control
 
 ### 3. Product and Plan Configuration
 - **Product Types**:
