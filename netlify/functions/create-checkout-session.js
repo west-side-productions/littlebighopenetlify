@@ -169,7 +169,7 @@ exports.handler = async (event, context) => {
                             currency: 'eur',
                         },
                         display_name: data.shippingLabel,
-                        tax_behavior: 'exclusive',
+                        tax_behavior: 'exclusive',  
                         delivery_estimate: {
                             minimum: {
                                 unit: 'business_day',
@@ -188,7 +188,9 @@ exports.handler = async (event, context) => {
             },
             tax_id_collection: {
                 enabled: true
-            }
+            },
+            customer_tax_ids: [],  
+            tax_calculation_description: 'Lille Big Hope Purchase'  
         });
 
         console.log('Session created:', { id: session.id });
