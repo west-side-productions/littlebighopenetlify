@@ -8,6 +8,12 @@ const headers = {
     'Content-Type': 'application/json'
 };
 
+// Tax Rate Configuration
+const TAX_RATES = {
+    txr_digital: 'txr_1QT2JKJRMXFic4sWXYZ123AB',  // Digital goods tax rate (e.g., 20% for digital)
+    txr_physical: 'txr_1QT2JLJRMXFic4sWABC456CD'  // Physical goods tax rate (e.g., 10% for books)
+};
+
 // Product Configuration
 const PRODUCT_CONFIG = {
     'course': {
@@ -57,6 +63,14 @@ const PRODUCT_CONFIG = {
             height: 2
         },
         shippingClass: 'standard',
+        components: {
+            book: {
+                priceMultiplier: 1    // Full price for book
+            },
+            course: {
+                priceMultiplier: 0.5  // 50% off for course when in bundle
+            }
+        },
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw',
@@ -138,10 +152,33 @@ exports.handler = async (event, context) => {
         }
 
         // Prepare line items
-        const lineItems = [{
-            price: data.priceId,
-            quantity: 1
-        }];
+        let lineItems = [];
+        if (productConfig.type === 'bundle') {
+            // For bundles, create separate line items for each component
+            for (const [componentType, config] of Object.entries(productConfig.components)) {
+                const componentProduct = PRODUCT_CONFIG[componentType];
+                const componentPrice = componentProduct.prices[data.language];
+                
+                // Get the price object to calculate discounted amount
+                const price = await stripe.prices.retrieve(componentPrice);
+                const discountedAmount = Math.round(price.unit_amount * config.priceMultiplier);
+                
+                lineItems.push({
+                    price: componentPrice,
+                    quantity: 1,
+                    tax_rates: componentProduct.type === 'digital' ? ['txr_digital'] : ['txr_physical'],
+                    adjustable_quantity: {
+                        enabled: false
+                    }
+                });
+            }
+        } else {
+            // For single products, use the standard price
+            lineItems = [{
+                price: data.priceId,
+                quantity: 1
+            }];
+        }
 
         // Create checkout session
         const session = await stripe.checkout.sessions.create({

@@ -377,6 +377,104 @@ const PRODUCT_CONFIG = {
    - Weight-based restrictions per country
    - Combined order weight handling
 
+## Shipping and Weight Handling
+
+#### 1. Product Weight Configuration
+- **Weight Specification**
+  ```javascript
+  const PRODUCT_CONFIG = {
+      'book': {
+          weight: 1005,         // Product weight in grams
+          packagingWeight: 152, // Additional packaging weight in grams
+          dimensions: {
+              length: 25,
+              width: 20,
+              height: 2
+          }
+      }
+  };
+  ```
+
+#### 2. Shipping Fee Structure
+- **Country-Based Rates**
+  - Austria (AT): Free shipping
+  - Europe: €20.36
+  - Great Britain: €20.72
+  - Singapore: €36.53
+- **Implementation**
+  ```javascript
+  const SHIPPING_RATES = {
+      'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+          price: 0, 
+          label: 'Österreich', 
+          countries: ['AT']
+      },
+      // ... other shipping rates
+  };
+  ```
+
+#### 3. Weight Metadata Handling
+- **Checkout Session**
+  - Product weight, packaging weight, and total weight are stored in session metadata
+  - Used for shipping notifications and logistics
+  ```javascript
+  metadata: {
+      productWeight: productConfig.weight?.toString() || '0',
+      packagingWeight: productConfig.packagingWeight?.toString() || '0',
+      totalWeight: ((productConfig.weight || 0) + (productConfig.packagingWeight || 0)).toString()
+  }
+  ```
+
+## Memberstack Plan Integration
+
+#### 1. Plan Configuration
+- **Product-Based Plans**
+  ```javascript
+  const PRODUCT_CONFIG = {
+      'course': {
+          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+      },
+      'book': {
+          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+      },
+      'bundle': {
+          memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
+      }
+  };
+  ```
+
+#### 2. Checkout Process
+1. **Session Creation**
+   - Memberstack plan ID is included in checkout session metadata
+   ```javascript
+   metadata: {
+       memberstackUserId: data.metadata.memberstackUserId,
+       memberstackPlanId: productConfig.memberstackPlanId
+   }
+   ```
+
+2. **Post-Purchase Plan Addition**
+   - Triggered by successful checkout event
+   - Plan is added via Memberstack API
+   ```javascript
+   async function addPlanToMember(memberId, planId) {
+       const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
+       const data = { planId };
+       const headers = { "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY };
+       await axios.post(url, data, { headers });
+   }
+   ```
+
+3. **Error Handling**
+   - Failed plan additions are logged but don't block the checkout process
+   - Retry mechanism for failed API calls
+   - Error notifications for monitoring
+
+#### 3. Environment Variables
+Required environment variables in Netlify:
+- `MEMBERSTACK_SECRET_KEY`: API key for Memberstack operations
+- `MEMBERSTACK_LIFETIME_PLAN_ID`: Default plan ID for purchases
+
 ## Checkout Process
 
 ### Technical Flow
@@ -748,7 +846,7 @@ if (!email) {
 
 #### 2. European Shipping Countries Fix
 **Problem**: When selecting "Europe" as shipping option, only Belgium was available in the shipping address form.
-**Solution**: 
+**Solution**:
 1. Frontend Changes:
 ```javascript
 // Updated shipping data handling
@@ -769,6 +867,17 @@ if (config.requiresShipping) {
 shipping_address_collection: data.requiresShipping ? {
     allowed_countries: data.shippingCountries
 } : undefined,
+```
+
+#### 3. Stripe Session ID Redirect Fix
+**Problem**: The success URL redirect was not working correctly because the session ID was not being properly passed in the URL parameters.
+**Solution**:
+```javascript
+// Before: Incorrect URL construction
+success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+
+// After: Fixed URL with proper template literal
+success_url: `${window.location.origin}/success?session_id=${session.id}`,
 ```
 
 ### Error Handling
