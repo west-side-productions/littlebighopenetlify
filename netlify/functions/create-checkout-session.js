@@ -114,7 +114,8 @@ exports.handler = async (event, context) => {
             priceId: data.priceId,
             language: data.language,
             requiresShipping: data.requiresShipping,
-            metadata: data.metadata
+            metadata: data.metadata,
+            productType: data.metadata?.productType
         });
 
         // Validate required fields
@@ -123,6 +124,13 @@ exports.handler = async (event, context) => {
         if (!validateEmail(data.email)) throw new Error('Invalid email format');
         if (!validateLocale(data.language)) throw new Error('Invalid language');
         if (!validateUrls(data.successUrl, data.cancelUrl)) throw new Error('Invalid URLs');
+        if (!data.metadata?.productType) throw new Error('Product type is required');
+
+        // Get product configuration
+        const productConfig = PRODUCT_CONFIG[data.metadata.productType];
+        if (!productConfig) {
+            throw new Error(`Invalid product type: ${data.metadata.productType}`);
+        }
 
         // Prepare line items
         const lineItems = [{
@@ -131,7 +139,6 @@ exports.handler = async (event, context) => {
         }];
 
         // Create checkout session
-        const productConfig = PRODUCT_CONFIG[data.metadata?.productType];
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card', 'sofort', 'giropay', 'eps'],
             line_items: lineItems,
@@ -141,10 +148,10 @@ exports.handler = async (event, context) => {
             customer_email: data.email,
             locale: data.language || 'de',
             metadata: {
-                memberstackUserId: data.metadata?.memberstackUserId,
+                memberstackUserId: data.metadata.memberstackUserId,
                 language: data.language,
                 type: productConfig.type,
-                productType: data.metadata?.productType,
+                productType: data.metadata.productType,
                 productWeight: productConfig.weight?.toString() || '0',
                 packagingWeight: productConfig.packagingWeight?.toString() || '0',
                 totalWeight: ((productConfig.weight || 0) + (productConfig.packagingWeight || 0)).toString(),
