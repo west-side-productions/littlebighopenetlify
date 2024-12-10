@@ -210,7 +210,7 @@ exports.handler = async (event) => {
                     if (session.metadata.type === 'bundle') {
                         console.log('Processing bundle purchase - adding both plans');
                         // Add course plan
-                        await addPlanToMember(session.metadata.memberstackUserId, 'pln_online-kochkurs-sl9z0w2q');
+                        await addPlanToMember(session.metadata.memberstackUserId, 'pln_bundle-rd004n7');
                         console.log('Successfully added course plan');
                         // Add book plan
                         await addPlanToMember(session.metadata.memberstackUserId, 'pln_kostenloser-zugang-84l80t3u');
