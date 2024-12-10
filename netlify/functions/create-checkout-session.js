@@ -110,52 +110,52 @@ exports.handler = async (event, context) => {
     try {
         // Parse request body
         const data = JSON.parse(event.body);
-        console.log('Request data:', {
+        console.log('Received data:', {
             priceId: data.priceId,
             language: data.language,
             requiresShipping: data.requiresShipping,
-            metadata: { ...data.metadata, customerEmail: '***' }
+            metadata: data.metadata
         });
 
         // Validate required fields
-        if (!data.priceId) throw new Error('Missing price ID');
-        if (!data.customerEmail) throw new Error('Missing customer email');
-        if (!validateEmail(data.customerEmail)) throw new Error('Invalid email format');
-        if (!data.successUrl || !data.cancelUrl) throw new Error('Missing success or cancel URLs');
-        if (!validateUrls(data.successUrl, data.cancelUrl)) throw new Error('Invalid URLs provided');
+        if (!data.priceId) throw new Error('Price ID is required');
+        if (!data.email) throw new Error('Email is required');
+        if (!validateEmail(data.email)) throw new Error('Invalid email format');
         if (!validateLocale(data.language)) throw new Error('Invalid language');
+        if (!validateUrls(data.successUrl, data.cancelUrl)) throw new Error('Invalid URLs');
 
+        // Prepare line items
         const lineItems = [{
             price: data.priceId,
             quantity: 1
         }];
 
-        // Create checkout session with proper shipping and tax handling
+        // Create checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card', 'sofort', 'giropay', 'eps'],
             line_items: lineItems,
             mode: 'payment',
             success_url: data.successUrl,
             cancel_url: data.cancelUrl,
-            customer_email: data.customerEmail,
+            customer_email: data.email,
             locale: data.language || 'de',
             metadata: {
                 ...data.metadata,
                 language: data.language
             },
             shipping_address_collection: data.requiresShipping ? {
-                allowed_countries: [data.shippingCountry] // Only allow the pre-selected country
+                allowed_countries: [data.shippingCountry]
             } : undefined,
             shipping_options: data.requiresShipping ? [
                 {
                     shipping_rate_data: {
                         type: 'fixed_amount',
                         fixed_amount: {
-                            amount: data.shippingRate * 100, // Convert to cents
+                            amount: Math.round(data.shippingRate * 100),
                             currency: 'eur',
                         },
-                        display_name: data.shippingLabel || 'Standard shipping',
-                        tax_behavior: 'exclusive', // Tax will be calculated separately
+                        display_name: data.shippingLabel,
+                        tax_behavior: 'exclusive',
                         delivery_estimate: {
                             minimum: {
                                 unit: 'business_day',
@@ -182,16 +182,15 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify(session)
+            body: JSON.stringify({ id: session.id })
         };
     } catch (error) {
         console.error('Error:', error);
-
         return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({
-                error: error.message
+            body: JSON.stringify({ 
+                error: error.message || 'Failed to create checkout session' 
             })
         };
     }

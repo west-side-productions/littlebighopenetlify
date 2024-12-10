@@ -367,7 +367,7 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         }
 
         // Create checkout session
-        const response = await fetch('/.netlify/functions/create-checkout-session', {
+        const response = await fetch(`${getBaseUrl()}/create-checkout-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -376,7 +376,13 @@ async function startCheckout(shippingRateId = null, forcedProductType = null) {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to create checkout session');
+            const errorText = await response.text();
+            console.error('Checkout error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText
+            });
+            throw new Error(`Checkout failed: ${response.statusText}`);
         }
 
         const session = await response.json();
