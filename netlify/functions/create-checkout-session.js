@@ -37,7 +37,7 @@ const PRODUCT_CONFIG = {
         discountAmount: 1400, // €14 discount
         weight: 1005,
         packagingWeight: 156,
-        memberstackPlanId: 'prc_lbh-kurs-buch-tjcb0624'
+        memberstackPlanId: 'prc_online-kochkurs-8b540kc2'
     }
 };
 
