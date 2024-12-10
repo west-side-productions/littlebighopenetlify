@@ -16,7 +16,7 @@ const PRODUCT_CONFIG = {
         weight: 450,
         packagingWeight: 50,
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ', 
+            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
             en: 'price_1QT214JRMXFic4sWr5OXetuw'
         }
     },
@@ -24,7 +24,7 @@ const PRODUCT_CONFIG = {
         type: 'digital',
         requiresShipping: false,
         prices: {
-            de: 'price_1QTSN6JRMXFic4sW9sklILhd', 
+            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
             en: 'price_1QTSN6JRMXFic4sW9sklILhd'
         }
     },
@@ -32,9 +32,37 @@ const PRODUCT_CONFIG = {
         type: 'bundle',
         requiresShipping: true,
         components: ['book', 'course'],
-        discountAmount: 1400, 
+        discountAmount: 1400, // €14 discount
         weight: 450,
         packagingWeight: 50
+    }
+};
+
+// Shipping Rates from Documentation
+const SHIPPING_RATES = {
+    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+        price: 0, 
+        label: 'Österreich', 
+        countries: ['AT']
+    },
+    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+        price: 20.36, 
+        label: 'Europe', 
+        countries: [
+            'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+            'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+            'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+        ]
+    },
+    'shr_1QScMXJRMXFic4sWih6q9v36': { 
+        price: 20.72, 
+        label: 'Great Britain', 
+        countries: ['GB']
+    },
+    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+        price: 36.53, 
+        label: 'Singapore', 
+        countries: ['SG']
     }
 };
 
@@ -66,6 +94,9 @@ exports.handler = async function(event, context) {
             throw new Error(`Invalid product type: ${data.productType}`);
         }
 
+        // Get shipping rate data if provided
+        const shippingRate = data.shippingRateId ? SHIPPING_RATES[data.shippingRateId] : null;
+
         // Prepare session parameters
         const sessionParams = {
             customer_email: data.email,
@@ -73,6 +104,7 @@ exports.handler = async function(event, context) {
             success_url: data.successUrl || `${process.env.SITE_URL}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: data.cancelUrl || process.env.SITE_URL,
             automatic_tax: { enabled: true },
+            tax_id_collection: { enabled: true },
             billing_address_collection: 'required',
             metadata: {
                 productType: data.productType,
@@ -82,13 +114,20 @@ exports.handler = async function(event, context) {
         };
 
         // Handle shipping if required
-        if (config.requiresShipping && data.shippingRateId) {
+        if (config.requiresShipping && shippingRate) {
             sessionParams.shipping_options = [{
                 shipping_rate: data.shippingRateId
             }];
             sessionParams.shipping_address_collection = {
-                allowed_countries: ['AT', 'DE', 'GB', 'SG']
+                allowed_countries: shippingRate.countries
             };
+            
+            // Add weight information for physical products
+            if (config.weight) {
+                sessionParams.metadata.productWeight = config.weight.toString();
+                sessionParams.metadata.packagingWeight = config.packagingWeight.toString();
+                sessionParams.metadata.totalWeight = (config.weight + config.packagingWeight).toString();
+            }
         }
 
         // Handle bundle vs single product
