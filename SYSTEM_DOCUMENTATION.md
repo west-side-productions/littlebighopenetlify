@@ -67,7 +67,7 @@
           discountAmount: 1400, // €14 discount
           weight: 1005,
           packagingWeight: 156,
-          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
+          memberstackPlanId: 'prc_lbh-kurs-buch-tjcb0624'
       }
   };
 
@@ -114,10 +114,10 @@
      - Available in multiple languages
   
   3. **Bundle (Book + Course)**
-     - Requires shipping (includes physical book)
+     - Combines both physical book and digital course
      - Weight: Same as book (1005g + 156g packaging)
      - Automatic €14 discount applied
-     - Memberstack Plan: `prc_kurs-buch-s29u04fs`
+     - Memberstack Plan: `prc_lbh-kurs-buch-tjcb0624`
      - Combines both products with special pricing
 
 - **Shipping Configuration**:
@@ -496,7 +496,7 @@ const PRODUCT_CONFIG = {
           memberstackPlanId: 'prc_kurs-buch-s29u04fs'
       },
       'bundle': {
-          memberstackPlanId: 'prc_kurs-buch-s29u04fs'
+          memberstackPlanId: 'prc_lbh-kurs-buch-tjcb0624'
       }
   };
   ```
