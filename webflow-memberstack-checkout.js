@@ -211,57 +211,54 @@ async function initializeDependencies() {
 async function initializeCheckoutButton() {
     console.log('Setting up checkout buttons...');
     
-    try {
-        // Initialize each product type's button separately
-        const productTypes = ['book', 'course', 'bundle'];
-        
-        productTypes.forEach(productType => {
-            console.log(`Looking for button: #checkout-button-${productType}`);
-            const button = document.querySelector(`#checkout-button-${productType}`);
-            if (!button) {
-                console.log(`No checkout button found for ${productType}`);
-                return;
-            }
+    // Get all checkout buttons
+    const checkoutButtons = document.querySelectorAll('[id^="checkout-button-"]');
+    
+    checkoutButtons.forEach(button => {
+        // Extract product type from button ID
+        const productType = button.id.replace('checkout-button-', '');
+        console.log(`Found button for ${productType}:`, button);
 
-            console.log(`Found button for ${productType}:`, button);
-
-            // Remove any existing listeners to prevent duplicates
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
-
-            // Add click listener
-            newButton.addEventListener('click', async (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                console.log(`${productType} checkout button clicked`);
+        // Add click listener
+        button.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            console.log(`${productType} checkout button clicked`);
+            
+            try {
+                // Get shipping rate if needed
+                let shippingRateId = null;
+                const config = PRODUCT_CONFIG[productType];
                 
-                try {
-                    // Get shipping rate if needed
-                    let shippingRateId = null;
-                    const config = PRODUCT_CONFIG[productType];
-                    
-                    if (config.requiresShipping || config.type === 'bundle') {
-                        const shippingSelect = document.querySelector(`#shipping-rate-select-${productType} select`);
-                        if (!shippingSelect?.value) {
-                            throw new Error('Please select a shipping option');
-                        }
-                        shippingRateId = shippingSelect.value;
+                if (config?.requiresShipping) {
+                    const shippingSelect = document.querySelector(`#shipping-rate-select-${productType} select`);
+                    if (!shippingSelect?.value) {
+                        throw new Error('Please select a shipping option');
                     }
+                    shippingRateId = shippingSelect.value;
+                }
 
+                // Disable button and show loading state
+                button.disabled = true;
+                const originalText = button.textContent;
+                button.textContent = 'Loading...';
+
+                try {
                     await handleCheckout(event, productType, shippingRateId);
                 } catch (error) {
-                    console.error('Error during checkout:', error);
-                    alert(error.message || 'An error occurred during checkout');
+                    // Reset button state
+                    button.disabled = false;
+                    button.textContent = originalText;
+                    throw error;
                 }
-            });
-            
-            console.log(`Initialized ${productType} checkout button`);
+            } catch (error) {
+                console.error('Error during checkout:', error);
+                alert(error.message || 'An error occurred during checkout');
+            }
         });
-
-        console.log('All checkout buttons initialized');
-    } catch (error) {
-        console.error('Error initializing checkout buttons:', error);
-    }
+        
+        console.log(`Initialized ${productType} checkout button`);
+    });
 }
 
 // Update handleCheckout to use the passed productType
