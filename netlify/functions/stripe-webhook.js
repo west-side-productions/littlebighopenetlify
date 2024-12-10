@@ -178,6 +178,11 @@ exports.handler = async (event) => {
                     if (!planId) {
                         throw new Error('No Memberstack plan ID found in session metadata');
                     }
+                    console.log('Adding plan to member:', {
+                        memberId: session.metadata.memberstackUserId,
+                        planId: planId,
+                        productType: session.metadata.productType
+                    });
                     await addPlanToMember(session.metadata.memberstackUserId, planId);
                     console.log('Successfully added plan to member');
                 } catch (error) {
