@@ -183,12 +183,6 @@ exports.handler = async (event, context) => {
                     },
                 }
             ] : undefined,
-            automatic_tax: {
-                enabled: true
-            },
-            tax_id_collection: {
-                enabled: true
-            }
         });
 
         console.log('Session created:', { id: session.id });
