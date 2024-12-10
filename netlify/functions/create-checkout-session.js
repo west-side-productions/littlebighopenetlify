@@ -16,6 +16,7 @@ const PRODUCT_CONFIG = {
         weight: 0,
         packagingWeight: 0,
         requiresShipping: false,
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
         prices: {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
             en: 'price_1QTSN6JRMXFic4sW9sklILhd',
@@ -29,6 +30,7 @@ const PRODUCT_CONFIG = {
         weight: 1005,
         packagingWeight: 152,
         requiresShipping: true,
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
         dimensions: {
             length: 25,
             width: 20,
@@ -48,6 +50,7 @@ const PRODUCT_CONFIG = {
         weight: 1157,
         packagingWeight: 200,
         requiresShipping: true,
+        memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
         dimensions: {
             length: 25,
             width: 20,
@@ -81,6 +84,8 @@ function validateUrls(successUrl, cancelUrl) {
         return false;
     }
 }
+
+const CONFIG = {};
 
 exports.handler = async (event, context) => {
     // Log request details (excluding sensitive data)
@@ -156,7 +161,7 @@ exports.handler = async (event, context) => {
                 packagingWeight: productConfig.packagingWeight?.toString() || '0',
                 totalWeight: ((productConfig.weight || 0) + (productConfig.packagingWeight || 0)).toString(),
                 isFirstPurchase: 'true',
-                memberstackPlanId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
+                memberstackPlanId: productConfig.memberstackPlanId
             },
             shipping_address_collection: data.requiresShipping ? {
                 allowed_countries: data.shippingCountries
