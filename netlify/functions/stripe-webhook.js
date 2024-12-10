@@ -11,18 +11,18 @@ const emailTemplates = {
 };
 
 // Function to add plan to member
-async function addPlanToMember(memberId) {
+async function addPlanToMember(memberId, planId) {
     try {
         const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
         const data = {
-            planId: process.env.MEMBERSTACK_LIFETIME_PLAN_ID
+            planId: planId
         };
         const headers = {
             "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY
         };
 
         const response = await axios.post(url, data, { headers });
-        console.log(`Successfully added plan to member ${memberId}`, response.data);
+        console.log(`Successfully added plan ${planId} to member ${memberId}`, response.data);
     } catch (error) {
         const errorMessage = error.response?.data || error.message || 'Unknown error';
         console.error('Error adding plan to member:', errorMessage);
@@ -174,7 +174,11 @@ exports.handler = async (event) => {
                 
                 // Add plan to existing member
                 try {
-                    await addPlanToMember(session.metadata.memberstackUserId);
+                    const planId = session.metadata.memberstackPlanId;
+                    if (!planId) {
+                        throw new Error('No Memberstack plan ID found in session metadata');
+                    }
+                    await addPlanToMember(session.metadata.memberstackUserId, planId);
                     console.log('Successfully added plan to member');
                 } catch (error) {
                     console.error('Failed to add plan to member:', error);

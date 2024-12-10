@@ -155,7 +155,8 @@ exports.handler = async (event, context) => {
                 productWeight: productConfig.weight?.toString() || '0',
                 packagingWeight: productConfig.packagingWeight?.toString() || '0',
                 totalWeight: ((productConfig.weight || 0) + (productConfig.packagingWeight || 0)).toString(),
-                isFirstPurchase: 'true'
+                isFirstPurchase: 'true',
+                memberstackPlanId: productConfig.memberstackPlanId || CONFIG.memberstackPlanId
             },
             shipping_address_collection: data.requiresShipping ? {
                 allowed_countries: data.shippingCountries
