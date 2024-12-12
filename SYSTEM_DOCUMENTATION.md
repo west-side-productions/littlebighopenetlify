@@ -22,7 +22,7 @@
   ```
 - **Location**: Included in Webflow's global head settings
 - **Dependencies**
-  - Memberstack SDK
+  - stack SDK
   - Custom language utilities
   - Browser APIs (localStorage, navigator)
 
