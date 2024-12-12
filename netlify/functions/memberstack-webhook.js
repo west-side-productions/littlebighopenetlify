@@ -117,120 +117,23 @@ exports.handler = async (event) => {
 
 async function handleMemberCreated(data) {
     console.log('Handling member created with full data:', JSON.stringify(data, null, 2));
-    const { auth: { email }, customFields = {} } = data;
-    
-    console.log('Custom fields received:', JSON.stringify(customFields, null, 2));
-
-    const firstName = customFields['first-name'] || 
-                     customFields['firstName'] || 
-                     customFields['firstname'] || 
-                     customFields['First Name'] || 
-                     'User';
-    
-    let language = customFields.language || 
-                  customFields['Language'] || 
-                  customFields['preferred_language'] ||
-                  DEFAULT_LANGUAGE;
-
-    if (!SUPPORTED_LANGUAGES.includes(language)) {
-        console.warn(`Unsupported language ${language}, falling back to ${DEFAULT_LANGUAGE}`);
-        language = DEFAULT_LANGUAGE;
-    }
-
-    console.log('Detected language:', language);
-    console.log('Using firstName:', firstName);
-    console.log('Using language:', language);
-    console.log('Member created successfully - verification email will be sent through frontend');
+    // Temporarily disabled email sending
+    console.log('Email sending is temporarily disabled');
+    return;
 }
 
 async function handleMemberVerified(data) {
     console.log('Handling member verified:', JSON.stringify(data, null, 2));
-    const { auth: { email }, customFields = {}, id: memberId } = data;
-    
-    const firstName = customFields['first-name'] || 
-                     customFields['firstName'] || 
-                     customFields['firstname'] || 
-                     customFields['First Name'] || 
-                     'User';
-    
-    let language = customFields.language || 
-                  customFields['Language'] || 
-                  customFields['preferred_language'] || 
-                  DEFAULT_LANGUAGE;
-
-    // Validate language is supported
-    if (!SUPPORTED_LANGUAGES.includes(language)) {
-        console.warn(`Unsupported language ${language}, falling back to ${DEFAULT_LANGUAGE}`);
-        language = DEFAULT_LANGUAGE;
-    }
-
-    console.log('Detected language:', language);
-    console.log('Using firstName:', firstName);
-    console.log('Using language:', language);
-
-    try {
-        // Check if user has already made a purchase
-        const hasPurchase = customFields.hasPurchase === 'true' || 
-                           customFields.hasActiveSubscription === 'true';
-        
-        // Only send welcome email if user hasn't made a purchase
-        if (!hasPurchase) {
-            await sendEmail({
-                to: email,
-                templateName: 'welcome',
-                language,
-                variables: {
-                    firstName,
-                    language
-                }
-            });
-            console.log('Welcome email sent');
-        } else {
-            console.log('Skipping welcome email - user already has a purchase');
-        }
-
-        // Always send verification success email
-        await sendEmail({
-            to: email,
-            templateName: 'email_verified',
-            language,
-            variables: {
-                firstName
-            }
-        });
-        console.log('Verification success email sent');
-        
-    } catch (error) {
-        console.error('Failed to send verification emails:', error);
-        throw error;
-    }
+    // Temporarily disabled email sending
+    console.log('Email sending is temporarily disabled');
+    return;
 }
 
 async function handlePlanAdded(data) {
     console.log('Handling plan added:', JSON.stringify(data, null, 2));
-    const { auth: { email }, customFields = {}, planConnections = [] } = data;
-    
-    if (planConnections.length > 0) {
-        const latestPlan = planConnections[planConnections.length - 1];
-        
-        try {
-            await sendEmail({
-                to: email,
-                templateName: 'purchase_confirmation',
-                language: customFields.language || 'de',
-                variables: {
-                    firstName: customFields['first-name'] || 'User',
-                    purchaseId: latestPlan.id
-                }
-            });
-            
-            console.log('Purchase confirmation email sent');
-            
-        } catch (error) {
-            console.error('Failed to send purchase confirmation:', error);
-            throw error;
-        }
-    }
+    // Temporarily disabled email sending
+    console.log('Email sending is temporarily disabled');
+    return;
 }
 
 async function handlePlanUpdated(data) {
