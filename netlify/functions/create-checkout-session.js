@@ -17,9 +17,7 @@ const PRODUCT_CONFIG = {
         packagingWeight: 156,
         prices: {
             de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+            en: 'price_1QT214JRMXFic4sWr5OXetuw'
         },
         memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
@@ -28,9 +26,7 @@ const PRODUCT_CONFIG = {
         requiresShipping: false,
         prices: {
             de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
+            en: 'price_1QTSN6JRMXFic4sW9sklILhd'
         },
         memberstackPlanId: 'pln_bundle-rd004n7'
     },
@@ -41,12 +37,6 @@ const PRODUCT_CONFIG = {
         discountAmount: 1400, // €14 discount
         weight: 1005,
         packagingWeight: 156,
-        prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
-        },
         memberstackPlanId: 'pln_bundle-rd004n7'  // Use free bundle plan
     }
 };
@@ -77,10 +67,6 @@ const SHIPPING_RATES = {
         label: 'Singapore', 
         countries: ['SG']
     }
-};
-
-const CONFIG = {
-    defaultLanguage: 'de'
 };
 
 exports.handler = async function(event, context) {
@@ -155,12 +141,8 @@ exports.handler = async function(event, context) {
             // Add both products
             sessionParams.line_items = config.components.map(componentType => {
                 const componentConfig = PRODUCT_CONFIG[componentType];
-                const price = componentConfig.prices[data.language] || componentConfig.prices[CONFIG.defaultLanguage];
-                if (!price) {
-                    throw new Error(`No price found for language ${data.language} in product ${componentType}`);
-                }
                 return {
-                    price: price,
+                    price: componentConfig.prices[data.language] || componentConfig.prices['de'],
                     quantity: 1,
                     adjustable_quantity: { enabled: false }
                 };
@@ -176,12 +158,8 @@ exports.handler = async function(event, context) {
             sessionParams.discounts = [{ coupon: coupon.id }];
         } else {
             // Single product
-            const price = config.prices[data.language] || config.prices[CONFIG.defaultLanguage];
-            if (!price) {
-                throw new Error(`No price found for language ${data.language} in product ${data.productType}`);
-            }
             sessionParams.line_items = [{
-                price: price,
+                price: config.prices[data.language] || config.prices['de'],
                 quantity: 1,
                 adjustable_quantity: { enabled: false }
             }];
