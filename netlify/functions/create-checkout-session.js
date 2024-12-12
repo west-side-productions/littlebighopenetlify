@@ -79,6 +79,10 @@ const SHIPPING_RATES = {
     }
 };
 
+const CONFIG = {
+    defaultLanguage: 'de'
+};
+
 exports.handler = async function(event, context) {
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers };
@@ -151,8 +155,12 @@ exports.handler = async function(event, context) {
             // Add both products
             sessionParams.line_items = config.components.map(componentType => {
                 const componentConfig = PRODUCT_CONFIG[componentType];
+                const price = componentConfig.prices[data.language] || componentConfig.prices[CONFIG.defaultLanguage];
+                if (!price) {
+                    throw new Error(`No price found for language ${data.language} in product ${componentType}`);
+                }
                 return {
-                    price: componentConfig.prices[data.language] || componentConfig.prices['de'],
+                    price: price,
                     quantity: 1,
                     adjustable_quantity: { enabled: false }
                 };
@@ -168,8 +176,12 @@ exports.handler = async function(event, context) {
             sessionParams.discounts = [{ coupon: coupon.id }];
         } else {
             // Single product
+            const price = config.prices[data.language] || config.prices[CONFIG.defaultLanguage];
+            if (!price) {
+                throw new Error(`No price found for language ${data.language} in product ${data.productType}`);
+            }
             sessionParams.line_items = [{
-                price: config.prices[data.language] || config.prices['de'],
+                price: price,
                 quantity: 1,
                 adjustable_quantity: { enabled: false }
             }];

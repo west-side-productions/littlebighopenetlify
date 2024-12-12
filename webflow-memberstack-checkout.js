@@ -301,7 +301,7 @@ async function handleCheckout(event, productType, shippingRateId) {
         }
 
         // Get language
-        const language = getPreferredLanguage();
+        const language = await getPreferredLanguage();
 
         // Prepare checkout data
         const checkoutData = {
@@ -372,23 +372,29 @@ async function startCheckout(checkoutData) {
 }
 
 // Function to get user's preferred language
-function getPreferredLanguage() {
-    // Use the global language detection from $lbh
-    const language = $lbh.language();
-    
-    // Get the product type
-    const productElement = document.querySelector('[data-product-type]');
-    const productType = productElement?.dataset.productType || 'book';
-    const productConfig = PRODUCT_CONFIG[productType];
-    
-    // Ensure we have a valid Stripe price for this language
-    if (productConfig?.prices[language]) {
-        return language;
+async function getPreferredLanguage() {
+    try {
+        // Use the global language detection from $lbh
+        const language = await $lbh.language();
+        
+        // Get the product type
+        const productElement = document.querySelector('[data-product-type]');
+        const productType = productElement?.dataset.productType || 'book';
+        const productConfig = PRODUCT_CONFIG[productType];
+        
+        // Ensure we have a valid Stripe price for this language
+        if (productConfig?.prices[language]) {
+            console.log('Using detected language:', language);
+            return language;
+        }
+        
+        // If no Stripe price found for the language, fall back to default
+        console.warn(`No Stripe price found for language: ${language}, falling back to ${CONFIG.defaultLanguage}`);
+        return CONFIG.defaultLanguage;
+    } catch (error) {
+        console.error('Error detecting language:', error);
+        return CONFIG.defaultLanguage;
     }
-    
-    // If no Stripe price found for the language, fall back to default
-    console.warn(`No Stripe price found for language: ${language}, falling back to ${CONFIG.defaultLanguage}`);
-    return CONFIG.defaultLanguage;
 }
 
 // Get the base URL for API endpoints
@@ -570,7 +576,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const languageSelectors = document.querySelectorAll('.language-selector, select[name="Sprache"]');
             if (languageSelectors.length > 0) {
-                const currentLanguage = getPreferredLanguage();
+                const currentLanguage = await getPreferredLanguage();
                 
                 languageSelectors.forEach(selector => {
                     if (selector) {
