@@ -168,165 +168,212 @@ function loadScript(src) {
     });
 }
 
+// Wait for Memberstack to be available
+async function waitForMemberstack(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+
+        function checkMemberstack() {
+            // Check if Memberstack is loaded and initialized
+            if (window.$memberstackDom && typeof window.$memberstackDom.getCurrentMember === 'function') {
+                // Check if we can get the current member
+                window.$memberstackDom.getCurrentMember()
+                    .then(member => {
+                        console.log('Memberstack initialized with member:', member?.data?.id || 'Not logged in');
+                        resolve(window.$memberstackDom);
+                    })
+                    .catch(error => {
+                        console.warn('Error getting current member:', error);
+                        resolve(window.$memberstackDom); // Still resolve since Memberstack is available
+                    });
+                return;
+            }
+
+            if (Date.now() - startTime > timeout) {
+                console.warn('Memberstack load timeout');
+                resolve(null); // Resolve with null instead of rejecting
+                return;
+            }
+
+            setTimeout(checkMemberstack, 100);
+        }
+
+        checkMemberstack();
+    });
+}
+
+// Get language from URL path
+function getCurrentLanguage() {
+    // First try URL path
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const urlLang = pathParts.length > 0 && ['de', 'en', 'fr', 'it'].includes(pathParts[0]) ? pathParts[0] : null;
+    
+    if (urlLang) {
+        console.log('Language from URL:', urlLang);
+        return urlLang;
+    }
+    
+    // Fallback to default
+    console.log('No valid language in URL, using default:', CONFIG.defaultLanguage);
+    return CONFIG.defaultLanguage;
+}
+
 // Initialize dependencies
 async function initializeDependencies() {
-    console.log('Initializing shopping system...');
-    
     try {
-        // Initialize Memberstack
-        let retries = 0;
-        const maxRetries = 10;
+        console.log('Initializing checkout system...');
         
-        while (!window.$memberstackDom && retries < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            retries++;
+        // First load Memberstack and Stripe in parallel
+        const [memberstack, stripe] = await Promise.all([
+            waitForMemberstack().catch(error => {
+                console.warn('Memberstack initialization failed:', error);
+                return null;
+            }),
+            loadStripe().catch(error => {
+                console.error('Stripe initialization failed:', error);
+                return null;
+            })
+        ]);
+
+        // Log initialization status
+        if (memberstack) {
+            console.log('Memberstack initialized successfully');
+        } else {
+            console.warn('Memberstack not available, proceeding with limited functionality');
+        }
+
+        if (stripe) {
+            console.log('Stripe initialized successfully');
+        } else {
+            console.error('Stripe initialization failed, checkout may not work');
         }
         
-        if (!window.$memberstackDom) {
-            throw new Error('Memberstack timeout');
-        }
-        console.log('Memberstack initialized');
-
-        // Initialize Stripe
-        if (!window.Stripe) {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://js.stripe.com/v3/';
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-        const stripe = window.Stripe(CONFIG.stripePublicKey);
-        console.log('Stripe initialized with test key');
-
-        return { stripe };
+        // Initialize checkout buttons
+        await initializeCheckoutButton();
+        
+        // Initialize shipping selects after buttons
+        initializeShippingSelects();
+        
+        console.log('Checkout system initialized successfully');
     } catch (error) {
         console.error('Error initializing dependencies:', error);
-        throw error;
     }
 }
 
 // Initialize checkout button
 async function initializeCheckoutButton() {
-    console.log('Setting up checkout buttons...');
+    // Wait for DOM to be fully loaded
+    if (document.readyState !== 'complete') {
+        await new Promise(resolve => window.addEventListener('load', resolve));
+    }
     
-    // Get all checkout buttons
-    const checkoutButtons = document.querySelectorAll('[id^="checkout-button-"]');
+    const currentLang = getCurrentLanguage();
+    console.log('Current language from URL:', currentLang);
     
-    checkoutButtons.forEach(button => {
-        // Extract product type from button ID
-        const productType = button.id.replace('checkout-button-', '');
-        console.log(`Found button for ${productType}:`, button);
-
-        // Add click listener
-        button.addEventListener('click', async (event) => {
+    // Find bundle button
+    const bundleButton = document.querySelector(`#checkout-button-bundle-${currentLang}`);
+    if (bundleButton) {
+        console.log(`Found bundle button: ${bundleButton.id}`);
+        bundleButton.addEventListener('click', (event) => {
             event.preventDefault();
-            event.stopPropagation();
-            console.log(`${productType} checkout button clicked`);
-            
-            try {
-                // Get shipping rate if needed
-                let shippingRateId = null;
-                const config = PRODUCT_CONFIG[productType];
-                
-                if (config?.requiresShipping) {
-                    const shippingSelect = document.querySelector(`#shipping-rate-select-${productType} select`);
-                    if (!shippingSelect?.value) {
-                        throw new Error('Please select a shipping option');
-                    }
-                    shippingRateId = shippingSelect.value;
-                }
-
-                // Disable button and show loading state
-                button.disabled = true;
-                const originalText = button.textContent;
-                button.textContent = 'Loading...';
-
-                try {
-                    await handleCheckout(event, productType, shippingRateId);
-                } catch (error) {
-                    // Reset button state
-                    button.disabled = false;
-                    button.textContent = originalText;
-                    throw error;
-                }
-            } catch (error) {
-                console.error('Error during checkout:', error);
-                alert(error.message || 'An error occurred during checkout');
-            }
+            console.log('Bundle button clicked');
+            const shippingSelect = document.querySelector('#shipping-rate-select-bundle select');
+            const shippingRateId = shippingSelect ? shippingSelect.value : CONFIG.defaultShippingRate;
+            handleCheckout(event, 'bundle', shippingRateId, currentLang);
         });
-        
-        console.log(`Initialized ${productType} checkout button`);
-    });
+    } else {
+        console.warn(`Bundle button not found for language ${currentLang}`);
+    }
+    
+    // Find book button
+    const bookButton = document.querySelector(`#checkout-button-book-${currentLang}`);
+    if (bookButton) {
+        console.log(`Found book button: ${bookButton.id}`);
+        bookButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            console.log('Book button clicked');
+            const shippingSelect = document.querySelector('#shipping-rate-select-book select');
+            const shippingRateId = shippingSelect ? shippingSelect.value : CONFIG.defaultShippingRate;
+            handleCheckout(event, 'book', shippingRateId, currentLang);
+        });
+    } else {
+        console.warn(`Book button not found for language ${currentLang}`);
+    }
+    
+    // Log available buttons if none were found
+    if (!bundleButton && !bookButton) {
+        console.warn(`No checkout buttons found for language ${currentLang}. Available buttons:`, 
+            Array.from(document.querySelectorAll('[id^="checkout-button-"]')).map(b => b.id));
+    }
 }
 
-// Update handleCheckout to use the passed productType
-async function handleCheckout(event, productType, shippingRateId) {
-    console.log('Starting checkout for:', { productType, shippingRateId });
-
+// Update handleCheckout to use the passed language
+async function handleCheckout(event, productType, shippingRateId, language) {
+    console.log('Starting checkout for:', { productType, shippingRateId, language });
+    
     try {
         // Get current member
         const member = await window.$memberstackDom.getCurrentMember();
-        console.log('Current member:', member?.data?.id || 'Not found');
-
-        // Get product configuration
-        const config = PRODUCT_CONFIG[productType];
-        if (!config) {
-            throw new Error('Invalid product type');
+        if (!member) {
+            console.error('No member found');
+            return;
         }
         
-        // Log configuration
-        console.log('Using product configuration:', {
-            type: productType,
-            config: config,
-            shippingRequired: config.requiresShipping,
-            shippingRate: shippingRateId
-        });
-
-        // If not logged in, store checkout info and redirect to registration
-        if (!member?.data) {
-            const currentPath = window.location.pathname;
-            const queryParams = window.location.search;
-            
-            // Store checkout configuration
-            localStorage.setItem('checkoutConfig', JSON.stringify({
-                productType: productType,
-                shippingRateId: shippingRateId
-            }));
-            
-            localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
-            window.location.href = '/registrieren';
+        // Ensure we have a price for this language
+        const config = PRODUCT_CONFIG[productType];
+        if (!config) {
+            console.error(`No configuration found for product type: ${productType}`);
             return;
         }
 
-        // Get language
-        const language = getPreferredLanguage();
-
-        // Prepare checkout data
-        const checkoutData = {
-            email: member.data.auth.email,
+        // Validate language and price
+        if (!config.prices[language]) {
+            console.warn(`No price found for language ${language}, falling back to default`);
+            language = CONFIG.defaultLanguage;
+        }
+        
+        // Log configuration
+        console.log('Checkout configuration:', {
+            type: productType,
+            config: config,
             language: language,
-            productType: productType,
-            shippingRateId: shippingRateId,
-            successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
-            cancelUrl: window.location.href,
-            metadata: {
-                memberstackUserId: member.data.id,
+            price: config.prices[language],
+            shippingRequired: config.requiresShipping,
+            shippingRate: shippingRateId
+        });
+        
+        // Store checkout data
+        const currentPath = window.location.pathname;
+        const queryParams = window.location.search;
+        
+        if (member.data.auth.email) {
+            localStorage.setItem('checkoutConfig', JSON.stringify({
                 productType: productType,
+                shippingRateId: shippingRateId,
                 language: language
-            }
-        };
-
-        // Log the checkout data being sent
-        console.log('Sending checkout data:', checkoutData);
-
-        // Create checkout session
-        await startCheckout(checkoutData);
-
+            }));
+            
+            localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
+            
+            // Prepare checkout data
+            const checkoutData = {
+                email: member.data.auth.email,
+                productType: productType,
+                shippingRateId: shippingRateId,
+                language: language,
+                successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
+                cancelUrl: window.location.href,
+                metadata: {
+                    productType: productType,
+                    language: language
+                }
+            };
+            
+            // Start checkout
+            await startCheckout(checkoutData);
+        }
     } catch (error) {
         console.error('Checkout error:', error);
-        throw error;
     }
 }
 
@@ -371,26 +418,6 @@ async function startCheckout(checkoutData) {
     }
 }
 
-// Function to get user's preferred language
-function getPreferredLanguage() {
-    // Use the global language detection from $lbh
-    const language = $lbh.language();
-    
-    // Get the product type
-    const productElement = document.querySelector('[data-product-type]');
-    const productType = productElement?.dataset.productType || 'book';
-    const productConfig = PRODUCT_CONFIG[productType];
-    
-    // Ensure we have a valid Stripe price for this language
-    if (productConfig?.prices[language]) {
-        return language;
-    }
-    
-    // If no Stripe price found for the language, fall back to default
-    console.warn(`No Stripe price found for language: ${language}, falling back to ${CONFIG.defaultLanguage}`);
-    return CONFIG.defaultLanguage;
-}
-
 // Get the base URL for API endpoints
 function getBaseUrl() {
     return 'https://lillebighopefunctions.netlify.app/.netlify/functions';
@@ -419,103 +446,45 @@ function updatePriceDisplay() {
 
 // Initialize shipping rate selection
 function initializeShippingSelects() {
-    const productTypes = ['book', 'bundle'];  // Only physical products need shipping
+    const shippingSelects = document.querySelectorAll('#shipping-rate-select, select[name="Versand-nach"]');
+    console.log('Found shipping selects:', shippingSelects.length);
     
-    productTypes.forEach(productType => {
-        const shippingContainer = document.querySelector(`#shipping-rate-select-${productType}`);
-        if (!shippingContainer) {
-            console.log(`No shipping container found for ${productType}`);
-            return;
-        }
-        
-        const select = shippingContainer.querySelector('select');
-        if (!select) {
-            console.log(`No shipping select found for ${productType}`);
-            return;
-        }
-        
-        const config = PRODUCT_CONFIG[productType];
-        
-        // Only show shipping selection for physical products and bundles
-        const requiresShipping = config.type === 'physical' || config.type === 'bundle';
-        shippingContainer.style.display = requiresShipping ? 'block' : 'none';
-        
-        if (!requiresShipping) return;
+    if (shippingSelects.length === 0) return;
+    
+    const currentLang = getCurrentLanguage();
+    console.log('Current language for shipping:', currentLang);
 
-        // Get base price from the product item
-        const productItem = shippingContainer.closest('[data-product-type]');
-        const basePrice = parseFloat(productItem?.dataset.basePrice) || 0;
+    shippingSelects.forEach(select => {
+        // Set initial value if not set
+        if (!select.value) {
+            select.value = CONFIG.defaultShippingRate;
+        }
+        console.log('Initial shipping rate:', select.value);
 
-        // Update price when shipping option changes
-        select.addEventListener('change', (event) => {
-            const shippingRateId = event.target.value;
-            updateTotalPrice(basePrice, shippingRateId, productType);
+        // Add change listener
+        select.addEventListener('change', () => {
+            updatePriceDisplay();
         });
-
-        // Set initial shipping rate and update price
-        const defaultShippingRate = CONFIG.defaultShippingRate;
-        if (defaultShippingRate) {
-            select.value = defaultShippingRate;
-            updateTotalPrice(basePrice, defaultShippingRate, productType);
-        }
     });
-}
 
-// Update price display with shipping
-function updateTotalPrice(basePrice, shippingRateId, productType) {
-    const shippingRate = SHIPPING_RATES[shippingRateId];
-    if (!shippingRate) return;
+    // Initialize language selectors if they exist
+    const languageSelectors = document.querySelectorAll('.language-selector, select[name="Sprache"]');
+    console.log('Found language selects:', languageSelectors.length);
 
-    const totalPrice = basePrice + shippingRate.price;
-    const priceDisplay = document.querySelector(`[data-product-type="${productType}"] .price-display`);
-    if (priceDisplay) {
-        priceDisplay.textContent = `€${totalPrice.toFixed(2)}`;
-    }
-}
-
-// Wait for Memberstack to be available
-function waitForMemberstack(timeout = 5000) {
-    return new Promise((resolve, reject) => {
-        const startTime = Date.now();
-
-        function checkMemberstack() {
-            if (window.$memberstackDom) {
-                // On membershome, wait a bit longer to ensure verification is complete
-                if (window.location.pathname === '/membershome') {
-                    window.$memberstackDom.getCurrentMember()
-                        .then(member => {
-                            if (member) {
-                                resolve(window.$memberstackDom);
-                            } else {
-                                if (Date.now() - startTime > timeout) {
-                                    reject(new Error('Memberstack verification timeout'));
-                                } else {
-                                    setTimeout(checkMemberstack, 100);
-                                }
-                            }
-                        })
-                        .catch(() => setTimeout(checkMemberstack, 100));
-                    return;
-                }
-                resolve(window.$memberstackDom);
-                return;
-            }
-
-            if (Date.now() - startTime > timeout) {
-                // Instead of rejecting, redirect to registration if not on membershome
-                if (window.location.pathname !== '/membershome') {
-                    localStorage.setItem('checkoutRedirectUrl', 'membershome');
-                    window.location.href = '/registrieren';
-                    return;
-                }
-                reject(new Error('Memberstack timeout'));
-                return;
-            }
-
-            setTimeout(checkMemberstack, 100);
+    languageSelectors.forEach(selector => {
+        if (selector) {
+            selector.value = currentLang;
+            
+            // Add change listener to sync all selectors
+            selector.addEventListener('change', function(e) {
+                const newLang = e.target.value;
+                languageSelectors.forEach(sel => {
+                    if (sel !== e.target) {
+                        sel.value = newLang;
+                    }
+                });
+            });
         }
-
-        checkMemberstack();
     });
 }
 
@@ -558,7 +527,7 @@ function loadStripe() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Initializing checkout system...');
+    console.log('DOM loaded, initializing checkout system...');
     
     try {
         // First check if we're on membershome and need to start checkout
@@ -570,7 +539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const languageSelectors = document.querySelectorAll('.language-selector, select[name="Sprache"]');
             if (languageSelectors.length > 0) {
-                const currentLanguage = getPreferredLanguage();
+                const currentLanguage = getCurrentLanguage();
                 
                 languageSelectors.forEach(selector => {
                     if (selector) {
@@ -594,68 +563,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Error initializing language selectors:', error);
         }
 
+        // Get current language for button detection
+        const currentLang = getCurrentLanguage();
+        console.log('Detecting buttons for language:', currentLang);
+
         // Find required elements for checkout
         const elements = {
-            checkoutButtons: document.querySelectorAll('[data-memberstack-content="checkout"], [data-checkout-button]'),
+            checkoutButtons: document.querySelectorAll(`#checkout-button-bundle-${currentLang}, #checkout-button-book-${currentLang}`),
             shippingSelects: document.querySelectorAll('#shipping-rate-select, select[name="Versand-nach"]'),
             priceElements: document.querySelectorAll('[data-price-display]')
         };
-        console.log('Found elements:', elements);
+        
+        // Log found elements
+        console.log('Found elements:', {
+            checkoutButtons: Array.from(elements.checkoutButtons).map(b => b.id),
+            shippingSelects: elements.shippingSelects.length,
+            priceElements: elements.priceElements.length
+        });
 
         // Check if we have the necessary elements or if we're on membershome
         if (Object.values(elements).some(el => el.length > 0) || isOnMembershome) {
             console.log('Loading Memberstack and Stripe...');
             
             // Initialize dependencies
-            const { stripe } = await initializeDependencies();
-            window.$lbh = window.$lbh || {};
-            window.$lbh.stripe = stripe;
+            await initializeDependencies();
             
             console.log('Memberstack and Stripe loaded successfully');
-            
-            // Initialize shipping selects if they exist
-            if (elements.shippingSelects.length > 0) {
-                initializeShippingSelects();
-            }
-            
-            // Initialize checkout buttons if they exist
-            if (elements.checkoutButtons.length > 0) {
-                await initializeCheckoutButton();
-            }
-
-            // Check if we need to start checkout on membershome
-            if (isOnMembershome) {
-                const params = new URLSearchParams(window.location.search);
-                const member = params.get('member');
-                const verified = member ? JSON.parse(decodeURIComponent(member)).verified : false;
-                
-                if (verified) {
-                    console.log('Starting checkout on membershome after verification...');
-                    
-                    // Get stored product type and shipping rate
-                    const storedConfig = localStorage.getItem('checkoutConfig');
-                    let productType = 'course';
-                    let shippingRateId = null;
-                    
-                    if (storedConfig) {
-                        try {
-                            const config = JSON.parse(storedConfig);
-                            productType = config.productType || productType;
-                            shippingRateId = config.shippingRateId;
-                            localStorage.removeItem('checkoutConfig');
-                        } catch (e) {
-                            console.error('Error parsing stored config:', e);
-                        }
-                    }
-                    
-                    console.log('Starting checkout with config:', { productType, shippingRateId });
-                    await startCheckout({ productType, shippingRateId }).catch(error => {
-                        console.error('Error starting checkout:', error);
-                    });
-                }
-            }
-
-            console.log('Checkout system initialized successfully');
         } else {
             console.log('Required elements not found, skipping initialization');
         }

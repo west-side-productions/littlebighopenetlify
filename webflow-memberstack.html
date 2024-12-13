@@ -281,8 +281,8 @@ const checkMemberstack = setInterval(() => {
         clearInterval(checkMemberstack);
         $lbh.init();
         
-        // Add listener for member changes
-        window.$memberstackDom.listen('member.update', () => {
+        // Add listener for member updates using the proper event name
+        document.addEventListener('memberstack:update', () => {
             console.log('Member updated, rechecking language...');
             $lbh.checkLanguageRedirect();
         });
