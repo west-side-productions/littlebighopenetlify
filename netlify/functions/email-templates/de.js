@@ -323,7 +323,7 @@ ${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.pric
                 </div>
 
                 <div class="footer">
-                    <p>Little Big Hope - Bestellsystem</p>
+                    <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
             </div>`;
         }
