@@ -240,27 +240,37 @@ exports.handler = async (event) => {
                 
                 try {
                     // Add plan to member if memberstackUserId exists
-                    if (session.metadata?.memberstackUserId) {
-                        const planId = session.metadata.memberstackPlanId;
-                        if (!planId) {
-                            throw new Error('No Memberstack plan ID found in session metadata');
+                    console.log('Checking Memberstack metadata:', {
+                        memberstackUserId: session.metadata?.memberstackUserId,
+                        memberstackPlanId: session.metadata?.memberstackPlanId,
+                        type: session.metadata?.type
+                    });
+
+                    if (session.metadata?.memberstackPlanId) {
+                        if (!session.metadata?.memberstackUserId) {
+                            console.error('No Memberstack user ID found in session metadata');
+                            throw new Error('No Memberstack user ID found in session metadata');
                         }
 
-                        // If it's a bundle, add both the course and book plans
+                        // If it's a bundle, add both plans
                         if (session.metadata.type === 'bundle') {
-                            console.log('Processing bundle purchase - adding both plans');
-                            await addPlanToMember(session.metadata.memberstackUserId, 'pln_bundle-rd004n7');
+                            console.log('Processing bundle purchase - adding bundle plan');
+                            await addPlanToMember(session.metadata.memberstackUserId, 'prc_lbh-kurs-buch-tjcb0624');
+                            console.log('Successfully added bundle plan');
+                        } else if (session.metadata.type === 'course') {
+                            console.log('Adding course plan to member');
+                            await addPlanToMember(session.metadata.memberstackUserId, 'prc_online-kochkurs-8b540kc2');
                             console.log('Successfully added course plan');
-                            await addPlanToMember(session.metadata.memberstackUserId, 'pln_kostenloser-zugang-84l80t3u');
+                        } else if (session.metadata.type === 'book') {
+                            console.log('Adding book plan to member');
+                            await addPlanToMember(session.metadata.memberstackUserId, 'prc_kurs-buch-s29u04fs');
                             console.log('Successfully added book plan');
                         } else {
-                            console.log('Adding plan to member:', {
-                                memberId: session.metadata.memberstackUserId,
-                                planId: planId
-                            });
-                            await addPlanToMember(session.metadata.memberstackUserId, planId);
-                            console.log('Successfully added plan');
+                            console.error('Unknown product type:', session.metadata.type);
+                            throw new Error(`Unknown product type: ${session.metadata.type}`);
                         }
+                    } else {
+                        console.log('No Memberstack plan ID found - skipping plan addition');
                     }
 
                     // Send confirmation email to customer
