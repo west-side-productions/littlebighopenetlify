@@ -7,8 +7,19 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Load email templates
 const emailTemplates = {
-    de: require('./email-templates/de')
+    de: require('./email-templates/de'),
+    en: require('./email-templates/en'),
+    fr: require('./email-templates/fr'),
+    it: require('./email-templates/it')
 };
+
+// Default language if none specified
+const DEFAULT_LANGUAGE = 'de';
+
+// Function to get email template for language
+function getEmailTemplate(language) {
+    return emailTemplates[language] || emailTemplates[DEFAULT_LANGUAGE];
+}
 
 // Function to add plan to member
 async function addPlanToMember(memberId, planId) {
@@ -60,12 +71,15 @@ async function addPlanToMember(memberId, planId) {
 // Function to send order confirmation email
 async function sendOrderConfirmationEmail(email, session) {
     try {
+        const language = session.metadata?.language || DEFAULT_LANGUAGE;
+        const template = getEmailTemplate(language);
+        
         const msg = {
             to: email,
             from: process.env.SENDGRID_FROM_EMAIL,
-            subject: emailTemplates.de.orderConfirmation.subject,
-            text: emailTemplates.de.orderConfirmation.text(session),
-            html: emailTemplates.de.orderConfirmation.html(session),
+            subject: template.orderConfirmation.subject,
+            text: template.orderConfirmation.text(session),
+            html: template.orderConfirmation.html(session),
         };
 
         await sgMail.send(msg);
@@ -120,32 +134,16 @@ function prepareOrderNotificationData(session) {
 // Function to send order notification to shipping company
 async function sendOrderNotificationEmail(session) {
     try {
-        console.log('Preparing to send order notification email');
+        const orderData = prepareOrderNotificationData(session);
+        const language = session.metadata?.language || DEFAULT_LANGUAGE;
+        const template = getEmailTemplate(language);
         
-        // Get line items for the session
-        console.log('Fetching line items for session:', session.id);
-        const lineItems = await Stripe.checkout.sessions.listLineItems(session.id);
-        session.line_items = lineItems;
-        console.log('Line items fetched:', lineItems.data.length, 'items');
-
-        // Transform data for email template
-        const emailData = prepareOrderNotificationData(session);
-        console.log('Prepared email data:', JSON.stringify(emailData, null, 2));
-
-        // Verify template exists
-        if (!emailTemplates.de.orderNotification) {
-            console.error('Available templates:', Object.keys(emailTemplates.de));
-            throw new Error('Email template "orderNotification" not found');
-        }
-
         const msg = {
-            to: 'office@west-side-productions.at',
+            to: process.env.SHIPPING_NOTIFICATION_EMAIL,
             from: process.env.SENDGRID_FROM_EMAIL,
-            subject: 'Neue Bestellung eingegangen',
-            text: emailTemplates.de.orderNotification.text ? 
-                  emailTemplates.de.orderNotification.text(emailData) : 
-                  emailTemplates.de.orderNotification.html(emailData).replace(/<[^>]*>/g, ''),
-            html: emailTemplates.de.orderNotification.html(emailData)
+            subject: template.orderNotification.subject,
+            text: template.orderNotification.text(orderData),
+            html: template.orderNotification.html(orderData),
         };
 
         console.log('Sending email with SendGrid:', {
@@ -229,12 +227,11 @@ exports.handler = async (event) => {
                 }
                 
                 // Send confirmation email to customer
-                // Only send if this is a first-time purchase (check metadata)
-                if (session.customer_details?.email && session.metadata?.isFirstPurchase !== 'false') {
+                if (session.customer_details?.email) {
                     console.log('Sending confirmation email to:', session.customer_details.email);
                     await sendOrderConfirmationEmail(session.customer_details.email, session);
                 } else {
-                    console.log('⚠️ Skipping confirmation email - not first purchase or no email');
+                    console.log('⚠️ Skipping confirmation email - no email address available');
                 }
 
                 // Send notification email to shipping company if it's a physical product
@@ -248,33 +245,33 @@ exports.handler = async (event) => {
                             totalWeight: session.metadata.totalWeight
                         }
                     });
-                    await sendOrderNotificationEmail(session);
+                    
+                    try {
+                        await sendOrderNotificationEmail(session);
+                        console.log('Successfully sent shipping notification email');
+                    } catch (error) {
+                        console.error('Failed to send shipping notification:', error);
+                    }
                 } else {
-                    console.log('Product type does not require shipping:', {
-                        productType: session.metadata.productType,
-                        type: session.metadata.type
-                    });
+                    console.log('No shipping required for this product type:', session.metadata?.type);
                 }
-            } else {
-                console.log('⚠️ Session not processed:', {
-                    payment_status: session.payment_status,
-                    has_memberstack_id: !!session.metadata?.memberstackUserId
-                });
             }
-        } else {
-            console.log('Ignoring non-checkout event:', stripeEvent.type);
-        }
 
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ received: true })
+            };
+        }
+        
         return {
             statusCode: 200,
             body: JSON.stringify({ received: true })
         };
     } catch (error) {
-        console.error('❌ Error processing webhook:', error);
-        console.error('Error details:', error.response?.body || error);
+        console.error('❌ Webhook processing failed:', error);
         return {
-            statusCode: 400,
-            body: JSON.stringify({ error: error.message })
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Webhook processing failed' })
         };
     }
 };

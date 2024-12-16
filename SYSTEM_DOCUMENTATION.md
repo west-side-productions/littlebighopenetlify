@@ -33,27 +33,66 @@
   3. Stripe Integration
   4. Error Handling
 
-### 3. Memberstack Plan Configuration
-- **Plan Structure**
-  - We use free Memberstack plans because all payments are handled through Stripe
-  - Current plan IDs:
-    - Book Access: `pln_kostenloser-zugang-84l80t3u` (free plan)
-    - Course/Bundle Access: `pln_bundle-rd004n7` (free plan)
+#### Recent Updates (December 2024)
+- **Shipping Selector Improvements**
+  1. Fixed duplicate ID issues in shipping selects
+  2. Implemented language-based default shipping rates:
+     - English: European Union rate (`shr_1QScOlJRMXFic4sW8MHW0kq7`)
+     - Other languages: Austrian rate (`shr_1QScKFJRMXFic4sW9e80ABBp`)
+  3. Added synchronization between shipping selects for consistent user experience
+  4. Enhanced error logging and debugging capabilities
+  5. Improved shipping rate initialization based on detected language
 
-- **Plan Assignment**
-  1. Single Product Purchase:
-     - Book: Gets the free book plan
-     - Course: Gets the free bundle plan
-  2. Bundle Purchase:
-     - Customer pays through Stripe (with bundle discount)
-     - System adds both free plans via webhook:
-       - Book plan (`pln_kostenloser-zugang-84l80t3u`)
-       - Bundle plan (`pln_bundle-rd004n7`)
+- **Non-Logged In User Flow**
+  1. User clicks checkout button on product page
+  2. System stores checkout configuration in localStorage:
+     ```javascript
+     localStorage.setItem('checkoutConfig', JSON.stringify({
+         productType: productType,
+         shippingRateId: shippingRateId
+     }));
+     localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
+     ```
+  3. User is redirected to registration page (`/registrieren`)
+  4. After successful registration and verification:
+     - User is redirected to `/membershome`
+     - System checks for stored checkout configuration
+     - If found, automatically initiates checkout process
+     - Clears stored configuration after successful checkout
 
-- **Important Notes**
-  - Always use free Memberstack plans to avoid conflicts with their payment system
-  - All payments are processed through Stripe
-  - Memberstack is used solely for access control
+- **Checkout Flow**
+  1. User selects product (book, course, or bundle)
+  2. For physical products:
+     - Shipping country selection
+     - Shipping rate selection (defaults based on language)
+  3. If user is not logged in:
+     - Store checkout configuration
+     - Redirect to registration
+     - Auto-resume checkout after verification
+  4. Create Stripe checkout session with:
+     - Product configuration
+     - Shipping details (if applicable)
+     - Language preference
+     - Memberstack user ID
+  5. Redirect to Stripe checkout
+  6. On successful payment:
+     - Assign Memberstack plan
+     - Send confirmation emails
+     - Send shipping notification (if physical product)
+
+- **Language-Based Shipping Logic**
+  ```javascript
+  // Default shipping rate selection based on language
+  const defaultShippingRate = currentLang === 'en' ? 
+      'shr_1QScOlJRMXFic4sW8MHW0kq7' : // EU rate for English
+      'shr_1QScKFJRMXFic4sW9e80ABBp'; // Austrian rate for others
+  ```
+
+- **Shipping Select Implementation**
+  1. Unique IDs for each shipping select based on product type
+  2. Automatic synchronization between bundle and book shipping selects
+  3. Proper initialization of shipping rates on page load
+  4. Enhanced error handling and logging for shipping rate changes
 
 ### 3. Product and Plan Configuration
 - **Product Types**:
@@ -67,6 +106,9 @@
      - Weight: 1005g + 156g packaging
      - Memberstack Plan: `prc_kurs-buch-s29u04fs`
      - Available in multiple languages
+     - Default shipping rates vary by language:
+       - English: EU shipping rate
+       - Others: Austrian shipping rate
   
   3. **Bundle (Book + Course)**
      - Combines both physical book and digital course
@@ -74,30 +116,7 @@
      - Automatic €14 discount applied
      - Memberstack Plan: `prc_lbh-kurs-buch-tjcb0624`
      - Combines both products with special pricing
-
-- **Shipping Configuration**:
-  - Rates vary by region:
-    - Austria: Free shipping
-    - Europe: €20.36
-    - Great Britain: €20.72
-    - Singapore: €36.53
-  - Each rate has specific country restrictions
-  - Weight-based calculations for physical products
-
-- **Checkout Process**:
-  1. User selects product (book, course, or bundle)
-  2. For physical products:
-     - Shipping country selection
-     - Shipping rate calculation
-  3. Stripe checkout session creation with:
-     - Product configuration
-     - Shipping details (if applicable)
-     - Tax calculation enabled
-     - Memberstack plan ID in metadata
-  4. On successful payment:
-     - Memberstack plan is assigned
-     - Confirmation emails sent
-     - For physical products, shipping notification sent
+     - Inherits language-based shipping rate defaults
 
 ## Language Handling
 
@@ -113,67 +132,11 @@ The system supports multiple languages (de, en, fr, it) with German (de) as the 
    5. Default to 'de'
    ```
 
-2. **Registration Form**:
-   - The registration form includes a language select field with Memberstack integration:
-   ```html
-   <select data-ms-field="language" data-ms-member="language">
-       <option value="en">English</option>
-       <option value="it">Italiano</option>
-       <option value="fr">Français</option>
-       <option value="de">Deutsch</option>
-   </select>
-   ```
-   - The detected language is automatically pre-selected in this dropdown
-   - The selected language is saved as a custom field in the member's Memberstack profile upon registration
-
-3. **Language Detection Implementation**:
-   ```javascript
-   const LANGUAGE_CONFIG = {
-       supported: ['de', 'en', 'fr', 'it'],
-       default: 'de'
-   };
-
-   // Language detection function
-   language: () => {
-       // 1. Try Memberstack (highest priority for logged-in users)
-       if (member?.data?.customFields?.language) {
-           return member.data.customFields.language;
-       }
-
-       // 2. Try Webflow's current locale
-       const currentLocaleLink = document.querySelector('.w-locales-item a.w--current');
-       if (currentLocaleLink?.getAttribute('hreflang')) {
-           return hrefLang;
-       }
-
-       // 3. Try URL path
-       const pathParts = window.location.pathname.split('/');
-       if (LANGUAGE_CONFIG.supported.includes(pathParts[1])) {
-           return pathParts[1];
-       }
-
-       // 4. Try browser language
-       const browserLang = navigator.language.split('-')[0].toLowerCase();
-       if (LANGUAGE_CONFIG.supported.includes(browserLang)) {
-           return browserLang;
-       }
-
-       // 5. Fallback to default
-       return LANGUAGE_CONFIG.default;
-   }
-   ```
-
-4. **URL Structure**:
-   - Default language (de): `domain.com/page`
-   - Other languages: `domain.com/[lang]/page`
-   - Example: `domain.com/en/products`
-
-5. **Language Persistence**:
-   - Language preference is stored in Memberstack custom fields for registered users
-   - The system automatically redirects users to their preferred language path
-   - Non-logged-in users are directed based on the language detection priority
-
-This multi-layered approach ensures consistent language handling across the site while respecting user preferences and maintaining a good user experience for both logged-in and anonymous users.
+2. **Language Impact on Shipping**:
+   - English site visitors default to EU shipping rates
+   - Other language visitors default to Austrian shipping rates
+   - Shipping rates can still be manually changed by users
+   - Changes are synchronized across all shipping selects
 
 ## Email System
 

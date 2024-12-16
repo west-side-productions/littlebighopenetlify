@@ -224,29 +224,12 @@ async function initializeDependencies() {
         console.log('Initializing checkout system...');
         
         // First load Memberstack and Stripe in parallel
-        const [memberstack, stripe] = await Promise.all([
-            waitForMemberstack().catch(error => {
-                console.warn('Memberstack initialization failed:', error);
-                return null;
-            }),
-            loadStripe().catch(error => {
-                console.error('Stripe initialization failed:', error);
-                return null;
-            })
+        await Promise.all([
+            waitForMemberstack(),
+            loadStripe()
         ]);
-
-        // Log initialization status
-        if (memberstack) {
-            console.log('Memberstack initialized successfully');
-        } else {
-            console.warn('Memberstack not available, proceeding with limited functionality');
-        }
-
-        if (stripe) {
-            console.log('Stripe initialized successfully');
-        } else {
-            console.error('Stripe initialization failed, checkout may not work');
-        }
+        
+        console.log('Memberstack and Stripe loaded successfully');
         
         // Initialize checkout buttons
         await initializeCheckoutButton();
@@ -314,10 +297,17 @@ async function handleCheckout(event, productType, shippingRateId, language) {
     try {
         // Get current member
         const member = await window.$memberstackDom.getCurrentMember();
-        if (!member) {
-            console.error('No member found');
+        console.log('Member status:', member ? 'Found' : 'Not logged in');
+
+        // If not logged in, redirect to registration
+        if (!member?.data) {
+            console.log('User not logged in, redirecting to registration');
+            window.location.href = '/registrieren';
             return;
         }
+
+        // User is logged in, proceed with checkout
+        console.log('User is logged in, proceeding with checkout');
         
         // Ensure we have a price for this language
         const config = PRODUCT_CONFIG[productType];
@@ -341,37 +331,23 @@ async function handleCheckout(event, productType, shippingRateId, language) {
             shippingRequired: config.requiresShipping,
             shippingRate: shippingRateId
         });
-        
-        // Store checkout data
-        const currentPath = window.location.pathname;
-        const queryParams = window.location.search;
-        
-        if (member.data.auth.email) {
-            localStorage.setItem('checkoutConfig', JSON.stringify({
+
+        // Prepare checkout data
+        const checkoutData = {
+            email: member.data.auth.email,
+            productType: productType,
+            shippingRateId: shippingRateId,
+            language: language,
+            successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: window.location.href,
+            metadata: {
                 productType: productType,
-                shippingRateId: shippingRateId,
                 language: language
-            }));
-            
-            localStorage.setItem('checkoutRedirectUrl', currentPath + queryParams);
-            
-            // Prepare checkout data
-            const checkoutData = {
-                email: member.data.auth.email,
-                productType: productType,
-                shippingRateId: shippingRateId,
-                language: language,
-                successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
-                cancelUrl: window.location.href,
-                metadata: {
-                    productType: productType,
-                    language: language
-                }
-            };
-            
-            // Start checkout
-            await startCheckout(checkoutData);
-        }
+            }
+        };
+        
+        // Start checkout
+        await startCheckout(checkoutData);
     } catch (error) {
         console.error('Checkout error:', error);
     }
@@ -429,62 +405,62 @@ function getShippingCountry(shippingRateId) {
     return shipping ? shipping.countries[0] : CONFIG.defaultCountry; // Default to Austria if not found
 }
 
-// Update price display
-function updatePriceDisplay() {
-    const quantity = parseInt(document.getElementById('book-quantity')?.value || '1');
-    const basePrice = 29.99;
-    const subtotal = (basePrice * quantity).toFixed(2);
-    
-    document.getElementById('subtotal-price').textContent = subtotal;
-    document.getElementById('total-price').textContent = subtotal;
-    
-    const button = document.querySelector('.checkout-button');
-    if (button) {
-        button.textContent = `Proceed to Checkout (€${subtotal})`;
-    }
-}
-
 // Initialize shipping rate selection
 function initializeShippingSelects() {
-    const shippingSelects = document.querySelectorAll('#shipping-rate-select, select[name="Versand-nach"]');
-    console.log('Found shipping selects:', shippingSelects.length);
+    const productTypes = ['book', 'bundle'];
     
-    if (shippingSelects.length === 0) return;
+    // Get current language from URL path
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const currentLang = pathParts.length > 0 && ['de', 'en', 'it'].includes(pathParts[0]) ? pathParts[0] : 'de';
     
-    const currentLang = getCurrentLanguage();
-    console.log('Current language for shipping:', currentLang);
-
-    shippingSelects.forEach(select => {
-        // Set initial value if not set
-        if (!select.value) {
-            select.value = CONFIG.defaultShippingRate;
+    // Set default shipping rate based on language
+    const defaultShippingRate = currentLang === 'en' ? 
+        'shr_1QScOlJRMXFic4sW8MHW0kq7' : // EU rate for English
+        'shr_1QScKFJRMXFic4sW9e80ABBp'; // Austrian rate for others
+    
+    productTypes.forEach(productType => {
+        const selectId = `shipping-rate-select-${productType}`;
+        const shippingContainer = document.querySelector(`#${selectId}`);
+        if (!shippingContainer) {
+            console.log(`No shipping container found for ${productType}`);
+            return;
         }
-        console.log('Initial shipping rate:', select.value);
+        
+        const select = shippingContainer.querySelector('select');
+        if (!select) {
+            console.log(`No shipping select found for ${productType}`);
+            return;
+        }
+        
+        // Ensure unique ID
+        select.id = selectId;
+        
+        const config = PRODUCT_CONFIG[productType];
+        
+        // Only show shipping selection for physical products and bundles
+        const requiresShipping = config.type === 'physical' || config.type === 'bundle';
+        shippingContainer.style.display = requiresShipping ? 'block' : 'none';
+        
+        if (!requiresShipping) return;
 
-        // Add change listener
-        select.addEventListener('change', () => {
-            updatePriceDisplay();
-        });
-    });
-
-    // Initialize language selectors if they exist
-    const languageSelectors = document.querySelectorAll('.language-selector, select[name="Sprache"]');
-    console.log('Found language selects:', languageSelectors.length);
-
-    languageSelectors.forEach(selector => {
-        if (selector) {
-            selector.value = currentLang;
+        // Set initial shipping rate based on language
+        select.value = defaultShippingRate;
+        
+        // Update shipping rate when option changes
+        select.addEventListener('change', (event) => {
+            const shippingRateId = event.target.value;
+            console.log(`Shipping rate changed for ${productType} to ${shippingRateId}`);
             
-            // Add change listener to sync all selectors
-            selector.addEventListener('change', function(e) {
-                const newLang = e.target.value;
-                languageSelectors.forEach(sel => {
-                    if (sel !== e.target) {
-                        sel.value = newLang;
+            // Sync other shipping selects if they exist
+            productTypes.forEach(otherType => {
+                if (otherType !== productType) {
+                    const otherSelect = document.querySelector(`#shipping-rate-select-${otherType} select`);
+                    if (otherSelect) {
+                        otherSelect.value = shippingRateId;
                     }
-                });
+                }
             });
-        }
+        });
     });
 }
 
@@ -548,6 +524,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Add change listener to sync all selectors
                         selector.addEventListener('change', function(e) {
                             const newLang = e.target.value;
+                            console.log(`Language changed to: ${newLang}`);
                             languageSelectors.forEach(sel => {
                                 if (sel !== e.target) {
                                     sel.value = newLang;
