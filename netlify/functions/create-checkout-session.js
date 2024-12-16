@@ -122,10 +122,13 @@ exports.handler = async function(event, context) {
             metadata: {
                 productType: data.productType,
                 language: data.language,
-                memberstackUserId: data.memberstackUserId,
+                memberstackUserId: data.memberstackUserId,  
                 memberstackPlanId: config.memberstackPlanId,
                 type: config.type,
-                ...(data.metadata || {})
+                productWeight: config.weight?.toString() || '0',
+                packagingWeight: config.packagingWeight?.toString() || '0',
+                totalWeight: ((config.weight || 0) + (config.packagingWeight || 0)).toString(),
+                ...data.metadata  
             }
         };
 
