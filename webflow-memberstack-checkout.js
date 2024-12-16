@@ -340,9 +340,11 @@ async function handleCheckout(event, productType, shippingRateId, language) {
             language: language,
             successUrl: `${window.location.origin}/vielen-dank-email?session_id={CHECKOUT_SESSION_ID}`,
             cancelUrl: window.location.href,
+            memberstackUserId: member.data.id,
             metadata: {
                 productType: productType,
-                language: language
+                language: language,
+                memberstackUserId: member.data.id
             }
         };
         
