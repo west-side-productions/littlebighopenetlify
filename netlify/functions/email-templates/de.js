@@ -180,7 +180,6 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Vielen Dank für Ihren Einkauf!</h1>
                 </div>
                 <div class="content">
