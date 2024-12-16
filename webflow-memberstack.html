@@ -23,7 +23,7 @@ const $lbh = {
         
         try {
             // Wait for Memberstack to be available
-            while (!window.$memberstackDom && !window.$memberstackDom.getCurrentUser) {
+            while (!window.$memberstackDom ||!window.$memberstackDom.getCurrentMember) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
             console.log("Memberstack initialized");

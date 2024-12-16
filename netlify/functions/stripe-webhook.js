@@ -82,17 +82,24 @@ async function sendOrderConfirmationEmail(email, session) {
             html: template.orderConfirmation.html(session),
         };
 
+        console.log('Sending order confirmation email:', {
+            to: msg.to,
+            from: msg.from,
+            subject: msg.subject
+        });
+
         await sgMail.send(msg);
-        console.log('Order confirmation email sent successfully');
+        console.log('✅ Order confirmation email sent successfully');
     } catch (error) {
-        console.error('Failed to send order confirmation email:', error);
+        console.error('❌ Failed to send order confirmation email:', error);
         console.error('Error details:', error.response?.body?.errors || error);
     }
 }
 
 // Function to transform Stripe session data for email template
 function prepareOrderNotificationData(session) {
-    return {
+    // Get line items and shipping details
+    const orderData = {
         orderDetails: {
             orderNumber: session.id,
             customerEmail: session.customer_details?.email,
@@ -106,50 +113,48 @@ function prepareOrderNotificationData(session) {
                 country: session.shipping_details?.address?.country
             },
             weights: {
-                productWeight: session.metadata?.productWeight || 0,
-                packagingWeight: session.metadata?.packagingWeight || 0,
-                totalWeight: session.metadata?.totalWeight || 0
+                productWeight: parseInt(session.metadata?.productWeight) || 0,
+                packagingWeight: parseInt(session.metadata?.packagingWeight) || 0,
+                totalWeight: parseInt(session.metadata?.totalWeight) || 0
             },
             items: session.line_items?.data?.map(item => ({
                 name: item.description,
                 price: (item.amount_total / 100).toFixed(2),
-                currency: item.currency?.toUpperCase()
-            })) || [],
-            shipping: {
-                method: 'Standard Versand',
-                cost: ((session.total_details?.shipping_cost || 0) / 100).toFixed(2),
-                currency: session.currency?.toUpperCase()
-            },
-            total: {
-                subtotal: ((session.amount_subtotal || 0) / 100).toFixed(2),
-                shipping: ((session.total_details?.shipping_cost || 0) / 100).toFixed(2),
-                tax: ((session.total_details?.amount_tax || 0) / 100).toFixed(2),
-                total: ((session.amount_total || 0) / 100).toFixed(2),
-                currency: session.currency?.toUpperCase()
-            }
+                currency: item.currency.toUpperCase()
+            })) || []
         }
     };
+
+    console.log('Prepared order notification data:', JSON.stringify(orderData, null, 2));
+    return orderData;
 }
 
 // Function to send order notification to shipping company
 async function sendOrderNotificationEmail(session) {
     try {
+        // Get line items for the session
+        console.log('Fetching line items for session:', session.id);
+        const lineItems = await Stripe.checkout.sessions.listLineItems(session.id);
+        session.line_items = lineItems;
+        console.log('Line items fetched:', lineItems.data.length, 'items');
+
         const orderData = prepareOrderNotificationData(session);
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
         
         const msg = {
-            to: process.env.SHIPPING_NOTIFICATION_EMAIL,
+            to: 'office@west-side-productions.at',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderNotification.subject,
             text: template.orderNotification.text(orderData),
             html: template.orderNotification.html(orderData),
         };
 
-        console.log('Sending email with SendGrid:', {
+        console.log('Sending shipping notification email:', {
             to: msg.to,
             from: msg.from,
-            subject: msg.subject
+            subject: msg.subject,
+            orderData: orderData
         });
 
         await sgMail.send(msg);
@@ -157,7 +162,7 @@ async function sendOrderNotificationEmail(session) {
     } catch (error) {
         console.error('❌ Failed to send order notification email:', error);
         console.error('Error details:', error.response?.body?.errors || error);
-        throw error; // Re-throw to handle in the main webhook handler
+        throw error;
     }
 }
 
@@ -230,8 +235,6 @@ exports.handler = async (event) => {
                 if (session.customer_details?.email) {
                     console.log('Sending confirmation email to:', session.customer_details.email);
                     await sendOrderConfirmationEmail(session.customer_details.email, session);
-                } else {
-                    console.log('⚠️ Skipping confirmation email - no email address available');
                 }
 
                 // Send notification email to shipping company if it's a physical product
@@ -246,21 +249,12 @@ exports.handler = async (event) => {
                         }
                     });
                     
-                    try {
-                        await sendOrderNotificationEmail(session);
-                        console.log('Successfully sent shipping notification email');
-                    } catch (error) {
-                        console.error('Failed to send shipping notification:', error);
-                    }
+                    await sendOrderNotificationEmail(session);
+                    console.log('Successfully sent shipping notification email');
                 } else {
                     console.log('No shipping required for this product type:', session.metadata?.type);
                 }
             }
-
-            return {
-                statusCode: 200,
-                body: JSON.stringify({ received: true })
-            };
         }
         
         return {
