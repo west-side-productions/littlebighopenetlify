@@ -1,5 +1,5 @@
 const axios = require('axios');
-const fs = require('fs'); // Add this line to import the fs module
+const fs = require('fs'); 
 const path = require('path');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
@@ -70,6 +70,10 @@ async function addPlanToMember(memberId, planId) {
     }
 }
 
+// Read the logo file once when the function loads
+const logoPath = path.join(__dirname, '..', '..', 'images', 'logo.png');
+const LOGO_BASE64 = fs.readFileSync(logoPath).toString('base64');
+
 // Function to send order confirmation email
 async function sendOrderConfirmationEmail(email, session) {
     try {
@@ -84,9 +88,9 @@ async function sendOrderConfirmationEmail(email, session) {
             html: template.orderConfirmation.html(session),
             attachments: [
                 {
-                    content: fs.readFileSync(path.join(__dirname, 'images', 'LBH_logo_rgb.svg')).toString('base64'),
-                    filename: 'LBH_logo_rgb.svg',
-                    type: 'image/svg+xml',
+                    content: LOGO_BASE64,
+                    filename: 'logo.png',
+                    type: 'image/png',
                     disposition: 'inline',
                     content_id: 'logo'
                 }
@@ -128,9 +132,9 @@ async function sendOrderNotificationEmail(session) {
             html: template.orderNotification.html(orderData),
             attachments: [
                 {
-                    content: fs.readFileSync(path.join(__dirname, 'images', 'LBH_logo_rgb.svg')).toString('base64'),
-                    filename: 'LBH_logo_rgb.svg',
-                    type: 'image/svg+xml',
+                    content: LOGO_BASE64,
+                    filename: 'logo.png',
+                    type: 'image/png',
                     disposition: 'inline',
                     content_id: 'logo'
                 }
