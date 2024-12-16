@@ -195,7 +195,7 @@ exports.handler = async (event) => {
                 id: session.id,
                 payment_status: session.payment_status,
                 metadata: session.metadata,
-                customer_email: session.customer_details?.email
+                customer_email: session.customer_email
             });
             
             // Only proceed if payment is successful and we have a Memberstack ID
@@ -235,13 +235,14 @@ exports.handler = async (event) => {
                 if (session.customer_details?.email) {
                     console.log('Sending confirmation email to:', session.customer_details.email);
                     await sendOrderConfirmationEmail(session.customer_details.email, session);
+                } else {
+                    console.error('No customer email found in session.customer_details');
                 }
 
-                // Send notification email to shipping company if it's a physical product
+                // Send notification email to shipping company if it's a physical product or bundle
                 if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
                     console.log('Product requires shipping, sending notification email', {
-                        productType: session.metadata.productType,
-                        type: session.metadata.type,
+                        productType: session.metadata.type,
                         weights: {
                             productWeight: session.metadata.productWeight,
                             packagingWeight: session.metadata.packagingWeight,
