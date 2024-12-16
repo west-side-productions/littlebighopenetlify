@@ -89,23 +89,13 @@ async function sendOrderConfirmationEmail(email, session) {
     try {
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
-        const encodedLogo = await getEncodedLogo();
         
         const msg = {
             to: email,
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderConfirmation.subject,
             text: template.orderConfirmation.text(session),
-            html: template.orderConfirmation.html(session),
-            attachments: [
-                {
-                    content: encodedLogo,
-                    filename: 'logo.png',
-                    type: 'image/png',
-                    disposition: 'inline',
-                    content_id: 'logo'
-                }
-            ]
+            html: template.orderConfirmation.html(session)
         };
 
         console.log('Sending order confirmation email:', {
@@ -134,23 +124,13 @@ async function sendOrderNotificationEmail(session) {
         const orderData = prepareOrderNotificationData(session);
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
-        const encodedLogo = await getEncodedLogo();
         
         const msg = {
             to: 'office@west-side-productions.at',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderNotification.subject,
             text: template.orderNotification.text(orderData),
-            html: template.orderNotification.html(orderData),
-            attachments: [
-                {
-                    content: encodedLogo,
-                    filename: 'logo.png',
-                    type: 'image/png',
-                    disposition: 'inline',
-                    content_id: 'logo'
-                }
-            ]
+            html: template.orderNotification.html(orderData)
         };
 
         console.log('Sending shipping notification email:', {
