@@ -156,99 +156,80 @@ The system supports multiple languages (de, en, fr, it) with German (de) as the 
 
 3. **Template System**
    - HTML templates with consistent styling
-   - Sanitization utilities
-   ```javascript
-   const sanitizeInput = (input) => {
-       if (!input) return '';
-       return String(input)
-           .replace(/&/g, '&amp;')
-           .replace(/</g, '&lt;')
-           // ... more sanitization
-   };
-   ```
+   - Language-specific templates in `/email-templates/[language].js`
+   - Fallback to German (de) if language not found
 
 ### Order Email System
 1. **Email Types**
-   - `orderConfirmation`: Sent to customers after successful purchase
+   - `orderConfirmation`: Sent to customer after successful purchase
    - `orderNotification`: Sent to shipping company for physical products
 
 2. **Trigger Conditions**
    ```javascript
-   // Order confirmation email
-   if (session.customer_details?.email) {
-       await sendOrderConfirmationEmail(session.customer_details.email, session);
+   // Order confirmation email - sent to customer
+   if (session.customer_email) {
+       await sendOrderConfirmationEmail(session.customer_email, session);
    }
 
-   // Shipping notification email
+   // Shipping notification email - sent to shipping company
    if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
        await sendOrderNotificationEmail(session);
    }
    ```
 
-3. **Template Structure**
-   - Both HTML and text versions available
-   - Language-specific content based on user preferences
-   - Dynamic content injection for order details
-   - Includes:
-     - Order summary
-     - Shipping details (if applicable)
-     - Payment confirmation
-     - Next steps instructions
-
-4. **Email Templates Location**
-   - Path: `/netlify/functions/email-templates/[language].js`
-   - Supported languages: de, en, fr, it
-   - Example structure:
+3. **Order Data Structure**
    ```javascript
-   module.exports = {
-       orderConfirmation: {
-           subject: 'Order Confirmation - Little Big Hope',
-           html: (data) => `...`,
-           text: (data) => `...`
+   {
+     orderDetails: {
+       orderNumber: string,     // Stripe session ID
+       customerEmail: string,   // Customer's email
+       shippingAddress: {
+         name: string,
+         line1: string,
+         line2: string|null,
+         postal_code: string,
+         city: string,
+         state: string|null,
+         country: string
        },
-       orderNotification: {
-           subject: 'New Order Notification',
-           html: (data) => `...`,
-           text: (data) => `...`
-       }
-   };
-   ```
-
-### Error Handling
-   - Retry mechanism for failed sends
-   - Error logging and monitoring
-   - Fallback templates
-
-### Webhook Processing
-1. **Event Validation**
-   ```javascript
-   const sig = event.headers['stripe-signature'];
-   const stripeEvent = Stripe.webhooks.constructEvent(
-       event.body, 
-       sig, 
-       process.env.STRIPE_WEBHOOK_SECRET
-   );
-   ```
-
-2. **Metadata Validation**
-   - Required fields:
-     - memberstackUserId
-     - planId
-     - countryCode
-     - totalWeight
-     - productWeight
-     - packagingWeight
-
-3. **Weight Validation**
-   ```javascript
-   const totalWeight = Number(session.metadata.totalWeight);
-   const productWeight = Number(session.metadata.productWeight);
-   const packagingWeight = Number(session.metadata.packagingWeight);
-   
-   if (totalWeight !== (productWeight + packagingWeight)) {
-       throw new Error('Weight mismatch');
+       weights: {
+         productWeight: number,   // in grams
+         packagingWeight: number, // in grams
+         totalWeight: number      // in grams
+       },
+       items: [
+         {
+           name: string,
+           price: string,
+           currency: string
+         }
+       ]
+     }
    }
    ```
+
+4. **Email Template Features**
+   - Responsive HTML design
+   - Plain text fallback version
+   - Includes:
+     - Order number (Stripe session ID)
+     - Customer information and shipping address
+     - Product weight details
+     - Order items with prices
+   - Proper error handling with fallbacks for missing data
+   - Supports multiple languages (de, en, fr, it)
+
+5. **Shipping Company Notification**
+   - Sent to: office@west-side-productions.at
+   - Triggered for: Physical products and bundles
+   - Contains all weight information needed for shipping
+   - Includes complete delivery address
+
+6. **Error Handling**
+   - Graceful handling of missing or null values
+   - Detailed error logging
+   - Independent processing of confirmation and notification emails
+   - Continues processing even if one email type fails
 
 ## Product System
 
