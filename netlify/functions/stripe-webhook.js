@@ -283,8 +283,8 @@ exports.handler = async (event) => {
                         console.error('No customer email found in session');
                     }
 
-                    // Send notification email to shipping company if it's a physical product or bundle
-                    if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
+                    // Send notification email to shipping company if it's a physical product, book, or bundle
+                    if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'book' || session.metadata?.productType === 'bundle') {
                         console.log('Product requires shipping, sending notification email', {
                             productType: session.metadata.productType,
                             weights: {
