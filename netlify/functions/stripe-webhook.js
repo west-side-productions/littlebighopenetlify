@@ -198,62 +198,66 @@ exports.handler = async (event) => {
                 customer_email: session.customer_email
             });
             
-            // Only proceed if payment is successful and we have a Memberstack ID
-            if (session.payment_status === 'paid' && session.metadata?.memberstackUserId) {
-                console.log('Payment successful, processing for member:', session.metadata.memberstackUserId);
+            // Only proceed if payment is successful
+            if (session.payment_status === 'paid') {
+                console.log('Payment successful, processing order');
                 
-                // Add plan to existing member
                 try {
-                    const planId = session.metadata.memberstackPlanId;
-                    if (!planId) {
-                        throw new Error('No Memberstack plan ID found in session metadata');
-                    }
-
-                    // If it's a bundle, add both the course and book plans
-                    if (session.metadata.type === 'bundle') {
-                        console.log('Processing bundle purchase - adding both plans');
-                        // Add course plan
-                        await addPlanToMember(session.metadata.memberstackUserId, 'pln_bundle-rd004n7');
-                        console.log('Successfully added course plan');
-                        // Add book plan
-                        await addPlanToMember(session.metadata.memberstackUserId, 'pln_kostenloser-zugang-84l80t3u');
-                        console.log('Successfully added book plan');
-                    } else {
-                        // For single products, just add the specified plan
-                        console.log('Adding plan to member:', {
-                            memberId: session.metadata.memberstackUserId,
-                            planId: planId
-                        });
-                        await addPlanToMember(session.metadata.memberstackUserId, planId);
-                        console.log('Successfully added plan');
-                    }
-                } catch (error) {
-                    console.error('Failed to add plan to member:', error);
-                }
-                
-                // Send confirmation email to customer
-                if (session.customer_details?.email) {
-                    console.log('Sending confirmation email to:', session.customer_details.email);
-                    await sendOrderConfirmationEmail(session.customer_details.email, session);
-                } else {
-                    console.error('No customer email found in session.customer_details');
-                }
-
-                // Send notification email to shipping company if it's a physical product or bundle
-                if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
-                    console.log('Product requires shipping, sending notification email', {
-                        productType: session.metadata.type,
-                        weights: {
-                            productWeight: session.metadata.productWeight,
-                            packagingWeight: session.metadata.packagingWeight,
-                            totalWeight: session.metadata.totalWeight
+                    // Add plan to member if memberstackUserId exists
+                    if (session.metadata?.memberstackUserId) {
+                        const planId = session.metadata.memberstackPlanId;
+                        if (!planId) {
+                            throw new Error('No Memberstack plan ID found in session metadata');
                         }
-                    });
-                    
-                    await sendOrderNotificationEmail(session);
-                    console.log('Successfully sent shipping notification email');
-                } else {
-                    console.log('No shipping required for this product type:', session.metadata?.type);
+
+                        // If it's a bundle, add both the course and book plans
+                        if (session.metadata.type === 'bundle') {
+                            console.log('Processing bundle purchase - adding both plans');
+                            await addPlanToMember(session.metadata.memberstackUserId, 'pln_bundle-rd004n7');
+                            console.log('Successfully added course plan');
+                            await addPlanToMember(session.metadata.memberstackUserId, 'pln_kostenloser-zugang-84l80t3u');
+                            console.log('Successfully added book plan');
+                        } else {
+                            console.log('Adding plan to member:', {
+                                memberId: session.metadata.memberstackUserId,
+                                planId: planId
+                            });
+                            await addPlanToMember(session.metadata.memberstackUserId, planId);
+                            console.log('Successfully added plan');
+                        }
+                    }
+
+                    // Send confirmation email to customer
+                    const customerEmail = session.customer_email;
+                    if (customerEmail) {
+                        console.log('Sending confirmation email to:', customerEmail);
+                        await sendOrderConfirmationEmail(customerEmail, session);
+                        console.log('Successfully sent confirmation email');
+                    } else {
+                        console.error('No customer email found in session');
+                    }
+
+                    // Send notification email to shipping company if it's a physical product or bundle
+                    if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
+                        console.log('Product requires shipping, sending notification email', {
+                            productType: session.metadata.type,
+                            weights: {
+                                productWeight: session.metadata.productWeight,
+                                packagingWeight: session.metadata.packagingWeight,
+                                totalWeight: session.metadata.totalWeight
+                            }
+                        });
+                        
+                        await sendOrderNotificationEmail(session);
+                        console.log('Successfully sent shipping notification email');
+                    } else {
+                        console.log('No shipping required for this product type:', session.metadata?.type);
+                    }
+
+                    console.log('Successfully processed order:', session.id);
+                } catch (error) {
+                    console.error('Error processing order:', error);
+                    throw error; // Re-throw to trigger 500 response
                 }
             }
         }
