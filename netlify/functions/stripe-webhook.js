@@ -73,11 +73,23 @@ async function addPlanToMember(memberId, planId) {
 // Logo URL from Webflow
 const LOGO_URL = 'https://cdn.prod.website-files.com/66fe7e7fc06ec10a17ffa57f/67609d5ffc9ced97f9c15adc_lbh_logo_rgb.png';
 
+// Function to fetch and encode logo
+async function getEncodedLogo() {
+    try {
+        const response = await axios.get(LOGO_URL, { responseType: 'arraybuffer' });
+        return Buffer.from(response.data).toString('base64');
+    } catch (error) {
+        console.error('Error fetching logo:', error);
+        throw error;
+    }
+}
+
 // Function to send order confirmation email
 async function sendOrderConfirmationEmail(email, session) {
     try {
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
+        const encodedLogo = await getEncodedLogo();
         
         const msg = {
             to: email,
@@ -87,7 +99,7 @@ async function sendOrderConfirmationEmail(email, session) {
             html: template.orderConfirmation.html(session),
             attachments: [
                 {
-                    content: LOGO_URL,
+                    content: encodedLogo,
                     filename: 'logo.png',
                     type: 'image/png',
                     disposition: 'inline',
@@ -122,6 +134,7 @@ async function sendOrderNotificationEmail(session) {
         const orderData = prepareOrderNotificationData(session);
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
+        const encodedLogo = await getEncodedLogo();
         
         const msg = {
             to: 'office@west-side-productions.at',
@@ -131,7 +144,7 @@ async function sendOrderNotificationEmail(session) {
             html: template.orderNotification.html(orderData),
             attachments: [
                 {
-                    content: LOGO_URL,
+                    content: encodedLogo,
                     filename: 'logo.png',
                     type: 'image/png',
                     disposition: 'inline',
