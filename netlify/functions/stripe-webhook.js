@@ -1,4 +1,5 @@
 const axios = require('axios');
+const fs = require('fs'); // Add this line to import the fs module
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
 
@@ -80,6 +81,15 @@ async function sendOrderConfirmationEmail(email, session) {
             subject: template.orderConfirmation.subject,
             text: template.orderConfirmation.text(session),
             html: template.orderConfirmation.html(session),
+            attachments: [
+                {
+                    content: fs.readFileSync('/Users/christianlechner/Desktop/lbhtest/images/LBH_logo_rgb.svg').toString('base64'),
+                    filename: 'LBH_logo_rgb.svg',
+                    type: 'image/svg+xml',
+                    disposition: 'inline',
+                    content_id: 'logo'
+                }
+            ]
         };
 
         console.log('Sending order confirmation email:', {
@@ -93,6 +103,52 @@ async function sendOrderConfirmationEmail(email, session) {
     } catch (error) {
         console.error('❌ Failed to send order confirmation email:', error);
         console.error('Error details:', error.response?.body?.errors || error);
+    }
+}
+
+// Function to send order notification email
+async function sendOrderNotificationEmail(session) {
+    try {
+        // Get line items for the session
+        console.log('Fetching line items for session:', session.id);
+        const lineItems = await Stripe.checkout.sessions.listLineItems(session.id);
+        session.line_items = lineItems;
+        console.log('Line items fetched:', lineItems.data.length, 'items');
+
+        const orderData = prepareOrderNotificationData(session);
+        const language = session.metadata?.language || DEFAULT_LANGUAGE;
+        const template = getEmailTemplate(language);
+        
+        const msg = {
+            to: 'office@west-side-productions.at',
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: template.orderNotification.subject,
+            text: template.orderNotification.text(orderData),
+            html: template.orderNotification.html(orderData),
+            attachments: [
+                {
+                    content: fs.readFileSync('/Users/christianlechner/Desktop/lbhtest/images/LBH_logo_rgb.svg').toString('base64'),
+                    filename: 'LBH_logo_rgb.svg',
+                    type: 'image/svg+xml',
+                    disposition: 'inline',
+                    content_id: 'logo'
+                }
+            ]
+        };
+
+        console.log('Sending shipping notification email:', {
+            to: msg.to,
+            from: msg.from,
+            subject: msg.subject,
+            orderData: orderData
+        });
+
+        await sgMail.send(msg);
+        console.log('✅ Order notification email sent successfully to shipping company');
+    } catch (error) {
+        console.error('❌ Failed to send order notification email:', error);
+        console.error('Error details:', error.response?.body?.errors || error);
+        throw error;
     }
 }
 
@@ -127,43 +183,6 @@ function prepareOrderNotificationData(session) {
 
     console.log('Prepared order notification data:', JSON.stringify(orderData, null, 2));
     return orderData;
-}
-
-// Function to send order notification to shipping company
-async function sendOrderNotificationEmail(session) {
-    try {
-        // Get line items for the session
-        console.log('Fetching line items for session:', session.id);
-        const lineItems = await Stripe.checkout.sessions.listLineItems(session.id);
-        session.line_items = lineItems;
-        console.log('Line items fetched:', lineItems.data.length, 'items');
-
-        const orderData = prepareOrderNotificationData(session);
-        const language = session.metadata?.language || DEFAULT_LANGUAGE;
-        const template = getEmailTemplate(language);
-        
-        const msg = {
-            to: 'office@west-side-productions.at',
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: template.orderNotification.subject,
-            text: template.orderNotification.text(orderData),
-            html: template.orderNotification.html(orderData),
-        };
-
-        console.log('Sending shipping notification email:', {
-            to: msg.to,
-            from: msg.from,
-            subject: msg.subject,
-            orderData: orderData
-        });
-
-        await sgMail.send(msg);
-        console.log('✅ Order notification email sent successfully to shipping company');
-    } catch (error) {
-        console.error('❌ Failed to send order notification email:', error);
-        console.error('Error details:', error.response?.body?.errors || error);
-        throw error;
-    }
 }
 
 // Main webhook handler
