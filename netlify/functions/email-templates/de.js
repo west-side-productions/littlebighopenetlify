@@ -151,7 +151,7 @@ Ihr Little Big Hope Team
     orderNotification: {
         subject: 'Neue Bestellung eingegangen',
         text: ({ orderDetails = {} }) => {
-            const address = orderDetails.shippingAddress;
+            const address = orderDetails.shippingAddress || {};
             return `
 Neue Bestellung Eingegangen
 
@@ -159,33 +159,25 @@ Bestellnummer: ${orderDetails.orderNumber}
 
 Kundeninformationen:
 Lieferadresse:
-${address.name}
-${address.line1}
-${address.line2 ? `${address.line2}\n` : ''}${address.postal_code} ${address.city}
-${address.state ? `${address.state}\n` : ''}${address.country}
+${address.name || ''}
+${address.line1 || ''}
+${address.line2 ? `${address.line2}\n` : ''}${address.postal_code || ''} ${address.city || ''}
+${address.state ? `${address.state}\n` : ''}${address.country || ''}
 
-E-Mail: ${orderDetails.customerEmail}
+E-Mail: ${orderDetails.customerEmail || ''}
 
 Gewichtsinformationen:
-Produktgewicht: ${orderDetails.weights.productWeight} g
-Verpackungsgewicht: ${orderDetails.weights.packagingWeight} g
-Gesamtgewicht: ${orderDetails.weights.totalWeight} g
+Produktgewicht: ${orderDetails.weights?.productWeight || 0} g
+Verpackungsgewicht: ${orderDetails.weights?.packagingWeight || 0} g
+Gesamtgewicht: ${orderDetails.weights?.totalWeight || 0} g
 
 Bestelldetails:
-${orderDetails.items.map(item => `${item.name}: ${item.price} ${item.currency}`).join('\n')}
-
-Versand:
-Versandart: ${orderDetails.shipping.method}
-Versandkosten: ${orderDetails.shipping.cost} ${orderDetails.shipping.currency}
-
-Zusammenfassung:
-Zwischensumme: ${orderDetails.total.subtotal} ${orderDetails.total.currency}
-Versand: ${orderDetails.total.shipping} ${orderDetails.total.currency}
-MwSt.: ${orderDetails.total.tax} ${orderDetails.total.currency}
-Gesamtsumme: ${orderDetails.total.total} ${orderDetails.total.currency}
-            `;
+${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.price} ${item.currency}`).join('\n') : ''}
+`;
         },
-        html: ({ orderDetails = {} }) => `
+        html: ({ orderDetails = {} }) => {
+            const address = orderDetails.shippingAddress || {};
+            return `
             ${baseStyles}
             <style>
                 .order-details {
@@ -199,103 +191,72 @@ Gesamtsumme: ${orderDetails.total.total} ${orderDetails.total.currency}
                     border-collapse: collapse;
                     margin: 15px 0;
                 }
-                .order-table th, .order-table td {
+                .order-table th,
+                .order-table td {
                     padding: 10px;
+                    border-bottom: 1px solid #dee2e6;
                     text-align: left;
-                    border-bottom: 1px solid #ddd;
                 }
-                .order-table th {
-                    background: #edf2f7;
-                }
-                .address-box {
-                    background: white;
-                    border: 1px solid #ddd;
+                .address-block {
+                    margin: 20px 0;
                     padding: 15px;
-                    margin: 10px 0;
+                    background: #fff;
+                    border: 1px solid #dee2e6;
                     border-radius: 4px;
                 }
-                .total-row {
-                    font-weight: bold;
-                    background: #edf2f7;
-                }
                 .weight-info {
-                    background: white;
-                    border: 1px solid #ddd;
+                    margin: 20px 0;
                     padding: 15px;
-                    margin: 10px 0;
+                    background: #f1f5f9;
                     border-radius: 4px;
                 }
             </style>
-            <h1>Neue Bestellung Eingegangen</h1>
-            <div class="order-details">
-                <h2>Bestellnummer: ${sanitizeInput(orderDetails.orderNumber)}</h2>
+            <div class="email-container">
+                <h1>Neue Bestellung Eingegangen</h1>
+                <p><strong>Bestellnummer:</strong> ${orderDetails.orderNumber}</p>
                 
-                <h3>Kundeninformationen</h3>
-                <div class="address-box">
-                    <p><strong>Lieferadresse:</strong><br>
-                    ${sanitizeInput(orderDetails.shippingAddress.name)}<br>
-                    ${sanitizeInput(orderDetails.shippingAddress.line1)}
-                    ${orderDetails.shippingAddress.line2 ? `<br>${sanitizeInput(orderDetails.shippingAddress.line2)}` : ''}<br>
-                    ${sanitizeInput(orderDetails.shippingAddress.postal_code)} ${sanitizeInput(orderDetails.shippingAddress.city)}<br>
-                    ${orderDetails.shippingAddress.state ? `${sanitizeInput(orderDetails.shippingAddress.state)}<br>` : ''}
-                    ${sanitizeInput(orderDetails.shippingAddress.country)}</p>
-                    
-                    <p><strong>E-Mail:</strong> ${sanitizeInput(orderDetails.customerEmail)}</p>
+                <div class="address-block">
+                    <h2>Lieferadresse:</h2>
+                    <p>
+                        ${address.name || ''}<br>
+                        ${address.line1 || ''}<br>
+                        ${address.line2 ? `${address.line2}<br>` : ''}
+                        ${address.postal_code || ''} ${address.city || ''}<br>
+                        ${address.state ? `${address.state}<br>` : ''}
+                        ${address.country || ''}
+                    </p>
+                    <p><strong>E-Mail:</strong> ${orderDetails.customerEmail || ''}</p>
                 </div>
 
-                <h3>Gewichtsinformationen</h3>
                 <div class="weight-info">
-                    <p><strong>Produktgewicht:</strong> ${sanitizeInput(orderDetails.weights.productWeight)} g</p>
-                    <p><strong>Verpackungsgewicht:</strong> ${sanitizeInput(orderDetails.weights.packagingWeight)} g</p>
-                    <p><strong>Gesamtgewicht:</strong> ${sanitizeInput(orderDetails.weights.totalWeight)} g</p>
+                    <h2>Gewichtsinformationen:</h2>
+                    <p>
+                        <strong>Produktgewicht:</strong> ${orderDetails.weights?.productWeight || 0} g<br>
+                        <strong>Verpackungsgewicht:</strong> ${orderDetails.weights?.packagingWeight || 0} g<br>
+                        <strong>Gesamtgewicht:</strong> ${orderDetails.weights?.totalWeight || 0} g
+                    </p>
                 </div>
 
-                <h3>Bestelldetails</h3>
-                <table class="order-table">
-                    <tr>
-                        <th>Produkt</th>
-                        <th>Preis</th>
-                    </tr>
-                    ${orderDetails.items.map(item => `
-                        <tr>
-                            <td>${sanitizeInput(item.name)}</td>
-                            <td>${sanitizeInput(item.price)} ${sanitizeInput(item.currency)}</td>
-                        </tr>
-                    `).join('')}
-                </table>
-
-                <h3>Versand</h3>
-                <table class="order-table">
-                    <tr>
-                        <td>Versandart</td>
-                        <td>${sanitizeInput(orderDetails.shipping.method)}</td>
-                    </tr>
-                    <tr>
-                        <td>Versandkosten</td>
-                        <td>${sanitizeInput(orderDetails.shipping.cost)} ${sanitizeInput(orderDetails.shipping.currency)}</td>
-                    </tr>
-                </table>
-
-                <h3>Zusammenfassung</h3>
-                <table class="order-table">
-                    <tr>
-                        <td>Zwischensumme</td>
-                        <td>${sanitizeInput(orderDetails.total.subtotal)} ${sanitizeInput(orderDetails.total.currency)}</td>
-                    </tr>
-                    <tr>
-                        <td>Versand</td>
-                        <td>${sanitizeInput(orderDetails.total.shipping)} ${sanitizeInput(orderDetails.total.currency)}</td>
-                    </tr>
-                    <tr>
-                        <td>MwSt.</td>
-                        <td>${sanitizeInput(orderDetails.total.tax)} ${sanitizeInput(orderDetails.total.currency)}</td>
-                    </tr>
-                    <tr class="total-row">
-                        <td>Gesamtsumme</td>
-                        <td>${sanitizeInput(orderDetails.total.total)} ${sanitizeInput(orderDetails.total.currency)}</td>
-                    </tr>
-                </table>
-            </div>
-        `
+                <div class="order-details">
+                    <h2>Bestelldetails:</h2>
+                    <table class="order-table">
+                        <thead>
+                            <tr>
+                                <th>Produkt</th>
+                                <th>Preis</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${orderDetails.items ? orderDetails.items.map(item => `
+                                <tr>
+                                    <td>${item.name}</td>
+                                    <td>${item.price} ${item.currency}</td>
+                                </tr>
+                            `).join('') : ''}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
     }
 };
