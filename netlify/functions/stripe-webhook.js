@@ -253,22 +253,29 @@ exports.handler = async (event) => {
                             throw new Error('No Memberstack user ID found in session or metadata');
                         }
 
-                        // If it's a bundle, add both plans
-                        if (session.metadata.productType === 'bundle') {
-                            console.log('Processing bundle purchase - adding bundle plan');
-                            await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
-                            console.log('Successfully added bundle plan');
-                        } else if (session.metadata.productType === 'course') {
-                            console.log('Adding course plan to member');
-                            await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
-                            console.log('Successfully added course plan');
-                        } else if (session.metadata.productType === 'book') {
-                            console.log('Adding book plan to member');
-                            await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
-                            console.log('Successfully added book plan');
-                        } else {
-                            console.error('Unknown product type:', session.metadata.productType);
-                            throw new Error(`Unknown product type: ${session.metadata.productType}`);
+                        try {
+                            // If it's a bundle, add both plans
+                            if (session.metadata.productType === 'bundle') {
+                                console.log('Processing bundle purchase - adding bundle plan');
+                                await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
+                                console.log('Successfully added bundle plan');
+                            } else if (session.metadata.productType === 'course') {
+                                console.log('Adding course plan to member');
+                                await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
+                                console.log('Successfully added course plan');
+                            } else if (session.metadata.productType === 'book') {
+                                console.log('Adding book plan to member');
+                                await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
+                                console.log('Successfully added book plan');
+                            } else {
+                                console.error('Unknown product type:', session.metadata.productType);
+                            }
+                        } catch (planError) {
+                            // Log the error but continue processing
+                            console.error('Error adding plan:', planError.message || planError);
+                            if (planError?.error?.code === 'already-have-plan') {
+                                console.log('User already has the plan, continuing with order processing');
+                            }
                         }
                     } else {
                         console.log('No Memberstack plan ID found - skipping plan addition');
@@ -284,7 +291,7 @@ exports.handler = async (event) => {
                         console.error('No customer email found in session');
                     }
 
-                    // Send notification email to shipping company if it's a physical product, book, or bundle
+                    // Send notification email to shipping company for physical products
                     if (session.metadata?.type === 'physical' || session.metadata?.productType === 'book' || session.metadata?.productType === 'bundle') {
                         console.log('Product requires shipping, sending notification email', {
                             productType: session.metadata.productType,
@@ -296,10 +303,13 @@ exports.handler = async (event) => {
                             }
                         });
                         
-                        await sendOrderNotificationEmail(session);
-                        console.log('Successfully sent shipping notification email');
-                    } else {
-                        console.log('No shipping required for this product. Type:', session.metadata?.type, 'Product Type:', session.metadata?.productType);
+                        try {
+                            await sendOrderNotificationEmail(session);
+                            console.log('Successfully sent shipping notification email');
+                        } catch (emailError) {
+                            console.error('Error sending shipping notification:', emailError);
+                            // Continue processing despite email error
+                        }
                     }
 
                     console.log('Successfully processed order:', session.id);

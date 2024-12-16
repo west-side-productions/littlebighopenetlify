@@ -345,7 +345,7 @@ async function handleCheckout(event, productType, shippingRateId, language) {
                 productType: productType,
                 language: language,
                 memberstackUserId: member.data.id,
-                type: productType === 'book' ? 'physical' : productType === 'bundle' ? 'bundle' : 'digital'
+                type: productType === 'book' || productType === 'bundle' ? 'physical' : 'digital'
             }
         };
         
