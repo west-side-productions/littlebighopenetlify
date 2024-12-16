@@ -89,13 +89,23 @@ async function sendOrderConfirmationEmail(email, session) {
     try {
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
+        const encodedLogo = await getEncodedLogo();
         
         const msg = {
             to: email,
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderConfirmation.subject,
             text: template.orderConfirmation.text(session),
-            html: template.orderConfirmation.html(session)
+            html: template.orderConfirmation.html(session),
+            attachments: [
+                {
+                    content: encodedLogo,
+                    filename: 'logo.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'logo'
+                }
+            ]
         };
 
         console.log('Sending order confirmation email:', {
@@ -124,13 +134,23 @@ async function sendOrderNotificationEmail(session) {
         const orderData = prepareOrderNotificationData(session);
         const language = session.metadata?.language || DEFAULT_LANGUAGE;
         const template = getEmailTemplate(language);
+        const encodedLogo = await getEncodedLogo();
         
         const msg = {
             to: 'office@west-side-productions.at',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderNotification.subject,
             text: template.orderNotification.text(orderData),
-            html: template.orderNotification.html(orderData)
+            html: template.orderNotification.html(orderData),
+            attachments: [
+                {
+                    content: encodedLogo,
+                    filename: 'logo.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'logo'
+                }
+            ]
         };
 
         console.log('Sending shipping notification email:', {
@@ -263,8 +283,8 @@ exports.handler = async (event) => {
                         console.error('No customer email found in session');
                     }
 
-                    // Send notification email to shipping company if it's a physical product, book, or bundle
-                    if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'book' || session.metadata?.productType === 'bundle') {
+                    // Send notification email to shipping company if it's a physical product or bundle
+                    if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
                         console.log('Product requires shipping, sending notification email', {
                             productType: session.metadata.productType,
                             weights: {

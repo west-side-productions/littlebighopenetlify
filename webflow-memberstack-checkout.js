@@ -253,8 +253,9 @@ async function initializeCheckoutButton() {
     const currentLang = getCurrentLanguage();
     console.log('Current language from URL:', currentLang);
     
-    // Find bundle button
-    const bundleButton = document.querySelector(`#checkout-button-bundle-${currentLang}`);
+    // Find bundle button - try language-specific first, then fallback
+    let bundleButton = document.querySelector(`#checkout-button-bundle-${currentLang}`) || 
+                      document.querySelector('#checkout-button-bundle');
     if (bundleButton) {
         console.log(`Found bundle button: ${bundleButton.id}`);
         bundleButton.addEventListener('click', (event) => {
@@ -268,8 +269,9 @@ async function initializeCheckoutButton() {
         console.warn(`Bundle button not found for language ${currentLang}`);
     }
     
-    // Find book button
-    const bookButton = document.querySelector(`#checkout-button-book-${currentLang}`);
+    // Find book button - try language-specific first, then fallback  
+    let bookButton = document.querySelector(`#checkout-button-book-${currentLang}`) || 
+                    document.querySelector('#checkout-button-book');
     if (bookButton) {
         console.log(`Found book button: ${bookButton.id}`);
         bookButton.addEventListener('click', (event) => {
