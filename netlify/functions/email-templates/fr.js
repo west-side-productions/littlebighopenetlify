@@ -128,5 +128,35 @@ module.exports = {
                 <p>Cordialement,<br>L'équipe Little Big Hope</p>
             </div>
         `
+    },
+
+    orderConfirmation: {
+        subject: 'Confirmation de votre commande chez Little Big Hope',
+        text: (data) => {
+            return `
+                Merci pour votre commande chez Little Big Hope !
+                
+                Votre commande a été confirmée et sera traitée dans les plus brefs délais.
+                
+                Cordialement,
+                L'équipe Little Big Hope
+            `;
+        },
+        html: (data) => {
+            return `
+                ${baseStyles}
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <img src="cid:logo" alt="Little Big Hope Logo" style="max-width: 200px; height: auto;">
+                    </div>
+                    <h1>Merci pour votre commande !</h1>
+                    <p>Nous avons bien reçu votre commande et nous la traitons actuellement.</p>
+                    <p>Vous recevrez un e-mail de confirmation dès que votre commande sera expédiée.</p>
+                    <div style="margin-top: 30px;">
+                        <p>Cordialement,<br>L'équipe Little Big Hope</p>
+                    </div>
+                </div>
+            `;
+        }
     }
 };

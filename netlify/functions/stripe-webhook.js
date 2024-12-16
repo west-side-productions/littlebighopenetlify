@@ -288,7 +288,7 @@ exports.handler = async (event) => {
                         console.error('No customer email found in session');
                     }
 
-                    // Send notification email for physical products
+                    // Send notification email for physical products (always in German)
                     if (session.metadata?.type === 'physical' || session.metadata?.productType === 'book' || session.metadata?.productType === 'bundle') {
                         console.log('Product requires shipping, sending notification email', {
                             productType: session.metadata.productType,
@@ -301,7 +301,29 @@ exports.handler = async (event) => {
                         });
                         
                         try {
-                            await sendOrderNotificationEmail(session);
+                            // Force German template for shipping company
+                            const germanTemplate = getEmailTemplate('de');
+                            const encodedLogo = await getEncodedLogo();
+                            const orderData = prepareOrderNotificationData(session);
+
+                            const msg = {
+                                to: 'office@west-side-productions.at',
+                                from: process.env.SENDGRID_FROM_EMAIL,
+                                subject: germanTemplate.orderNotification.subject,
+                                text: germanTemplate.orderNotification.text(orderData),
+                                html: germanTemplate.orderNotification.html(orderData),
+                                attachments: [
+                                    {
+                                        content: encodedLogo,
+                                        filename: 'logo.png',
+                                        type: 'image/png',
+                                        disposition: 'inline',
+                                        content_id: 'logo'
+                                    }
+                                ]
+                            };
+
+                            await sgMail.send(msg);
                             console.log('Successfully sent shipping notification email');
                         } catch (emailError) {
                             console.error('Error sending shipping notification:', emailError);

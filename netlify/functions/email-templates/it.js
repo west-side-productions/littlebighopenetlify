@@ -104,29 +104,47 @@ module.exports = {
         subject: 'Grazie per il tuo acquisto!',
         html: ({ firstName = '', orderDetails = {} }) => `
             ${baseStyles}
-            <h1>Ciao ${sanitizeInput(firstName)},</h1>
-            <p>Grazie per il tuo acquisto su Little Big Hope!</p>
-            ${orderDetails.items ? `
-                <div style="margin: 24px 0;">
-                    <h2>Il tuo ordine:</h2>
-                    ${orderDetails.items.map(item => `
-                        <div style="margin: 8px 0;">
-                            <strong>${sanitizeInput(item.name)}</strong> - €${sanitizeInput(item.price)}
-                        </div>
-                    `).join('')}
-                    ${orderDetails.shipping ? `
-                        <div style="margin-top: 16px;">
-                            <strong>Spese di spedizione:</strong> €${sanitizeInput(orderDetails.shipping)}
-                        </div>
-                    ` : ''}
-                    <div style="margin-top: 16px; font-weight: bold;">
-                        <strong>Totale:</strong> €${sanitizeInput(orderDetails.total)}
-                    </div>
-                </div>
-            ` : ''}
+            <h1>Grazie ${sanitizeInput(firstName)}!</h1>
+            <p>Il tuo acquisto è stato confermato.</p>
+            <p>Dettagli dell'ordine:</p>
+            <ul>
+                <li>Prodotto: ${sanitizeInput(orderDetails.productName || '')}</li>
+                <li>Prezzo: ${sanitizeInput(orderDetails.price || '')}</li>
+            </ul>
+            <p>Se hai domande, non esitare a contattarci.</p>
             <div class="footer">
                 <p>Cordiali saluti,<br>Il team di Little Big Hope</p>
             </div>
         `
+    },
+
+    orderConfirmation: {
+        subject: 'Conferma del tuo ordine su Little Big Hope',
+        text: (data) => {
+            return `
+                Grazie per il tuo ordine su Little Big Hope!
+                
+                Il tuo ordine è stato confermato e verrà elaborato il prima possibile.
+                
+                Cordiali saluti,
+                Il team di Little Big Hope
+            `;
+        },
+        html: (data) => {
+            return `
+                ${baseStyles}
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <img src="cid:logo" alt="Little Big Hope Logo" style="max-width: 200px; height: auto;">
+                    </div>
+                    <h1>Grazie per il tuo ordine!</h1>
+                    <p>Abbiamo ricevuto il tuo ordine e lo stiamo elaborando.</p>
+                    <p>Ti invieremo un'email di conferma non appena il tuo ordine sarà spedito.</p>
+                    <div style="margin-top: 30px;">
+                        <p>Cordiali saluti,<br>Il team di Little Big Hope</p>
+                    </div>
+                </div>
+            `;
+        }
     }
 };
