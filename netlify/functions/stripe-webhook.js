@@ -255,15 +255,15 @@ exports.handler = async (event) => {
                         // If it's a bundle, add both plans
                         if (session.metadata.type === 'bundle') {
                             console.log('Processing bundle purchase - adding bundle plan');
-                            await addPlanToMember(session.metadata.memberstackUserId, 'prc_lbh-kurs-buch-tjcb0624');
+                            await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added bundle plan');
                         } else if (session.metadata.type === 'course') {
                             console.log('Adding course plan to member');
-                            await addPlanToMember(session.metadata.memberstackUserId, 'prc_online-kochkurs-8b540kc2');
+                            await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added course plan');
                         } else if (session.metadata.type === 'book') {
                             console.log('Adding book plan to member');
-                            await addPlanToMember(session.metadata.memberstackUserId, 'prc_kurs-buch-s29u04fs');
+                            await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added book plan');
                         } else {
                             console.error('Unknown product type:', session.metadata.type);
