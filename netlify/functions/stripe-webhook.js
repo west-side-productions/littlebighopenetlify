@@ -243,7 +243,7 @@ exports.handler = async (event) => {
                     console.log('Checking Memberstack metadata:', {
                         memberstackUserId: session.metadata?.memberstackUserId,
                         memberstackPlanId: session.metadata?.memberstackPlanId,
-                        type: session.metadata?.type
+                        productType: session.metadata?.productType
                     });
 
                     if (session.metadata?.memberstackPlanId) {
@@ -253,21 +253,21 @@ exports.handler = async (event) => {
                         }
 
                         // If it's a bundle, add both plans
-                        if (session.metadata.type === 'bundle') {
+                        if (session.metadata.productType === 'bundle') {
                             console.log('Processing bundle purchase - adding bundle plan');
                             await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added bundle plan');
-                        } else if (session.metadata.type === 'course') {
+                        } else if (session.metadata.productType === 'course') {
                             console.log('Adding course plan to member');
                             await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added course plan');
-                        } else if (session.metadata.type === 'book') {
+                        } else if (session.metadata.productType === 'book') {
                             console.log('Adding book plan to member');
                             await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added book plan');
                         } else {
-                            console.error('Unknown product type:', session.metadata.type);
-                            throw new Error(`Unknown product type: ${session.metadata.type}`);
+                            console.error('Unknown product type:', session.metadata.productType);
+                            throw new Error(`Unknown product type: ${session.metadata.productType}`);
                         }
                     } else {
                         console.log('No Memberstack plan ID found - skipping plan addition');
@@ -284,9 +284,9 @@ exports.handler = async (event) => {
                     }
 
                     // Send notification email to shipping company if it's a physical product or bundle
-                    if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
+                    if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
                         console.log('Product requires shipping, sending notification email', {
-                            productType: session.metadata.type,
+                            productType: session.metadata.productType,
                             weights: {
                                 productWeight: session.metadata.productWeight,
                                 packagingWeight: session.metadata.packagingWeight,
@@ -297,7 +297,7 @@ exports.handler = async (event) => {
                         await sendOrderNotificationEmail(session);
                         console.log('Successfully sent shipping notification email');
                     } else {
-                        console.log('No shipping required for this product type:', session.metadata?.type);
+                        console.log('No shipping required for this product type:', session.metadata?.productType);
                     }
 
                     console.log('Successfully processed order:', session.id);

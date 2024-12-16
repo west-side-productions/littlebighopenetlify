@@ -14,13 +14,12 @@ const logoUrl = 'https://cdn.prod.website-files.com/66fe7e7fc06ec10a17ffa57f/676
 const baseStyles = `
     <style>
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
             margin: 0;
             padding: 0;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #ffffff;
         }
         .email-container {
             max-width: 600px;
@@ -30,8 +29,6 @@ const baseStyles = `
         }
         .header {
             text-align: center;
-            padding: 20px 0;
-            border-bottom: 2px solid #f0f0f0;
             margin-bottom: 30px;
         }
         .logo {
@@ -39,78 +36,36 @@ const baseStyles = `
             height: auto;
             margin-bottom: 20px;
         }
-        h1 {
-            color: #2c5282;
-            font-size: 24px;
+        .content {
             margin: 20px 0;
-            font-weight: 600;
         }
-        h2 {
-            color: #2d3748;
-            font-size: 20px;
-            margin: 15px 0;
-            font-weight: 500;
-        }
-        .order-details {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 8px;
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
             margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .order-table {
+        table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            background: white;
-            border-radius: 6px;
-            overflow: hidden;
+            margin: 20px 0;
         }
-        .order-table th,
-        .order-table td {
-            padding: 12px 15px;
+        th, td {
+            padding: 10px;
             text-align: left;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid #ddd;
         }
-        .order-table th {
-            background: #f7fafc;
-            font-weight: 600;
-            color: #4a5568;
-        }
-        .order-table tr:last-child td {
-            border-bottom: none;
-        }
-        .address-block {
-            margin: 20px 0;
-            padding: 20px;
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .weight-info {
-            margin: 20px 0;
-            padding: 20px;
-            background: #f1f5f9;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
+        th {
+            background-color: #f8f8f8;
         }
         .footer {
             margin-top: 30px;
-            padding-top: 20px;
-            border-top: 2px solid #f0f0f0;
             text-align: center;
-            color: #718096;
+            color: #666666;
             font-size: 14px;
-        }
-        @media only screen and (max-width: 600px) {
-            .email-container {
-                width: 100% !important;
-                padding: 10px !important;
-            }
-            .order-table {
-                font-size: 14px;
-            }
         }
     </style>
 `;
@@ -125,8 +80,10 @@ module.exports = {
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Willkommen ${sanitizeInput(firstName)}!</h1>
                 </div>
-                <p>Vielen Dank, dass Sie sich bei Little Big Hope angemeldet haben. Wir freuen uns, Sie in unserer Community begrüßen zu dürfen.</p>
-                <p>Bei Fragen stehen wir Ihnen jederzeit zur Verfügung.</p>
+                <div class="content">
+                    <p>Vielen Dank, dass Sie sich bei Little Big Hope angemeldet haben. Wir freuen uns, Sie in unserer Community begrüßen zu dürfen.</p>
+                    <p>Bei Fragen stehen wir Ihnen jederzeit zur Verfügung.</p>
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
@@ -142,11 +99,13 @@ module.exports = {
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
-                <p>Bitte bestätigen Sie Ihre E-Mail-Adresse durch Klicken auf den folgenden Link:</p>
-                <a href="${sanitizeInput(verificationLink)}" class="button">E-Mail-Adresse bestätigen</a>
-                <p>Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:</p>
-                <p style="word-break: break-all;">${sanitizeInput(verificationLink)}</p>
-                <p>Falls Sie diese Verifizierung nicht angefordert haben, können Sie diese E-Mail ignorieren.</p>
+                <div class="content">
+                    <p>Bitte bestätigen Sie Ihre E-Mail-Adresse durch Klicken auf den folgenden Link:</p>
+                    <a href="${sanitizeInput(verificationLink)}" class="button">E-Mail-Adresse bestätigen</a>
+                    <p>Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:</p>
+                    <p style="word-break: break-all;">${sanitizeInput(verificationLink)}</p>
+                    <p>Falls Sie diese Verifizierung nicht angefordert haben, können Sie diese E-Mail ignorieren.</p>
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                     <p style="font-size: 12px;">Dieser Link ist aus Sicherheitsgründen nur 24 Stunden gültig.</p>
@@ -163,8 +122,10 @@ module.exports = {
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
-                <p>Ihre E-Mail-Adresse wurde erfolgreich bestätigt!</p>
-                <p>Sie haben nun vollen Zugriff auf Ihr Little Big Hope Konto.</p>
+                <div class="content">
+                    <p>Ihre E-Mail-Adresse wurde erfolgreich bestätigt!</p>
+                    <p>Sie haben nun vollen Zugriff auf Ihr Little Big Hope Konto.</p>
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
@@ -180,11 +141,13 @@ module.exports = {
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
-                <p>Wir haben eine Anfrage erhalten, Ihr Passwort zurückzusetzen.</p>
-                <a href="${sanitizeInput(resetLink)}" class="button">Passwort zurücksetzen</a>
-                <p>Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:</p>
-                <p style="word-break: break-all;">${sanitizeInput(resetLink)}</p>
-                <p>Falls Sie diese Änderung nicht angefordert haben, können Sie diese E-Mail ignorieren.</p>
+                <div class="content">
+                    <p>Wir haben eine Anfrage erhalten, Ihr Passwort zurückzusetzen.</p>
+                    <a href="${sanitizeInput(resetLink)}" class="button">Passwort zurücksetzen</a>
+                    <p>Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:</p>
+                    <p style="word-break: break-all;">${sanitizeInput(resetLink)}</p>
+                    <p>Falls Sie diese Änderung nicht angefordert haben, können Sie diese E-Mail ignorieren.</p>
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                     <p style="font-size: 12px;">Dieser Link ist aus Sicherheitsgründen nur 24 Stunden gültig.</p>
@@ -201,8 +164,10 @@ module.exports = {
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
-                <p>Ihr Passwort wurde erfolgreich geändert.</p>
-                <p>Falls Sie diese Änderung nicht vorgenommen haben, kontaktieren Sie uns bitte umgehend.</p>
+                <div class="content">
+                    <p>Ihr Passwort wurde erfolgreich geändert.</p>
+                    <p>Falls Sie diese Änderung nicht vorgenommen haben, kontaktieren Sie uns bitte umgehend.</p>
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
@@ -218,25 +183,27 @@ module.exports = {
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Vielen Dank für Ihren Einkauf!</h1>
                 </div>
-                <p>Vielen Dank für Ihren Einkauf bei Little Big Hope!</p>
-                ${orderDetails.items ? `
-                    <div class="order-details">
-                        <h2>Ihre Bestellung:</h2>
-                        ${orderDetails.items.map(item => `
-                            <div style="margin: 8px 0;">
-                                <strong>${sanitizeInput(item.name)}</strong> - €${sanitizeInput(item.price)}
+                <div class="content">
+                    <p>Vielen Dank für Ihren Einkauf bei Little Big Hope!</p>
+                    ${orderDetails.items ? `
+                        <div class="order-details">
+                            <h2>Ihre Bestellung:</h2>
+                            ${orderDetails.items.map(item => `
+                                <div style="margin: 8px 0;">
+                                    <strong>${sanitizeInput(item.name)}</strong> - €${sanitizeInput(item.price)}
+                                </div>
+                            `).join('')}
+                            ${orderDetails.shipping ? `
+                                <div style="margin-top: 16px;">
+                                    <strong>Versand:</strong> €${sanitizeInput(orderDetails.shipping)}
+                                </div>
+                            ` : ''}
+                            <div style="margin-top: 16px; font-weight: bold;">
+                                <strong>Gesamt:</strong> €${sanitizeInput(orderDetails.total)}
                             </div>
-                        `).join('')}
-                        ${orderDetails.shipping ? `
-                            <div style="margin-top: 16px;">
-                                <strong>Versand:</strong> €${sanitizeInput(orderDetails.shipping)}
-                            </div>
-                        ` : ''}
-                        <div style="margin-top: 16px; font-weight: bold;">
-                            <strong>Gesamt:</strong> €${sanitizeInput(orderDetails.total)}
                         </div>
-                    </div>
-                ` : ''}
+                    ` : ''}
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
@@ -264,8 +231,10 @@ Ihr Little Big Hope Team
                     <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Vielen Dank für Ihre Bestellung!</h1>
                 </div>
-                <p>Ihre Bestellung wurde erfolgreich aufgegeben und wird schnellstmöglich bearbeitet.</p>
-                <p><strong>Bestellnummer:</strong> ${sanitizeInput(data.id)}</p>
+                <div class="content">
+                    <p>Ihre Bestellung wurde erfolgreich aufgegeben und wird schnellstmöglich bearbeitet.</p>
+                    <p><strong>Bestellnummer:</strong> ${sanitizeInput(data.id)}</p>
+                </div>
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
@@ -308,52 +277,54 @@ ${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.pric
                     <h1>Neue Bestellung Eingegangen</h1>
                 </div>
                 
-                <p><strong>Bestellnummer:</strong> ${orderDetails.orderNumber}</p>
-                
-                <div class="address-block">
-                    <h2>Lieferadresse</h2>
-                    <p>
-                        ${address.name || ''}<br>
-                        ${address.line1 || ''}<br>
-                        ${address.line2 ? `${address.line2}<br>` : ''}
-                        ${address.postal_code || ''} ${address.city || ''}<br>
-                        ${address.state ? `${address.state}<br>` : ''}
-                        ${address.country || ''}
-                    </p>
-                    <p><strong>E-Mail:</strong> ${orderDetails.customerEmail || ''}</p>
-                </div>
+                <div class="content">
+                    <p><strong>Bestellnummer:</strong> ${orderDetails.orderNumber}</p>
+                    
+                    <div class="address-block">
+                        <h2>Lieferadresse</h2>
+                        <p>
+                            ${address.name || ''}<br>
+                            ${address.line1 || ''}<br>
+                            ${address.line2 ? `${address.line2}<br>` : ''}
+                            ${address.postal_code || ''} ${address.city || ''}<br>
+                            ${address.state ? `${address.state}<br>` : ''}
+                            ${address.country || ''}
+                        </p>
+                        <p><strong>E-Mail:</strong> ${orderDetails.customerEmail || ''}</p>
+                    </div>
 
-                <div class="weight-info">
-                    <h2>Gewichtsinformationen</h2>
-                    <p>
-                        <strong>Produktgewicht:</strong> ${orderDetails.weights?.productWeight || 0} g<br>
-                        <strong>Verpackungsgewicht:</strong> ${orderDetails.weights?.packagingWeight || 0} g<br>
-                        <strong>Gesamtgewicht:</strong> ${orderDetails.weights?.totalWeight || 0} g
-                    </p>
-                </div>
+                    <div class="weight-info">
+                        <h2>Gewichtsinformationen</h2>
+                        <p>
+                            <strong>Produktgewicht:</strong> ${orderDetails.weights?.productWeight || 0} g<br>
+                            <strong>Verpackungsgewicht:</strong> ${orderDetails.weights?.packagingWeight || 0} g<br>
+                            <strong>Gesamtgewicht:</strong> ${orderDetails.weights?.totalWeight || 0} g
+                        </p>
+                    </div>
 
-                <div class="order-details">
-                    <h2>Bestelldetails</h2>
-                    <table class="order-table">
-                        <thead>
-                            <tr>
-                                <th>Produkt</th>
-                                <th>Preis</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${orderDetails.items ? orderDetails.items.map(item => `
+                    <div class="order-details">
+                        <h2>Bestelldetails</h2>
+                        <table class="order-table">
+                            <thead>
                                 <tr>
-                                    <td>${item.name}</td>
-                                    <td>${item.price} ${item.currency}</td>
+                                    <th>Produkt</th>
+                                    <th>Preis</th>
                                 </tr>
-                            `).join('') : ''}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                ${orderDetails.items ? orderDetails.items.map(item => `
+                                    <tr>
+                                        <td>${item.name}</td>
+                                        <td>${item.price} ${item.currency}</td>
+                                    </tr>
+                                `).join('') : ''}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="footer">
-                    <p>© ${new Date().getFullYear()} Little Big Hope. Alle Rechte vorbehalten.</p>
+                    <p>Little Big Hope - Bestellsystem</p>
                 </div>
             </div>`;
         }

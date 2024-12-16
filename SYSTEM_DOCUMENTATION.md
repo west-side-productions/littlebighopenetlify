@@ -144,8 +144,7 @@ The system supports multiple languages (de, en, fr, it) with German (de) as the 
 1. **Netlify Functions**
    - Location: `/netlify/functions/`
    - Key Components:
-     - `stripe-webhook.js`: Handles Stripe events
-     - `send-email.js`: Email dispatch service
+     - `stripe-webhook.js`: Handles Stripe events and Memberstack plan assignment
      - `email-templates/`: Language-specific templates
 
 2. **Email Service Integration**
@@ -158,78 +157,59 @@ The system supports multiple languages (de, en, fr, it) with German (de) as the 
    - HTML templates with consistent styling
    - Language-specific templates in `/email-templates/[language].js`
    - Fallback to German (de) if language not found
+   - Clean, white background design
+   - Logo embedded as inline attachment
+   - Responsive design for mobile devices
 
 ### Order Email System
 1. **Email Types**
    - `orderConfirmation`: Sent to customer after successful purchase
    - `orderNotification`: Sent to shipping company for physical products
 
-2. **Trigger Conditions**
-   ```javascript
-   // Order confirmation email - sent to customer
-   if (session.customer_email) {
-       await sendOrderConfirmationEmail(session.customer_email, session);
-   }
+2. **Email Template Features**
+   - Consistent branding with logo in header
+   - Clean white background
+   - Responsive design
+   - Clear section separation
+   - Order details in tabular format
+   - Shipping information for physical products
 
-   // Shipping notification email - sent to shipping company
-   if (session.metadata?.type === 'physical' || session.metadata?.type === 'bundle') {
-       await sendOrderNotificationEmail(session);
-   }
+3. **Logo Implementation**
+   ```javascript
+   // Logo is fetched from Webflow CDN and attached to emails
+   const LOGO_URL = 'https://cdn.prod.website-files.com/66fe7e7fc06ec10a17ffa57f/67609d5ffc9ced97f9c15adc_lbh_logo_rgb.png';
+   
+   // Fetch and encode for email attachment
+   const encodedLogo = await getEncodedLogo();
+   const attachments = [{
+       content: encodedLogo,
+       filename: 'logo.png',
+       type: 'image/png',
+       disposition: 'inline',
+       content_id: 'logo'
+   }];
    ```
 
-3. **Order Data Structure**
+### Plan Management
+1. **Product Types and Plans**
+   - Course (Digital)
+     - Plan ID: `pln_bundle-rd004n7`
+     - No shipping required
+   - Book (Physical)
+     - Plan ID: `pln_kostenloser-zugang-84l80t3u`
+     - Requires shipping
+   - Bundle (Book + Course)
+     - Plan ID: `pln_bundle-rd004n7`
+     - Requires shipping
+     - Includes both physical and digital components
+
+2. **Plan Assignment Process**
    ```javascript
-   {
-     orderDetails: {
-       orderNumber: string,     // Stripe session ID
-       customerEmail: string,   // Customer's email
-       shippingAddress: {
-         name: string,
-         line1: string,
-         line2: string|null,
-         postal_code: string,
-         city: string,
-         state: string|null,
-         country: string
-       },
-       weights: {
-         productWeight: number,   // in grams
-         packagingWeight: number, // in grams
-         totalWeight: number      // in grams
-       },
-       items: [
-         {
-           name: string,
-           price: string,
-           currency: string
-         }
-       ]
-     }
+   // Plans are assigned based on product type
+   if (session.metadata.type === 'bundle') {
+       await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
    }
    ```
-
-4. **Email Template Features**
-   - Responsive HTML design
-   - Plain text fallback version
-   - Includes:
-     - Order number (Stripe session ID)
-     - Customer information and shipping address
-     - Product weight details
-     - Order items with prices
-   - Proper error handling with fallbacks for missing data
-   - Supports multiple languages (de, en, fr, it)
-
-5. **Shipping Company Notification**
-   - Sent to: office@west-side-productions.at
-   - Triggered for: Physical products and bundles
-   - Contains all weight information needed for shipping
-   - Includes complete delivery address
-
-6. **Error Handling**
-   - Graceful handling of missing or null values
-   - Detailed error logging
-   - Independent processing of confirmation and notification emails
-   - Continues processing even if one email type fails
 
 ## Product System
 
