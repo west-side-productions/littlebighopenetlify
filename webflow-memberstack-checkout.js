@@ -253,11 +253,10 @@ async function initializeCheckoutButton() {
     const currentLang = getCurrentLanguage();
     console.log('Current language from URL:', currentLang);
     
-    // Find bundle button - try language-specific first, then fallback
-    let bundleButton = document.querySelector(`#checkout-button-bundle-${currentLang}`) || 
-                      document.querySelector('#checkout-button-bundle');
+    // Find bundle button for specific language
+    const bundleButton = document.querySelector(`#checkout-button-bundle-${currentLang}`);
     if (bundleButton) {
-        console.log(`Found bundle button: ${bundleButton.id}`);
+        console.log(`Found bundle button for language ${currentLang}: ${bundleButton.id}`);
         bundleButton.addEventListener('click', (event) => {
             event.preventDefault();
             console.log('Bundle button clicked');
@@ -269,11 +268,10 @@ async function initializeCheckoutButton() {
         console.warn(`Bundle button not found for language ${currentLang}`);
     }
     
-    // Find book button - try language-specific first, then fallback  
-    let bookButton = document.querySelector(`#checkout-button-book-${currentLang}`) || 
-                    document.querySelector('#checkout-button-book');
+    // Find book button for specific language
+    const bookButton = document.querySelector(`#checkout-button-book-${currentLang}`);
     if (bookButton) {
-        console.log(`Found book button: ${bookButton.id}`);
+        console.log(`Found book button for language ${currentLang}: ${bookButton.id}`);
         bookButton.addEventListener('click', (event) => {
             event.preventDefault();
             console.log('Book button clicked');
@@ -346,7 +344,8 @@ async function handleCheckout(event, productType, shippingRateId, language) {
             metadata: {
                 productType: productType,
                 language: language,
-                memberstackUserId: member.data.id
+                memberstackUserId: member.data.id,
+                type: productType === 'book' ? 'physical' : productType === 'bundle' ? 'bundle' : 'digital'
             }
         };
         

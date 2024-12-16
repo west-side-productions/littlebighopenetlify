@@ -241,29 +241,30 @@ exports.handler = async (event) => {
                 try {
                     // Add plan to member if memberstackUserId exists
                     console.log('Checking Memberstack metadata:', {
-                        memberstackUserId: session.metadata?.memberstackUserId,
+                        memberstackUserId: session.metadata?.memberstackUserId || session.memberstackUserId,
                         memberstackPlanId: session.metadata?.memberstackPlanId,
                         productType: session.metadata?.productType
                     });
 
                     if (session.metadata?.memberstackPlanId) {
-                        if (!session.metadata?.memberstackUserId) {
-                            console.error('No Memberstack user ID found in session metadata');
-                            throw new Error('No Memberstack user ID found in session metadata');
+                        const memberstackUserId = session.metadata?.memberstackUserId || session.memberstackUserId;
+                        if (!memberstackUserId) {
+                            console.error('No Memberstack user ID found in session or metadata');
+                            throw new Error('No Memberstack user ID found in session or metadata');
                         }
 
                         // If it's a bundle, add both plans
                         if (session.metadata.productType === 'bundle') {
                             console.log('Processing bundle purchase - adding bundle plan');
-                            await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
+                            await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added bundle plan');
                         } else if (session.metadata.productType === 'course') {
                             console.log('Adding course plan to member');
-                            await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
+                            await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added course plan');
                         } else if (session.metadata.productType === 'book') {
                             console.log('Adding book plan to member');
-                            await addPlanToMember(session.metadata.memberstackUserId, session.metadata.memberstackPlanId);
+                            await addPlanToMember(memberstackUserId, session.metadata.memberstackPlanId);
                             console.log('Successfully added book plan');
                         } else {
                             console.error('Unknown product type:', session.metadata.productType);
