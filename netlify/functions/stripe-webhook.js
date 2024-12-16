@@ -1,5 +1,6 @@
 const axios = require('axios');
 const fs = require('fs'); // Add this line to import the fs module
+const path = require('path');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const sgMail = require('@sendgrid/mail');
 
@@ -83,7 +84,7 @@ async function sendOrderConfirmationEmail(email, session) {
             html: template.orderConfirmation.html(session),
             attachments: [
                 {
-                    content: fs.readFileSync('/Users/christianlechner/Desktop/lbhtest/images/LBH_logo_rgb.svg').toString('base64'),
+                    content: fs.readFileSync(path.join(__dirname, 'images', 'LBH_logo_rgb.svg')).toString('base64'),
                     filename: 'LBH_logo_rgb.svg',
                     type: 'image/svg+xml',
                     disposition: 'inline',
@@ -127,7 +128,7 @@ async function sendOrderNotificationEmail(session) {
             html: template.orderNotification.html(orderData),
             attachments: [
                 {
-                    content: fs.readFileSync('/Users/christianlechner/Desktop/lbhtest/images/LBH_logo_rgb.svg').toString('base64'),
+                    content: fs.readFileSync(path.join(__dirname, 'images', 'LBH_logo_rgb.svg')).toString('base64'),
                     filename: 'LBH_logo_rgb.svg',
                     type: 'image/svg+xml',
                     disposition: 'inline',
