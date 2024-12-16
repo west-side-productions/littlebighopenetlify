@@ -70,9 +70,8 @@ async function addPlanToMember(memberId, planId) {
     }
 }
 
-// Read the logo file once when the function loads
-const logoPath = path.join(__dirname, '..', '..', 'images', 'logo.png');
-const LOGO_BASE64 = fs.readFileSync(logoPath).toString('base64');
+// Logo URL from Webflow
+const LOGO_URL = 'https://cdn.prod.website-files.com/66fe7e7fc06ec10a17ffa57f/67609d5ffc9ced97f9c15adc_lbh_logo_rgb.png';
 
 // Function to send order confirmation email
 async function sendOrderConfirmationEmail(email, session) {
@@ -88,7 +87,7 @@ async function sendOrderConfirmationEmail(email, session) {
             html: template.orderConfirmation.html(session),
             attachments: [
                 {
-                    content: LOGO_BASE64,
+                    content: LOGO_URL,
                     filename: 'logo.png',
                     type: 'image/png',
                     disposition: 'inline',
@@ -132,7 +131,7 @@ async function sendOrderNotificationEmail(session) {
             html: template.orderNotification.html(orderData),
             attachments: [
                 {
-                    content: LOGO_BASE64,
+                    content: LOGO_URL,
                     filename: 'logo.png',
                     type: 'image/png',
                     disposition: 'inline',

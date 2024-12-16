@@ -9,6 +9,8 @@ const sanitizeInput = (input) => {
         .replace(/'/g, '&#039;');
 };
 
+const logoUrl = 'https://cdn.prod.website-files.com/66fe7e7fc06ec10a17ffa57f/67609d5ffc9ced97f9c15adc_lbh_logo_rgb.png';
+
 const baseStyles = `
     <style>
         body {
@@ -120,7 +122,7 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Willkommen ${sanitizeInput(firstName)}!</h1>
                 </div>
                 <p>Vielen Dank, dass Sie sich bei Little Big Hope angemeldet haben. Wir freuen uns, Sie in unserer Community begrüßen zu dürfen.</p>
@@ -137,7 +139,7 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
                 <p>Bitte bestätigen Sie Ihre E-Mail-Adresse durch Klicken auf den folgenden Link:</p>
@@ -158,7 +160,7 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
                 <p>Ihre E-Mail-Adresse wurde erfolgreich bestätigt!</p>
@@ -175,7 +177,7 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
                 <p>Wir haben eine Anfrage erhalten, Ihr Passwort zurückzusetzen.</p>
@@ -196,7 +198,7 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Hallo ${sanitizeInput(firstName)},</h1>
                 </div>
                 <p>Ihr Passwort wurde erfolgreich geändert.</p>
@@ -213,7 +215,7 @@ module.exports = {
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Vielen Dank für Ihren Einkauf!</h1>
                 </div>
                 <p>Vielen Dank für Ihren Einkauf bei Little Big Hope!</p>
@@ -259,7 +261,7 @@ Ihr Little Big Hope Team
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Vielen Dank für Ihre Bestellung!</h1>
                 </div>
                 <p>Ihre Bestellung wurde erfolgreich aufgegeben und wird schnellstmöglich bearbeitet.</p>
@@ -302,7 +304,7 @@ ${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.pric
             ${baseStyles}
             <div class="email-container">
                 <div class="header">
-                    <img src="cid:logo" alt="Little Big Hope Logo" class="logo">
+                    <img src="${logoUrl}" alt="Little Big Hope Logo" class="logo">
                     <h1>Neue Bestellung Eingegangen</h1>
                 </div>
                 
