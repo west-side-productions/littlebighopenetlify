@@ -284,10 +284,11 @@ exports.handler = async (event) => {
                         console.error('No customer email found in session');
                     }
 
-                    // Send notification email to shipping company if it's a physical product or bundle
-                    if (session.metadata?.productType === 'physical' || session.metadata?.productType === 'bundle') {
+                    // Send notification email to shipping company if it's a physical product, book, or bundle
+                    if (session.metadata?.type === 'physical' || session.metadata?.productType === 'book' || session.metadata?.productType === 'bundle') {
                         console.log('Product requires shipping, sending notification email', {
                             productType: session.metadata.productType,
+                            type: session.metadata.type,
                             weights: {
                                 productWeight: session.metadata.productWeight,
                                 packagingWeight: session.metadata.packagingWeight,
@@ -298,7 +299,7 @@ exports.handler = async (event) => {
                         await sendOrderNotificationEmail(session);
                         console.log('Successfully sent shipping notification email');
                     } else {
-                        console.log('No shipping required for this product type:', session.metadata?.productType);
+                        console.log('No shipping required for this product. Type:', session.metadata?.type, 'Product Type:', session.metadata?.productType);
                     }
 
                     console.log('Successfully processed order:', session.id);
