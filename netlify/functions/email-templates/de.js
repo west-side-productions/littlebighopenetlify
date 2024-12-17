@@ -258,13 +258,13 @@ ${address.line2 ? `${address.line2}\n` : ''}${address.postal_code || ''} ${addre
 ${address.state ? `${address.state}\n` : ''}${address.country || ''}
 E-Mail: ${orderDetails.customerEmail || ''}
 
+Bestelldetails:
+${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.price} ${item.currency}`).join('\n') : ''}
+
 Gewichtsinformationen:
 Produktgewicht: ${orderDetails.weights?.productWeight || 0} g
 Verpackungsgewicht: ${orderDetails.weights?.packagingWeight || 0} g
 Gesamtgewicht: ${orderDetails.weights?.totalWeight || 0} g
-
-Bestelldetails:
-${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.price} ${item.currency}`).join('\n') : ''}
 `;
         },
         html: ({ orderDetails = {} }) => {
@@ -293,6 +293,24 @@ ${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.pric
                         <p><strong>E-Mail:</strong> ${orderDetails.customerEmail || ''}</p>
                     </div>
 
+                    <div class="order-details">
+                        <h2>Bestelldetails</h2>
+                        ${orderDetails.items ? `
+                            <table>
+                                <tr>
+                                    <th>Artikel</th>
+                                    <th>Preis</th>
+                                </tr>
+                                ${orderDetails.items.map(item => `
+                                    <tr>
+                                        <td>${sanitizeInput(item.name)}</td>
+                                        <td>${sanitizeInput(item.price)} ${sanitizeInput(item.currency)}</td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                        ` : ''}
+                    </div>
+
                     <div class="weight-info">
                         <h2>Gewichtsinformationen</h2>
                         <p>
@@ -301,32 +319,12 @@ ${orderDetails.items ? orderDetails.items.map(item => `${item.name}: ${item.pric
                             <strong>Gesamtgewicht:</strong> ${orderDetails.weights?.totalWeight || 0} g
                         </p>
                     </div>
-
-                    <div class="order-details">
-                        <h2>Bestelldetails</h2>
-                        <table class="order-table">
-                            <thead>
-                                <tr>
-                                    <th>Produkt</th>
-                                    <th>Preis</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${orderDetails.items ? orderDetails.items.map(item => `
-                                    <tr>
-                                        <td>${item.name}</td>
-                                        <td>${item.price} ${item.currency}</td>
-                                    </tr>
-                                `).join('') : ''}
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
-
+                
                 <div class="footer">
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
-            </div>`;
-        }
+            </div>
+        `
     }
 };
