@@ -325,6 +325,7 @@ Gesamtgewicht: ${orderDetails.weights?.totalWeight || 0} g
                     <p>Beste Grüße,<br>Ihr Little Big Hope Team</p>
                 </div>
             </div>
-        `
+            `;
+        }
     }
 };
