@@ -150,27 +150,18 @@ async function sendOrderNotificationEmail(session) {
 
 // Function to transform Stripe session data for email template
 function prepareOrderNotificationData(session) {
-    // Get line items and shipping details
     const orderData = {
         orderDetails: {
             orderNumber: session.id,
-            customerEmail: session.customer_details?.email,
-            shippingAddress: {
-                name: session.shipping_details?.name,
-                line1: session.shipping_details?.address?.line1,
-                line2: session.shipping_details?.address?.line2,
-                postal_code: session.shipping_details?.address?.postal_code,
-                city: session.shipping_details?.address?.city,
-                state: session.shipping_details?.address?.state,
-                country: session.shipping_details?.address?.country
-            },
+            customerEmail: session.customer_email,
+            shippingAddress: session.shipping_details?.address || {},
             weights: {
-                productWeight: parseInt(session.metadata?.productWeight) || 0,
-                packagingWeight: parseInt(session.metadata?.packagingWeight) || 0,
-                totalWeight: parseInt(session.metadata?.totalWeight) || 0
+                productWeight: session.metadata?.productWeight || '0',
+                packagingWeight: session.metadata?.packagingWeight || '0',
+                totalWeight: session.metadata?.totalWeight || '0'
             },
             items: session.line_items?.data?.map(item => ({
-                name: item.description,
+                name: item.description || item.price?.product?.name,
                 price: (item.amount_total / 100).toFixed(2),
                 currency: item.currency.toUpperCase()
             })) || []
