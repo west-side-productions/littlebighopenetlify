@@ -206,103 +206,52 @@ exports.handler = async (event) => {
         // Only handle successful checkouts
         if (stripeEvent.type === 'checkout.session.completed') {
             const session = stripeEvent.data.object;
+            
+            // Retrieve the session with line items expanded
+            const expandedSession = await Stripe.checkout.sessions.retrieve(
+                session.id,
+                {
+                    expand: ['line_items']
+                }
+            );
+            
             console.log('Processing checkout session:', {
-                id: session.id,
-                payment_status: session.payment_status,
-                metadata: session.metadata,
-                customer_email: session.customer_email
+                id: expandedSession.id,
+                payment_status: expandedSession.payment_status,
+                metadata: expandedSession.metadata,
+                customer_email: expandedSession.customer_email,
+                line_items: expandedSession.line_items
             });
             
             // Only proceed if payment is successful
-            if (session.payment_status === 'paid') {
+            if (expandedSession.payment_status === 'paid') {
                 console.log('Payment successful, processing order');
                 
                 try {
                     // Add plan to member if memberstackUserId exists
-                    const memberstackUserId = session.metadata?.memberstackUserId;
-                    const memberstackPlanId = session.metadata?.memberstackPlanId;
-                    
-                    console.log('Checking Memberstack metadata:', {
-                        memberstackUserId,
-                        memberstackPlanId,
-                        productType: session.metadata?.productType
-                    });
-
-                    // Try to add plan if we have both IDs
-                    if (memberstackUserId && memberstackPlanId) {
-                        try {
-                            if (session.metadata.productType === 'bundle') {
-                                console.log('Processing bundle purchase - adding bundle plan');
-                                await addPlanToMember(memberstackUserId, memberstackPlanId);
-                                console.log('Successfully added bundle plan');
-                            } else if (session.metadata.productType === 'course') {
-                                console.log('Adding course plan to member');
-                                await addPlanToMember(memberstackUserId, memberstackPlanId);
-                                console.log('Successfully added course plan');
-                            } else if (session.metadata.productType === 'book') {
-                                console.log('Adding book plan to member');
-                                await addPlanToMember(memberstackUserId, memberstackPlanId);
-                                console.log('Successfully added book plan');
-                            }
-                        } catch (planError) {
-                            console.error('Error adding plan:', planError.message || planError);
-                            if (planError?.error?.code === 'already-have-plan') {
-                                console.log('User already has the plan, continuing with order processing');
-                            }
-                        }
-                    } else {
-                        console.log('Missing Memberstack IDs - skipping plan addition:', {
-                            hasMemberstackUserId: !!memberstackUserId,
-                            hasMemberstackPlanId: !!memberstackPlanId
-                        });
+                    if (expandedSession.metadata?.memberstackUserId && expandedSession.metadata?.memberstackPlanId) {
+                        await addPlanToMember(
+                            expandedSession.metadata.memberstackUserId,
+                            expandedSession.metadata.memberstackPlanId
+                        );
                     }
 
                     // Send confirmation email to customer
-                    const customerEmail = session.customer_email;
-                    if (customerEmail) {
-                        console.log('Sending confirmation email to:', customerEmail);
-                        await sendOrderConfirmationEmail(customerEmail, session);
-                        console.log('Successfully sent confirmation email');
-                    } else {
-                        console.error('No customer email found in session');
-                    }
+                    await sendOrderConfirmationEmail(expandedSession.customer_email, expandedSession);
+                    
+                    // Send notification email to admin
+                    await sendOrderNotificationEmail(expandedSession);
 
-                    // Send notification email for physical products (always in German)
-                    if (session.metadata?.type === 'physical' || session.metadata?.productType === 'book' || session.metadata?.productType === 'bundle') {
-                        console.log('Product requires shipping, sending notification email', {
-                            productType: session.metadata.productType,
-                            type: session.metadata.type,
-                            weights: {
-                                productWeight: session.metadata.productWeight,
-                                packagingWeight: session.metadata.packagingWeight,
-                                totalWeight: session.metadata.totalWeight
-                            }
-                        });
-                        
-                        try {
-                            // Force German template for shipping company
-                            const germanTemplate = getEmailTemplate('de');
-                            const orderData = prepareOrderNotificationData(session);
-
-                            const msg = {
-                                to: 'office@west-side-productions.at',
-                                from: process.env.SENDGRID_FROM_EMAIL,
-                                subject: germanTemplate.orderNotification.subject,
-                                text: germanTemplate.orderNotification.text(orderData),
-                                html: germanTemplate.orderNotification.html(orderData)
-                            };
-
-                            await sgMail.send(msg);
-                            console.log('Successfully sent shipping notification email');
-                        } catch (emailError) {
-                            console.error('Error sending shipping notification:', emailError);
-                        }
-                    }
-
-                    console.log('Successfully processed order:', session.id);
+                    return {
+                        statusCode: 200,
+                        body: JSON.stringify({ received: true })
+                    };
                 } catch (error) {
-                    console.error('Error processing order:', error);
-                    throw error; // Re-throw to trigger 500 response
+                    console.error('Error processing successful payment:', error);
+                    return {
+                        statusCode: 500,
+                        body: JSON.stringify({ error: 'Error processing successful payment' })
+                    };
                 }
             }
         }
