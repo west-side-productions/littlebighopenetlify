@@ -137,7 +137,7 @@ async function sendOrderNotificationEmail(session) {
         const encodedLogo = await getEncodedLogo();
         
         const msg = {
-            to: 'office@west-side-productions.at',
+            to: 'ms.tagespost@outlook.com',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderNotification.subject,
             text: template.orderNotification.text(orderData),
