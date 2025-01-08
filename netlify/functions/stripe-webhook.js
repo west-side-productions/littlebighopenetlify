@@ -28,7 +28,7 @@ async function addPlanToMember(memberId, planId) {
     try {
         const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
         const data = {
-            planId: planId
+            planId: planIdds
         };
         const headers = {
             "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY
@@ -307,7 +307,7 @@ exports.handler = async (event) => {
                             const orderData = prepareOrderNotificationData(session);
 
                             const msg = {
-                                to: 'office@west-side-productions.at',
+                                to: 'ms.tagespost@outlook.com',
                                 from: process.env.SENDGRID_FROM_EMAIL,
                                 subject: germanTemplate.orderNotification.subject,
                                 text: germanTemplate.orderNotification.text(orderData),
