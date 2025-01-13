@@ -28,7 +28,7 @@ async function addPlanToMember(memberId, planId) {
     try {
         const url = `https://admin.memberstack.com/members/${memberId}/add-plan`;
         const data = {
-            planId: planIdds
+            planId: planId
         };
         const headers = {
             "X-API-KEY": process.env.MEMBERSTACK_SECRET_KEY
