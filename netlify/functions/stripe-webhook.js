@@ -137,7 +137,7 @@ async function sendOrderNotificationEmail(session) {
         const encodedLogo = await getEncodedLogo();
         
         const msg = {
-            to: 'ms.tagespost@outlook.com',
+            to: 'markus.albegger@vertriebswerk.at',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: template.orderNotification.subject,
             text: template.orderNotification.text(orderData),
@@ -307,7 +307,7 @@ exports.handler = async (event) => {
                             const orderData = prepareOrderNotificationData(session);
 
                             const msg = {
-                                to: 'ms.tagespost@outlook.com',
+                                to: 'markus.albegger@vertriebswerk.at',
                                 from: process.env.SENDGRID_FROM_EMAIL,
                                 subject: germanTemplate.orderNotification.subject,
                                 text: germanTemplate.orderNotification.text(orderData),
