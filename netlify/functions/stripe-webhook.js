@@ -161,7 +161,7 @@ async function sendOrderNotificationEmail(session) {
         });
 
         await sgMail.send(msg);
-        console.log('✅ Order notification email sent successfully to shipping company');
+        console.log('✅ Order notification email sent successfully to shipping company:', msg.to);
     } catch (error) {
         console.error('❌ Failed to send order notification email:', error);
         console.error('Error details:', error.response?.body?.errors || error);
@@ -324,7 +324,7 @@ exports.handler = async (event) => {
                             };
 
                             await sgMail.send(msg);
-                            console.log('Successfully sent shipping notification email');
+                            console.log('✅ Successfully sent shipping notification email to:', msg.to);
                         } catch (emailError) {
                             console.error('Error sending shipping notification:', emailError);
                         }
