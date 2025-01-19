@@ -151,7 +151,8 @@ exports.handler = async function(event, context) {
 
         // Handle bundle vs single product
         if (config.type === 'bundle') {
-            // Add both products
+            // Use a fixed bundle discount coupon
+            sessionParams.allow_promotion_codes = true;
             sessionParams.line_items = config.components.map(componentType => {
                 const componentConfig = PRODUCT_CONFIG[componentType];
                 return {
@@ -160,17 +161,7 @@ exports.handler = async function(event, context) {
                     adjustable_quantity: { enabled: false }
                 };
             });
-
-            // Create and apply fixed amount coupon
-            const coupon = await stripe.coupons.create({
-                amount_off: config.discountAmount,
-                currency: 'eur',
-                name: 'Bundle Discount',
-                duration: 'once'
-            });
-            sessionParams.discounts = [{ coupon: coupon.id }];
-            // Allow additional promotion codes for bundles
-            sessionParams.allow_promotion_codes = true;
+            sessionParams.discounts = [{ coupon: 'tj27prAb' }];
         } else {
             // Single product
             sessionParams.line_items = [{
