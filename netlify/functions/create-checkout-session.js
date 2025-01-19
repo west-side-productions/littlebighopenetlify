@@ -152,7 +152,7 @@ exports.handler = async function(event, context) {
         // Handle bundle vs single product
         if (config.type === 'bundle') {
             // For bundles, we'll create line items with adjusted prices
-            sessionParams.allow_promotion_codes = true;
+            // Remove allow_promotion_codes since we're using a discount line item
             
             // First, get the prices for both components
             const pricePromises = config.components.map(async componentType => {
