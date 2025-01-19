@@ -151,17 +151,38 @@ exports.handler = async function(event, context) {
 
         // Handle bundle vs single product
         if (config.type === 'bundle') {
-            // Use a fixed bundle discount coupon
+            // For bundles, we'll create line items with adjusted prices
             sessionParams.allow_promotion_codes = true;
-            sessionParams.line_items = config.components.map(componentType => {
+            
+            // First, get the prices for both components
+            const pricePromises = config.components.map(async componentType => {
                 const componentConfig = PRODUCT_CONFIG[componentType];
-                return {
-                    price: componentConfig.prices[data.language] || componentConfig.prices['de'],
-                    quantity: 1,
-                    adjustable_quantity: { enabled: false }
-                };
+                const priceId = componentConfig.prices[data.language] || componentConfig.prices['de'];
+                return stripe.prices.retrieve(priceId);
             });
-            sessionParams.discounts = [{ coupon: 'tj27prAb' }];
+            
+            const prices = await Promise.all(pricePromises);
+            const totalAmount = prices.reduce((sum, price) => sum + price.unit_amount, 0);
+            
+            // Create line items with original prices
+            sessionParams.line_items = prices.map((price, index) => ({
+                price: price.id,
+                quantity: 1,
+                adjustable_quantity: { enabled: false }
+            }));
+            
+            // Create a negative line item for the discount
+            sessionParams.line_items.push({
+                price_data: {
+                    currency: 'eur',
+                    product_data: {
+                        name: 'Bundle Discount',
+                        description: '€14 Bundle-Rabatt'
+                    },
+                    unit_amount: -1400
+                },
+                quantity: 1
+            });
         } else {
             // Single product
             sessionParams.line_items = [{
