@@ -169,6 +169,8 @@ exports.handler = async function(event, context) {
                 duration: 'once'
             });
             sessionParams.discounts = [{ coupon: coupon.id }];
+            // Allow additional promotion codes for bundles
+            sessionParams.allow_promotion_codes = true;
         } else {
             // Single product
             sessionParams.line_items = [{
