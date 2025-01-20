@@ -27,10 +27,10 @@ const PRODUCT_CONFIG = {
         type: 'digital',
         requiresShipping: false,
         prices: {
-            de: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            en: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            fr: 'price_1QTSN6JRMXFic4sW9sklILhd',
-            it: 'price_1QTSN6JRMXFic4sW9sklILhd'
+            de: 'price_1QUAGZJRMXFic4sWrT05083n',
+            en: 'price_1QUAGZJRMXFic4sWrT05083n',
+            fr: 'price_1QUAGZJRMXFic4sWrT05083n',
+            it: 'price_1QUAGZJRMXFic4sWrT05083n'
         },
         memberstackPlanId: 'pln_bundle-rd004n7'
     },
