@@ -307,7 +307,7 @@ exports.handler = async (event) => {
                             const orderData = prepareOrderNotificationData(session);
 
                             const msg = {
-                                to: 'christian.lechner213@gmail.com',
+                                to: 'ms.taggespost@outlook.com',
                                 from: process.env.SENDGRID_FROM_EMAIL,
                                 subject: germanTemplate.orderNotification.subject,
                                 text: germanTemplate.orderNotification.text(orderData),
