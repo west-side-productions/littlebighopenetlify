@@ -53,12 +53,12 @@ const PRODUCT_CONFIG = {
 
 // Shipping Rates from Documentation
 const SHIPPING_RATES = {
-    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
+    'shr_1QjI3DJRMXFic4sWdoWACLFB': { 
         price: 0, 
         label: 'Österreich', 
         countries: ['AT']
     },
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+    'shr_1QjI0sJRMXFic4sWHjuPK2hx': { 
         price: 20.36, 
         label: 'Europe', 
         countries: [
@@ -67,12 +67,12 @@ const SHIPPING_RATES = {
             'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
         ]
     },
-    'shr_1QScMXJRMXFic4sWih6q9v36': { 
+    'shr_1QjI2gJRMXFic4sWUDisEAPh': { 
         price: 20.72, 
         label: 'Great Britain', 
         countries: ['GB']
     },
-    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+    'shr_1QjI1pJRMXFic4sWTsmZOJiK': { 
         price: 36.53, 
         label: 'Singapore', 
         countries: ['SG']
