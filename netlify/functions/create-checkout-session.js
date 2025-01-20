@@ -109,6 +109,22 @@ exports.handler = async function(event, context) {
 
         // Get shipping rate data if provided
         const shippingRate = data.shippingRateId ? SHIPPING_RATES[data.shippingRateId] : null;
+        console.log('Shipping rate data:', {
+            providedRateId: data.shippingRateId,
+            foundRate: shippingRate,
+            requiresShipping: config.requiresShipping,
+            allRates: Object.keys(SHIPPING_RATES)
+        });
+
+        // Validate shipping rate for physical products
+        if (config.requiresShipping) {
+            if (!data.shippingRateId) {
+                throw new Error('Shipping rate is required for physical products');
+            }
+            if (!shippingRate) {
+                throw new Error(`Invalid shipping rate ID: ${data.shippingRateId}`);
+            }
+        }
 
         // Prepare session parameters
         const sessionParams = {
@@ -134,6 +150,11 @@ exports.handler = async function(event, context) {
 
         // Handle shipping if required
         if (config.requiresShipping && shippingRate) {
+            console.log('Adding shipping options to session:', {
+                rateId: data.shippingRateId,
+                countries: shippingRate.countries,
+                sessionParams
+            });
             sessionParams.shipping_options = [{
                 shipping_rate: data.shippingRateId
             }];

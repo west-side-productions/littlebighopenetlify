@@ -3,12 +3,12 @@
 
 // Configuration
 const SHIPPING_RATES = {
-    'shr_1QScKFJRMXFic4sW9e80ABBp': { 
-        price: 7.28, 
+    'shr_1QjI5oJRMXFic4sWJvDUJlzU': { 
+        price: 0, 
         label: 'Österreich', 
         countries: ['AT']
     },
-    'shr_1QScOlJRMXFic4sW8MHW0kq7': { 
+    'shr_1QjI0sJRMXFic4sWHjuPK2hx': { 
         price: 20.36, 
         label: 'Europe', 
         countries: [
@@ -17,12 +17,12 @@ const SHIPPING_RATES = {
             'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
         ]
     },
-    'shr_1QScMXJRMXFic4sWih6q9v36': { 
+    'shr_1QjI2gJRMXFic4sWUDisEAPh': { 
         price: 20.72, 
         label: 'Great Britain', 
         countries: ['GB']
     },
-    'shr_1QScNqJRMXFic4sW3NVUUckl': { 
+    'shr_1QjI1pJRMXFic4sWTsmZOJiK': { 
         price: 36.53, 
         label: 'Singapore', 
         countries: ['SG']
@@ -95,8 +95,8 @@ const PRODUCT_CONFIG = {
 
 const CONFIG = {
     functionsUrl: '/.netlify/functions',
-    stripePublicKey: 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8',
-    defaultShippingRate: 'shr_1QScOlJRMXFic4sW8MHW0kq7', // EU shipping rate
+    stripePublicKey: 'pk_live_51Q4ix1JRMXFic4sWsE65TtoInTrnSKldUHCgXblVeOsncV69FMyumpS4oJL5dYrkKmyBftW5J7vzeMbgd8PY6Y9Y00JO6gygBI',
+    defaultShippingRate: 'shr_1QjI5oJRMXFic4sWJvDUJlzU', // Austrian rate
     memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u',
     defaultLanguage: 'de',
     defaultCountry: 'DE',
@@ -292,7 +292,12 @@ async function initializeCheckoutButton() {
 
 // Update handleCheckout to use the passed language
 async function handleCheckout(event, productType, shippingRateId, language) {
-    console.log('Starting checkout for:', { productType, shippingRateId, language });
+    console.log('Starting checkout for:', { 
+        productType, 
+        shippingRateId, 
+        language,
+        shippingRateDetails: SHIPPING_RATES[shippingRateId] 
+    });
     
     try {
         // Get current member
@@ -345,9 +350,12 @@ async function handleCheckout(event, productType, shippingRateId, language) {
                 productType: productType,
                 language: language,
                 memberstackUserId: member.data.id,
-                type: productType === 'book' || productType === 'bundle' ? 'physical' : 'digital'
+                type: productType === 'book' || productType === 'bundle' ? 'physical' : 'digital',
+                shippingRateId: shippingRateId  // Add shipping rate to metadata
             }
         };
+        
+        console.log('Final checkout data:', checkoutData);
         
         // Start checkout
         await startCheckout(checkoutData);
@@ -418,8 +426,8 @@ function initializeShippingSelects() {
     
     // Set default shipping rate based on language
     const defaultShippingRate = currentLang === 'en' ? 
-        'shr_1QScOlJRMXFic4sW8MHW0kq7' : // EU rate for English
-        'shr_1QScKFJRMXFic4sW9e80ABBp'; // Austrian rate for others
+        'shr_1QjI0sJRMXFic4sWHjuPK2hx' : // EU rate for English
+        'shr_1QjI5oJRMXFic4sWJvDUJlzU'; // Austrian rate for others
     
     productTypes.forEach(productType => {
         const selectId = `shipping-rate-select-${productType}`;
@@ -471,7 +479,7 @@ function initializeShippingSelects() {
 function loadStripe() {
     return new Promise((resolve, reject) => {
         try {
-            const stripePublicKey = 'pk_test_51Q4ix1JRMXFic4sW5em3IMoFbubNwBdzj4F5tUzStHExi3T245BrPLYu0SG1uWLSrd736NDy0V4dx10ZN4WFJD2a00pAzHlDw8';
+            const stripePublicKey = 'pk_live_51Q4ix1JRMXFic4sWsE65TtoInTrnSKldUHCgXblVeOsncV69FMyumpS4oJL5dYrkKmyBftW5J7vzeMbgd8PY6Y9Y00JO6gygBI';
             
             if (window.Stripe) {
                 console.log('Using existing Stripe instance');
