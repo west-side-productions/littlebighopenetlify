@@ -16,10 +16,10 @@ const PRODUCT_CONFIG = {
         weight: 1005,
         packagingWeight: 156,
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+            de: 'price_1QSkYvJRMXFic4sWeAmPTYAe',
+            en: 'price_1QSkYvJRMXFic4sWeAmPTYAe',
+            fr: 'price_1QSkYvJRMXFic4sWeAmPTYAe',
+            it: 'price_1QSkYvJRMXFic4sWeAmPTYAe'
         },
         memberstackPlanId: 'pln_kostenloser-zugang-84l80t3u'
     },
@@ -43,10 +43,10 @@ const PRODUCT_CONFIG = {
         packagingWeight: 156,
         memberstackPlanId: 'pln_bundle-rd004n7',  // Use free bundle plan
         prices: {
-            de: 'price_1QT1vTJRMXFic4sWBPxcmlEZ',
-            en: 'price_1QT214JRMXFic4sWr5OXetuw',
-            fr: 'price_1QT214JRMXFic4sWr5OXetuw',
-            it: 'price_1QT206JRMXFic4sW78d5dEDO'
+            de: 'price_1QSkYvJRMXFic4sWeAmPTYAe',
+            en: 'price_1QSkYvJRMXFic4sWeAmPTYAe',
+            fr: 'price_1QSkYvJRMXFic4sWeAmPTYAe',
+            it: 'price_1QSkYvJRMXFic4sWeAmPTYAe'
         }
     }
 };
