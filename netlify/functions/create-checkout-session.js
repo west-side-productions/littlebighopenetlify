@@ -53,7 +53,7 @@ const PRODUCT_CONFIG = {
 
 // Shipping Rates from Documentation
 const SHIPPING_RATES = {
-    'shr_1QjI3DJRMXFic4sWdoWACLFB': { 
+    'shr_1QjI5oJRMXFic4sWJvDUJlzU': { 
         price: 0, 
         label: 'Österreich', 
         countries: ['AT']
